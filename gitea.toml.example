@@ -1,0 +1,9 @@
+# Gitea credentials template
+#
+# Copy to ~/.vibe-kanban/gitea.toml and replace the placeholder.
+#
+#   cp gitea.toml.example ~/.vibe-kanban/gitea.toml
+#
+# Alternative: set GITEA_TOKEN env var instead of using this file.
+
+token = "your-gitea-personal-access-token-here"

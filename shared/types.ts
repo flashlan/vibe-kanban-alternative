@@ -576,13 +576,15 @@ export type OrchestratorPromptSource = "self" | "ancestor" | "default";
 
 export type UnifiedPrComment = { "comment_type": "general", id: string, author: string, author_association: string | null, body: string, created_at: string, url: string | null, } | { "comment_type": "review", id: bigint, author: string, author_association: string | null, body: string, created_at: string, url: string | null, path: string, line: bigint | null, side: string | null, diff_hunk: string | null, };
 
-export type ProviderKind = "git_hub" | "unknown";
+export type ProviderKind = "git_hub" | "gitea" | "unknown";
 
 export type PullRequestDetail = { number: bigint, url: string, status: MergeStatus, merged_at: string | null, merge_commit_sha: string | null, title: string, base_branch: string, head_branch: string, };
 
 export type GitRemote = { name: string, url: string, };
 
 export type ListPrsError = { "type": "cli_not_installed", provider: ProviderKind, } | { "type": "auth_failed", message: string, } | { "type": "unsupported_provider" };
+
+export type DeleteRepoConflict = { message: string, workspaces: Array<string>, };
 
 export type CreateWorkspaceFromPrBody = { repo_id: string, pr_number: bigint, pr_title: string, pr_url: string, head_branch: string, base_branch: string, run_setup: boolean, remote_name: string | null, };
 
@@ -790,7 +792,19 @@ export enum EditorType { VS_CODE = "VS_CODE", VS_CODE_INSIDERS = "VS_CODE_INSIDE
 export type EditorOpenError = { "type": "executable_not_found", executable: string, editor_type: EditorType, } | { "type": "invalid_command", details: string, editor_type: EditorType, } | { "type": "launch_failed", executable: string, details: string, editor_type: EditorType, };
 
 export type GitHubConfig = { pat: string | null, oauth_token: string | null, username: string | null, primary_email: string | null, default_pr_base: string | null, };
-export type GiteaConfig = { base_url: string | null, default_branch: string | null, };
+
+export type GiteaConfig = { 
+/**
+ * Base URL of the Gitea instance, e.g. `https://gitea.example.com` or
+ * `https://gitea.local:3000`. When set, PR operations for remotes hosted
+ * on this instance route through the Gitea REST API instead of the
+ * `gh` CLI.
+ */
+base_url: string | null, 
+/**
+ * Default base branch for new PRs on this instance (e.g. `main`).
+ */
+default_branch: string | null, };
 
 export enum SoundFile { ABSTRACT_SOUND1 = "ABSTRACT_SOUND1", ABSTRACT_SOUND2 = "ABSTRACT_SOUND2", ABSTRACT_SOUND3 = "ABSTRACT_SOUND3", ABSTRACT_SOUND4 = "ABSTRACT_SOUND4", COW_MOOING = "COW_MOOING", FAHHHHH = "FAHHHHH", PHONE_VIBRATION = "PHONE_VIBRATION", ROOSTER = "ROOSTER" }
 

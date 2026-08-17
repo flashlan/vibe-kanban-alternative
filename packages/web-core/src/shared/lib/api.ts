@@ -217,10 +217,19 @@ export const handleApiResponse = async <T, E = T>(
 ): Promise<T> => {
   if (!response.ok) {
     let errorMessage = `Request failed with status ${response.status}`;
+    let errorDataValue: unknown;
 
     try {
       const errorData = await response.json();
-      if (errorData.message) {
+      // Prefer the structured error_data (set by ApiResponse::error_with_data),
+      // whose own `message` field usually carries the meaningful text.
+      if (errorData?.error_data) {
+        errorDataValue = errorData.error_data;
+        if (errorData.error_data.message) {
+          errorMessage = errorData.error_data.message;
+        }
+      }
+      if (errorData?.message && !errorDataValue) {
         errorMessage = errorData.message;
       }
     } catch {
@@ -231,11 +240,17 @@ export const handleApiResponse = async <T, E = T>(
     console.error('[API Error]', {
       message: errorMessage,
       status: response.status,
+      error_data: errorDataValue,
       response,
       endpoint: response.url,
       timestamp: new Date().toISOString(),
     });
-    throw new ApiError<E>(errorMessage, response.status, response);
+    throw new ApiError<E>(
+      errorMessage,
+      response.status,
+      response,
+      errorDataValue as E
+    );
   }
 
   if (response.status === 204) {

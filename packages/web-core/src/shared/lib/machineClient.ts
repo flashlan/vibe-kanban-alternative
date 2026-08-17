@@ -1,5 +1,6 @@
 import type {
   Config,
+  DeleteRepoConflict,
   GetMcpServerResponse,
   GitBranch,
   McpServerQuery,
@@ -111,7 +112,7 @@ export function createMachineClient(target: MachineTarget): MachineClient {
         })
       ),
     deleteRepo: async (repoId) =>
-      handleApiResponse<void>(
+      handleApiResponse<void, DeleteRepoConflict>(
         await makeMachineRequest(target, `/api/repos/${repoId}`, {
           method: 'DELETE',
         })

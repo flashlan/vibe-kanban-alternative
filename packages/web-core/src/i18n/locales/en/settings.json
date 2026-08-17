@@ -626,7 +626,8 @@
         "dialogTitle": "Remove \"{{name}}\"?",
         "dialogDescription": "This will unlink the repository from Vibe Kanban. Your files on disk will not be affected. You can re-add it later.",
         "success": "Repository removed successfully.",
-        "error": "Failed to remove repository."
+        "error": "Failed to remove repository.",
+        "blocked": "This repository is still linked to active workspace(s): {{workspaces}}. Remove or archive those workspaces first, then retry."
       },
       "save": {
         "button": "Save Repository Settings",

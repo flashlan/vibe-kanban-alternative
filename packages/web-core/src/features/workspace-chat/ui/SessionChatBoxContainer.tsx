@@ -1059,6 +1059,7 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
           onQueue: () => {},
           onCancelQueue: () => {},
           onStop: () => {},
+          onClearEditor: () => {},
           onPasteFiles: () => {},
         }}
         session={{
@@ -1118,6 +1119,10 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
         onQueue: handleQueueMessage,
         onCancelQueue: handleCancelQueue,
         onStop: stopExecution,
+        onClearEditor: () => {
+          setLocalMessage('');
+          clearDraft();
+        },
         onPasteFiles: headedLive ? () => {} : uploadFiles,
       }}
       session={{

@@ -61,6 +61,7 @@ interface ActionsProps {
   onQueue: () => void;
   onCancelQueue: () => void;
   onStop: () => void;
+  onClearEditor: () => void;
   onPasteFiles: (files: File[]) => void;
 }
 
@@ -928,6 +929,14 @@ export function SessionChatBox<TExecutor extends string = string>({
       footerLeft={
         <>
           {showRunningAnimation && <PulsingDot className="self-center" />}
+          {hasContent && !isRunning && !isInEditMode && (
+            <ToolbarIconButton
+              icon={TrashIcon}
+              aria-label={t('conversation.actions.clearEditor')}
+              title={t('conversation.actions.clearEditor')}
+              onClick={actions.onClearEditor}
+            />
+          )}
           <ToolbarIconButton
             icon={PaperclipIcon}
             aria-label={t('tasks:taskFormDialog.attachFile')}

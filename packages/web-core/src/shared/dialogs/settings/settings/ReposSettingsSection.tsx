@@ -11,7 +11,7 @@ import { useProjects } from '@/shared/hooks/useProjects';
 import { getProjectRepoDefaults } from '@/shared/hooks/useProjectRepoDefaults';
 import { ApiError } from '@/shared/lib/api';
 import { defineModal } from '@/shared/lib/modals';
-import type { Repo, UpdateRepo } from 'shared/types';
+import type { DeleteRepoConflict, Repo, UpdateRepo } from 'shared/types';
 import { SearchableDropdownContainer } from '@/shared/components/ui-new/containers/SearchableDropdownContainer';
 import { FolderPickerDialog } from '@/shared/dialogs/shared/FolderPickerDialog';
 import { Button } from '@vibe/ui/components/Button';
@@ -276,14 +276,23 @@ export function ReposSettingsSection({
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        setError(err.message);
+        const conflict = err.error_data as DeleteRepoConflict | undefined;
+        if (conflict?.workspaces && conflict.workspaces.length > 0) {
+          setError(
+            t('settings:settings.repos.remove.blocked', {
+              workspaces: conflict.workspaces.join(', '),
+            })
+          );
+        } else {
+          setError(err.message);
+        }
       } else if (err instanceof Error) {
         setError(err.message);
       }
     } finally {
       setRemoving(false);
     }
-  }, [machineClient, queryClient, reposQueryKey, selectedRepo]);
+  }, [machineClient, queryClient, reposQueryKey, selectedRepo, t]);
 
   // Handle adding a new repo via folder picker
   const handleAddRepo = useCallback(async () => {

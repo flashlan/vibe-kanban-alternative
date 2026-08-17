@@ -55,12 +55,12 @@ You can have a board with a mix of GitHub and Gitea projects simultaneously — 
 - Comments are fetched from both the issue and PR comment endpoints and merged, matching GitHub's unified comment view.
 - Forgejo instances are fully compatible (they share the Gitea API surface used here).
 <p align="center">
-  <a href="https://www.npmjs.com/package/vibe-kanban-indie"><img alt="npm" src="https://img.shields.io/npm/v/vibe-kanban-indie?style=flat-square" /></a>
-  <a href="https://github.com/dexloom/vibe-kanban-indie/actions/workflows/release-indie.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/dexloom/vibe-kanban-indie/release-indie.yml" /></a>
+  <a href="https://www.npmjs.com/package/vibe-kanban-alternative"><img alt="npm" src="https://img.shields.io/npm/v/vibe-kanban-alternative?style=flat-square" /></a>
+  <a href="https://github.com/flashlan/vibe-kanban-alternative/actions"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/flashlan/vibe-kanban-alternative/main.yml" /></a>
   <a href="https://deepwiki.com/BloopAI/vibe-kanban"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
-<h1 align="center"><strong>vibe-kanban-indie</strong></h1>
+<h1 align="center"><strong>vibe-kanban-alternative</strong></h1>
 <p align="center">
   The independent, self-hosted fork of vibe-kanban. One dev, your machine, your
   agents — drive a crew of coding agents from the terminal or your phone.
@@ -74,13 +74,13 @@ You can have a board with a mix of GitHub and Gitea projects simultaneously — 
 
 ![](packages/public/vibe-kanban-indie-screenshot-overview.png)
 
-# Welcome to indie version of Vibe-Kanban
+# Welcome to vibe-kanban-alternative
 
 ## Overview
 
 In a world where software engineers spend most of their time planning and reviewing coding agents, the most impactful way to ship more is to get faster at planning and review.
 
-`vibe-kanban-indie` is built for this — for a single developer, running entirely on your own machine. Use kanban issues to plan work, then create workspaces where coding agents can execute.
+`vibe-kanban-alternative` is built for this — for a single developer, running entirely on your own machine. Use kanban issues to plan work, then create workspaces where coding agents can execute.
 
 - **Plan with kanban issues** — create, prioritise, and assign issues on a kanban board
 - **Run coding agents in workspaces** — each workspace gives an agent a branch, a terminal, and a dev server
@@ -94,17 +94,36 @@ In a world where software engineers spend most of their time planning and review
 One command. Describe the work, review the diff, ship it.
 
 ```bash
-npx vibe-kanban-indie
+npx vibe-kanban-alternative
 ```
 
 
 ## Installation
 
-Make sure you have authenticated with your favourite coding agent. A full list of supported coding agents can be found in the [docs](https://dexloom.mintlify.app/supported-coding-agents). Then in your terminal run:
+This fork is published on the public npm registry as **`vibe-kanban-alternative`**.
+
+Prerequisites:
+
+- [Node.js](https://nodejs.org/) (>=20) and npm
+- A supported coding agent installed and authenticated (the app drives it). A full list is in the [docs](https://dexloom.mintlify.app/supported-coding-agents).
+
+Run it directly with no install:
 
 ```bash
-npx vibe-kanban-indie
+npx vibe-kanban-alternative
 ```
+
+Or install globally:
+
+```bash
+npm install -g vibe-kanban-alternative
+vibe-kanban-alternative
+```
+
+The package ships the web app plus prebuilt `vibe-kanban`, `vibe-kanban-mcp` and
+`vibe-kanban-review` binaries and the `npx-cli` launcher, so a Rust toolchain is
+not required to run it. On first launch it opens the board at
+`http://localhost:3001`.
 
 ## Terminal UI (TUI)
 
@@ -157,7 +176,7 @@ For the full architecture (TUI, bridge, MCP approval tools, and the PM agent), s
 
 ## Claude Code Plugins (SombraX)
 
-The automation layer is driven from Claude Code by three plugins published in the **`sombrax_plugins`** marketplace: **vibe-kanban-indie** (orchestration skills, the agent crew, and the bundled `vibe-kanban` MCP server), **sombrax-telegram** (the inbound Telegram channel listener that pairs with the send-only bridge above), and **sombrax-codex** (Codex CLI helpers for independent plan and code review).
+The automation layer is driven from Claude Code by three plugins published in the **`sombrax_plugins`** marketplace: **vibe-kanban-alternative** (orchestration skills, the agent crew, and the bundled `vibe-kanban` MCP server), **sombrax-telegram** (the inbound Telegram channel listener that pairs with the send-only bridge above), and **sombrax-codex** (Codex CLI helpers for independent plan and code review).
 
 Add the marketplace once, then install the plugins you want — from inside Claude Code:
 
@@ -166,7 +185,7 @@ Add the marketplace once, then install the plugins you want — from inside Clau
 /plugin marketplace add dexloom/sombrax_plugins
 
 # Install the plugins
-/plugin install vibe-kanban-indie@sombrax-plugins
+/plugin install vibe-kanban-alternative@sombrax-plugins
 /plugin install sombrax-telegram@sombrax-plugins
 /plugin install sombrax-codex@sombrax-plugins
 ```
@@ -183,11 +202,11 @@ Indie runs entirely on your own machine — no cloud, no account. See the [self-
 
 ## Support
 
-For feature requests and bugs, please open an issue on [`dexloom/vibe-kanban-indie`](https://github.com/dexloom/vibe-kanban-indie/issues).
+For feature requests and bugs, please open an issue on [`flashlan/vibe-kanban-alternative`](https://github.com/flashlan/vibe-kanban-alternative/issues).
 
 ## Contributing
 
-`vibe-kanban-indie` is an independent, single-developer fork. Please raise ideas and changes as issues on [`dexloom/vibe-kanban-indie`](https://github.com/dexloom/vibe-kanban-indie/issues) before opening a PR, so we can discuss implementation details and alignment with the roadmap.
+`vibe-kanban-alternative` is an independent, single-developer fork. Please raise ideas and changes as issues on [`flashlan/vibe-kanban-alternative`](https://github.com/flashlan/vibe-kanban-alternative/issues) before opening a PR, so we can discuss implementation details and alignment with the roadmap.
 
 ## Development
 

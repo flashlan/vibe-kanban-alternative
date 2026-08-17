@@ -144,6 +144,7 @@
       "requestChanges": "Request Changes",
       "approve": "Approve",
       "clearReviewComments": "Clear review comments",
+      "clearEditor": "Clear message",
       "edit": "Edit message",
       "scrollToPreviousMessage": "Go to previous message",
       "reset": "Reset",

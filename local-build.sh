@@ -50,8 +50,13 @@ echo "🔨 Building web app..."
 (cd packages/local-web && npm run build)
 
 echo "🔨 Building Rust binaries..."
-cargo build --release --manifest-path Cargo.toml
-cargo build --release --bin vibe-kanban-mcp --manifest-path Cargo.toml
+if command -v cargo >/dev/null 2>&1; then
+  cargo build --release --manifest-path Cargo.toml
+  cargo build --release --bin vibe-kanban-mcp --manifest-path Cargo.toml
+else
+  # cargo not in PATH (e.g. npm prepack). Fall back to prebuilt release binaries.
+  echo "⚠️  cargo not found — using prebuilt binaries in ${CARGO_TARGET_DIR}/release"
+fi
 
 echo "📦 Creating distribution package..."
 

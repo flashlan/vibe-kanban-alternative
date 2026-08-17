@@ -1,11 +1,87 @@
 # Changelog
 
-All notable changes to **vibe-kanban-indie** are documented here. This fork is
+All notable changes to **vibe-kanban-alternative** are documented here. This fork is
 local-only and single-developer focused; releases are cut by pushing a `v<version>`
 tag that matches `npx-cli/package.json` (see `.github/workflows/release-indie.yml`).
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.2.26] - 2026-08-17
+
+### Added
+
+- **First-class Gitea / Forgejo support** — create pull requests, check their
+  status, and read review comments on self-hosted Gitea/Forgejo instances via
+  the REST API, alongside GitHub. The provider is auto-detected from each
+  project's `git remote` URL, so a board can mix GitHub and Gitea projects and
+  each routes independently:
+
+  - `github.com` / `github.*` (Enterprise) → GitHub provider (`gh` CLI)
+  - host matching the configured `gitea_base_url` → Gitea provider (reqwest + retries)
+  - anything else → a clear "unsupported provider" error
+
+  - `crates/git-host`: `GitHostService` now wraps GitHub + Gitea and dispatches
+    by URL; `detection.rs` adds `ProviderKind` and the `is_gitea_remote` helper;
+    `GiteaProvider` implements the five PR trait methods.
+  - `crates/utils`: `GiteaSecretConfig` loads the token from
+    `~/.vibe-kanban/gitea.toml` or the `GITEA_TOKEN` env var — **never** from
+    the app config or the repo, so it can't leak into a commit.
+  - Config: `GiteaConfig { base_url, default_branch }` added to the app config
+    (v9); Settings gains a **Gitea / Forgejo** card.
+  - Server: repo and PR routes pass the Gitea base URL and route the PR
+    monitor through the unified `GitHostService`.
+  - Docs: `docs/TUTORIAL-GITEA.md` (a screen-by-screen "zero to pull request"
+    walkthrough) and `gitea.toml.example`.
+
+- **Qwen Code model selector** — the workspace model picker now surfaces the
+  providers and models declared in `~/.qwen/settings.json` (grouped by
+  provider, with the configured default model highlighted) instead of a blank
+  list. Clicking a model selects it (checkmark) and the clean model id is
+  sent to the Qwen ACP `session/set_model`.
+  - `crates/executors`: `QwenCode::load_settings_models()` parses
+    `modelProviders` + `model` from the settings file and feeds the
+    `ModelSelectorConfig`; the executor now launches the `qwen` binary from
+    PATH rather than pinning an `npx -y @qwen-code/...@0.9.1` invocation.
+
+- **Clear-message action in the chat editor** — a trash button appears in the
+  chat box footer (only when there's a draft, the session is idle, and the box
+  is not in edit mode) to wipe the composer and its persisted draft.
+
+- **npm release: `vibe-kanban-alternative@0.2.26`** — this fork is now
+  installable from the public npm registry under the name
+  `vibe-kanban-alternative` (published as account `datapoint`):
+
+  ```bash
+  npx vibe-kanban-alternative
+  ```
+
+  The package ships the web app plus prebuilt `vibe-kanban`, `vibe-kanban-mcp`
+  and `vibe-kanban-review` binaries and the `npx-cli` launcher.
+
+### Changed
+
+- `package.json`: package renamed from `vibe-kanban` → `vibe-kanban-alternative`
+  and `private` removed so the project can be published to npm.
+- `local-build.sh`: the Rust build step now falls back to the prebuilt release
+  binaries when `cargo` is not on `PATH`, so `npm pack` / `npm publish` (which
+  trigger `prepack`) succeed without a full toolchain.
+
+### Fixed
+
+- **Blocking a repo removal with a clear message** — removing a repository
+  still linked to an active workspace no longer silently "succeeds". The
+  backend now returns a `409` with a structured `DeleteRepoConflict { message,
+  workspaces }` payload, and the Settings → Repositories panel shows a message
+  naming the blocking workspaces ("This repository is still linked to active
+  workspace(s): … Remove or archive those workspaces first, then retry.").
+  - `shared/lib/api.ts` now surfaces the structured `error_data` on
+    `ApiError`; `machineClient.deleteRepo` is typed against the new payload;
+    `ReposSettingsSection` reads the conflict and renders the localized message.
+- **Qwen model id corruption** — `sanitize_model_id` normalises the model id
+  before it reaches the Qwen ACP session, stripping stray UI quotes and any
+  `provider/model` prefix so the *bare* id (as written in `~/.qwen/settings.json`)
+  is what `session/set_model` receives.
 
 ## [Unreleased]
 
@@ -532,19 +608,20 @@ full control surface from the web UI.
   npm release pipeline. First independent, self-hosted (no team, no cloud, no auth)
   release of the fork.
 
-[Unreleased]: https://github.com/dexloom/vibe-kanban-indie/compare/v0.2.8...HEAD
-[0.2.8]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.8
-[0.2.8-beta.6]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.8-beta.6
-[0.2.8-beta.5]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.8-beta.5
-[0.2.8-beta.4]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.8-beta.4
-[0.2.8-beta.3]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.8-beta.3
-[0.2.8-beta.2]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.8-beta.2
-[0.2.8-beta.1]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.8-beta.1
-[0.2.7]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.7
-[0.2.6]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.6
-[0.2.5]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.5
-[0.2.4]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.4
-[0.2.3]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.3
-[0.2.2]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.2
-[0.2.1]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.1
-[0.2.0]: https://github.com/dexloom/vibe-kanban-indie/releases/tag/v0.2.0
+[0.2.26]: https://github.com/flashlan/vibe-kanban-alternative/compare/v0.2.8...HEAD
+[Unreleased]: https://github.com/flashlan/vibe-kanban-alternative/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.8
+[0.2.8-beta.6]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.8-beta.6
+[0.2.8-beta.5]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.8-beta.5
+[0.2.8-beta.4]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.8-beta.4
+[0.2.8-beta.3]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.8-beta.3
+[0.2.8-beta.2]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.8-beta.2
+[0.2.8-beta.1]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.8-beta.1
+[0.2.7]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.7
+[0.2.6]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.6
+[0.2.5]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.5
+[0.2.4]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.4
+[0.2.3]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.3
+[0.2.2]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.2
+[0.2.1]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.1
+[0.2.0]: https://github.com/flashlan/vibe-kanban-alternative/releases/tag/v0.2.0
