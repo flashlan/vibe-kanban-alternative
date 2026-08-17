@@ -654,6 +654,61 @@ export function GeneralSettingsSection() {
         </SettingsField>
       </SettingsCard>
 
+      {/* Gitea */}
+      <SettingsCard
+        title={t('settings.gitea.title')}
+        description={t('settings.gitea.description')}
+      >
+        <SettingsField
+          label={t('settings.gitea.baseUrl.label')}
+          description={t('settings.gitea.baseUrl.helper')}
+        >
+          <SettingsInput
+            value={draft?.gitea?.base_url ?? ''}
+            onChange={(value) =>
+              updateDraft({
+                gitea: {
+                  ...draft!.gitea,
+                  base_url: value.trim() || null,
+                },
+              })
+            }
+            placeholder={t('settings.gitea.baseUrl.placeholder')}
+          />
+        </SettingsField>
+
+        <SettingsField
+          label={t('settings.gitea.defaultBranch.label')}
+          description={t('settings.gitea.defaultBranch.helper')}
+        >
+          <SettingsInput
+            value={draft?.gitea?.default_branch ?? ''}
+            onChange={(value) =>
+              updateDraft({
+                gitea: {
+                  ...draft!.gitea,
+                  default_branch: value.trim() || null,
+                },
+              })
+            }
+            placeholder={t('settings.gitea.defaultBranch.placeholder')}
+          />
+        </SettingsField>
+
+        <div className="border-t border-primary pt-base mt-base">
+          <p className="text-sm font-medium text-normal">
+            {t('settings.gitea.token.title')}
+          </p>
+          <p className="text-sm text-low">{t('settings.gitea.token.description')}</p>
+          <p className="text-sm text-low mt-half">
+            {t('settings.gitea.token.hint')}
+          </p>
+          <pre className="overflow-x-auto rounded-sm border border-border/50 bg-secondary/30 p-3 text-xs text-normal">
+            {t('settings.gitea.token.example')}
+          </pre>
+        </div>
+      </SettingsCard>
+
       {/* Network */}
       <SettingsCard
         title={t('settings.general.network.title')}

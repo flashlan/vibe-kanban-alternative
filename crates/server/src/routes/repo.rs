@@ -252,7 +252,10 @@ pub async fn list_open_prs(
         None => deployment.git().get_default_remote(&repo.path)?,
     };
 
-    let git_host = match GitHostService::from_url(&remote.url) {
+    let (gitea_base, gitea_token) = GitHostService::resolve_gitea_credentials(
+        deployment.config().read().await.gitea.base_url.as_deref(),
+    );
+    let git_host = match GitHostService::from_url(&remote.url, gitea_base.as_deref(), gitea_token.as_deref()) {
         Ok(host) => host,
         Err(GitHostError::UnsupportedProvider) => {
             return Ok(ResponseJson(ApiResponse::error_with_data(
@@ -289,10 +292,13 @@ pub struct PrInfoQuery {
 }
 
 pub async fn get_pr_info(
-    State(_deployment): State<DeploymentImpl>,
+    State(deployment): State<DeploymentImpl>,
     Query(query): Query<PrInfoQuery>,
 ) -> Result<ResponseJson<ApiResponse<PullRequestDetail, ListPrsError>>, ApiError> {
-    let git_host = match GitHostService::from_url(&query.url) {
+    let (gitea_base, gitea_token) = GitHostService::resolve_gitea_credentials(
+        deployment.config().read().await.gitea.base_url.as_deref(),
+    );
+    let git_host = match GitHostService::from_url(&query.url, gitea_base.as_deref(), gitea_token.as_deref()) {
         Ok(host) => host,
         Err(GitHostError::UnsupportedProvider) => {
             return Ok(ResponseJson(ApiResponse::error_with_data(

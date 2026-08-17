@@ -67,6 +67,24 @@ pub struct PipelineStep {
     pub heavy: bool,
 }
 
+/// Non-secret Gitea (or any Forgejo-compatible) instance configuration,
+/// editable in the app Settings. The personal access token is a secret and is
+/// kept OUT of this config (and thus out of versioned JSON): it is resolved at
+/// runtime from `~/.vibe-kanban/gitea.toml` or the `GITEA_TOKEN` env var
+/// (see `utils::gitea_config`).
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+pub struct GiteaConfig {
+    /// Base URL of the Gitea instance, e.g. `https://gitea.example.com` or
+    /// `https://gitea.local:3000`. When set, PR operations for remotes hosted
+    /// on this instance route through the Gitea REST API instead of the
+    /// `gh` CLI.
+    #[serde(default)]
+    pub base_url: Option<String>,
+    /// Default base branch for new PRs on this instance (e.g. `main`).
+    #[serde(default)]
+    pub default_branch: Option<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 pub struct Config {
     pub config_version: String,
@@ -79,6 +97,8 @@ pub struct Config {
     pub notifications: NotificationConfig,
     pub editor: EditorConfig,
     pub github: GitHubConfig,
+    #[serde(default)]
+    pub gitea: GiteaConfig,
     pub workspace_dir: Option<String>,
     pub last_app_version: Option<String>,
     pub show_release_notes: bool,
@@ -136,6 +156,7 @@ impl Config {
             notifications: old_config.notifications,
             editor: old_config.editor,
             github: old_config.github,
+            gitea: GiteaConfig::default(),
             workspace_dir: old_config.workspace_dir,
             last_app_version: old_config.last_app_version,
             show_release_notes: old_config.show_release_notes,
@@ -195,6 +216,7 @@ impl Default for Config {
             notifications: NotificationConfig::default(),
             editor: EditorConfig::default(),
             github: GitHubConfig::default(),
+            gitea: GiteaConfig::default(),
             workspace_dir: None,
             last_app_version: None,
             show_release_notes: false,
@@ -339,6 +361,37 @@ mod tests {
         let raw = serde_json::to_string(&cfg).unwrap();
         let back = Config::from(raw);
         assert_eq!(back.theme_variant, "ghost-white");
+        assert_eq!(back.config_version, "v9");
+    }
+
+    #[test]
+    fn v9_round_trips_gitea() {
+        let cfg = Config {
+            gitea: GiteaConfig {
+                base_url: Some("https://gitea.example.com".to_string()),
+                default_branch: Some("main".to_string()),
+            },
+            ..Default::default()
+        };
+        let raw = serde_json::to_string(&cfg).unwrap();
+        let back = Config::from(raw);
+        assert_eq!(
+            back.gitea.base_url.as_deref(),
+            Some("https://gitea.example.com")
+        );
+        assert_eq!(back.gitea.default_branch.as_deref(), Some("main"));
+    }
+
+    #[test]
+    fn v9_config_without_gitea_defaults_empty() {
+        // A v9 blob that predates the gitea field must deserialise with an
+        // empty GiteaConfig (serde default) so Gitea stays disabled.
+        let cfg = Config::default();
+        let mut value = serde_json::to_value(&cfg).unwrap();
+        value.as_object_mut().unwrap().remove("gitea").unwrap();
+        let back = Config::from(value.to_string());
+        assert!(back.gitea.base_url.is_none());
+        assert!(back.gitea.default_branch.is_none());
         assert_eq!(back.config_version, "v9");
     }
 

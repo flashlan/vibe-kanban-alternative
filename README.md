@@ -9,6 +9,51 @@
 </p>
 
 <p align="center">Get 10X more out of Claude Code, Gemini CLI, Codex, Amp and other coding agents...</p>
+
+> **Fork by [evertonekacy](https://github.com/evertonekacy)** — adds [Gitea/Forgejo support](#gitea--forgejo-support) alongside GitHub, so you can manage PRs on self-hosted instances.
+
+## What's different in this fork
+
+This fork targets self-hosted development workflows where GitHub is not the primary host. Changes are additive — all upstream features remain intact.
+
+- **Gitea / Forgejo PR support** — create PRs, check status, and fetch comments on any Gitea/Forgejo instance via its REST API. Routing is automatic: remotes pointing at `github.com` use the GitHub provider (`gh` CLI); remotes whose host matches the configured Gitea base URL use the Gitea provider. No manual switching needed.
+- **Secure token storage** — the Gitea token lives in `~/.vibe-kanban/gitea.toml` (or the `GITEA_TOKEN` env var), never in the app config or the repository.
+
+## Gitea / Forgejo Support
+
+### Setup
+
+1. Create a **personal access token** on your Gitea/Forgejo instance (scope: `Projects: read/write` or broader as needed).
+2. Store the token outside the repo:
+
+```toml
+# ~/.vibe-kanban/gitea.toml
+token = "your-personal-access-token"
+```
+
+   Alternatively, set the environment variable `GITEA_TOKEN` (takes precedence if both are set).
+
+3. Open **Settings → Gitea** in the app and fill in:
+   - **Base URL** — e.g. `https://gitea.example.com` (trailing slash optional)
+   - **Default branch** — e.g. `main` (used when a PR's base branch is unspecified)
+
+### How routing works
+
+The app inspects the `git remote` URL of each project:
+
+| Remote host | Provider used |
+|---|---|
+| `github.com`, `github.*` (Enterprise) | GitHub (`gh` CLI) |
+| matches `gitea_base_url` host | Gitea (REST API) |
+| anything else | unsupported (clear error) |
+
+You can have a board with a mix of GitHub and Gitea projects simultaneously — each project is routed independently.
+
+### Limitations
+
+- Gitea PR creation uses the REST API directly (not a CLI), so no `gh`-specific features (like project-based auto-assignment) apply.
+- Comments are fetched from both the issue and PR comment endpoints and merged, matching GitHub's unified comment view.
+- Forgejo instances are fully compatible (they share the Gitea API surface used here).
 <p align="center">
   <a href="https://www.npmjs.com/package/vibe-kanban-indie"><img alt="npm" src="https://img.shields.io/npm/v/vibe-kanban-indie?style=flat-square" /></a>
   <a href="https://github.com/dexloom/vibe-kanban-indie/actions/workflows/release-indie.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/dexloom/vibe-kanban-indie/release-indie.yml" /></a>

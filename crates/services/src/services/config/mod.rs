@@ -88,6 +88,7 @@ pub type ThemeMode = versions::v9::ThemeMode;
 pub type SoundFile = versions::v9::SoundFile;
 pub type EditorType = versions::v9::EditorType;
 pub type GitHubConfig = versions::v9::GitHubConfig;
+pub type GiteaConfig = versions::v9::GiteaConfig;
 pub type UiLanguage = versions::v9::UiLanguage;
 pub type ShowcaseState = versions::v9::ShowcaseState;
 pub type SendMessageShortcut = versions::v9::SendMessageShortcut;

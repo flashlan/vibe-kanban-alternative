@@ -667,6 +667,26 @@
         "description": "Edit this file, then restart the bridge to apply changes.",
         "example": "Example telegram.toml"
       }
+    },
+    "gitea": {
+      "title": "Gitea",
+      "description": "Repositories hosted on a Gitea server (e.g. your self-hosted instance). Pull requests against these remotes use the Gitea API.",
+      "baseUrl": {
+        "label": "Server URL",
+        "helper": "Base URL of your Gitea instance, e.g. https://gitea.example.com or http://192.168.1.10:3000",
+        "placeholder": "https://gitea.example.com"
+      },
+      "defaultBranch": {
+        "label": "Default base branch",
+        "helper": "Falls back to 'main' when left empty. Used when creating pull requests.",
+        "placeholder": "main"
+      },
+      "token": {
+        "title": "Token (gitea.toml)",
+        "description": "The Gitea personal access token is NOT stored in this app's configuration. Put it in an out-of-repo file so it is never committed.",
+        "hint": "Set gitea_token in ~/.vibe-kanban/gitea.toml (or the GITEA_TOKEN env var):",
+        "example": "gitea_token = \"gt_1a2b3c...\""
+      }
     }
   },
   "integrations": {
