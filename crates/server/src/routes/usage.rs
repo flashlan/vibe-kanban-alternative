@@ -1,0 +1,181 @@
+//! Aggregated usage data for the Settings → Usage dashboard.
+//!
+//! Builds per-day activity from `execution_processes` joined with `sessions`
+//! (agent breakdown), plus issue progress (created/completed) and a per-project
+//! summary. Token usage is not persisted yet, so this endpoint reports
+//! executions, duration, and issue activity rather than token counts.
+
+use axum::{Router, extract::State, response::Json as ResponseJson, routing::get};
+use deployment::Deployment;
+use serde::Serialize;
+use sqlx::FromRow;
+use ts_rs::TS;
+use utils::response::ApiResponse;
+use uuid::Uuid;
+
+use crate::DeploymentImpl;
+
+/// One day of activity for a single agent.
+#[derive(Debug, Serialize, TS)]
+pub struct DailyAgentActivity {
+    /// `YYYY-MM-DD` (local server time).
+    pub day: String,
+    pub agent: String,
+    pub executions: i64,
+    /// Total execution time in seconds (completed/failed/killed only).
+    pub seconds: i64,
+}
+
+/// Issue activity on a single day.
+#[derive(Debug, Serialize, TS)]
+pub struct DailyIssueActivity {
+    pub day: String,
+    pub created: i64,
+    pub completed: i64,
+}
+
+/// Per-project progress summary.
+#[derive(Debug, Serialize, TS)]
+pub struct ProjectProgress {
+    pub project_id: String,
+    pub name: String,
+    pub total: i64,
+    pub done: i64,
+    pub open: i64,
+}
+
+#[derive(Debug, Serialize, TS)]
+pub struct UsageSummary {
+    /// Activity over the last 30 days, one row per (day, agent).
+    pub activity: Vec<DailyAgentActivity>,
+    /// Issue created/completed over the last 30 days.
+    pub issues: Vec<DailyIssueActivity>,
+    /// Per-project open/done counts.
+    pub projects: Vec<ProjectProgress>,
+    /// Total executions + duration across the whole window.
+    pub total_executions: i64,
+    pub total_seconds: i64,
+}
+
+pub fn router() -> Router<DeploymentImpl> {
+    Router::new().route("/usage/summary", get(usage_summary))
+}
+
+async fn usage_summary(
+    State(deployment): State<DeploymentImpl>,
+) -> ResponseJson<ApiResponse<UsageSummary>> {
+    let pool = &deployment.db().pool;
+
+    // Per-day, per-agent execution counts and durations (exclude still-running
+    // executions from the duration sum — their completed_at is NULL).
+    let activity = sqlx::query_as::<_, (String, String, i64, i64)>(
+        r#"SELECT date(ep.started_at) AS day,
+                  COALESCE(s.executor, 'unknown') AS agent,
+                  COUNT(*) AS executions,
+                  COALESCE(SUM(
+                      CASE
+                        WHEN ep.completed_at IS NOT NULL
+                          THEN CAST((julianday(ep.completed_at) - julianday(ep.started_at)) * 86400 AS INTEGER)
+                        ELSE 0
+                      END
+                  ), 0) AS seconds
+           FROM execution_processes ep
+           LEFT JOIN sessions s ON s.id = ep.session_id
+           WHERE ep.started_at >= datetime('now', '-30 days')
+           GROUP BY day, agent
+           ORDER BY day ASC"#,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .map(|(day, agent, executions, seconds)| DailyAgentActivity {
+        day,
+        agent,
+        executions,
+        seconds,
+    })
+    .collect();
+
+    // Issue created/completed per day.
+    let issues = sqlx::query_as::<_, (String, i64, i64)>(
+        r#"SELECT COALESCE(d.day, '') AS day,
+                  COALESCE(SUM(d.created), 0) AS created,
+                  COALESCE(SUM(d.completed), 0) AS completed
+           FROM (
+               SELECT date(created_at) AS day, 1 AS created, 0 AS completed
+                 FROM issues WHERE created_at >= datetime('now', '-30 days')
+               UNION ALL
+               SELECT date(completed_at) AS day, 0 AS created, 1 AS completed
+                 FROM issues WHERE completed_at IS NOT NULL
+                               AND completed_at >= datetime('now', '-30 days')
+           ) d
+           GROUP BY d.day
+           ORDER BY d.day ASC"#,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .map(|(day, created, completed)| DailyIssueActivity {
+        day,
+        created,
+        completed,
+    })
+    .collect();
+
+    // Per-project open/done counts (done = completed_at set).
+    #[derive(FromRow)]
+    struct ProjectRow {
+        id: Uuid,
+        name: String,
+        total: i64,
+        done: i64,
+    }
+    let projects = sqlx::query_as::<_, ProjectRow>(
+        r#"SELECT p.id, p.name,
+                  COUNT(i.id) AS total,
+                  COALESCE(SUM(CASE WHEN i.completed_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS done
+           FROM projects p
+           LEFT JOIN issues i ON i.project_id = p.id
+           GROUP BY p.id, p.name
+           ORDER BY p.name ASC"#,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .map(|row| ProjectProgress {
+        project_id: row.id.to_string(),
+        name: row.name,
+        total: row.total,
+        done: row.done,
+        open: row.total - row.done,
+    })
+    .collect();
+
+    // Totals across the whole 30-day window.
+    let (total_executions, total_seconds) = sqlx::query_as::<_, (i64, i64)>(
+        r#"SELECT COUNT(*) AS executions,
+                  COALESCE(SUM(
+                      CASE
+                        WHEN completed_at IS NOT NULL
+                          THEN CAST((julianday(completed_at) - julianday(started_at)) * 86400 AS INTEGER)
+                        ELSE 0
+                      END
+                  ), 0) AS seconds
+           FROM execution_processes
+           WHERE started_at >= datetime('now', '-30 days')"#,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap_or((0, 0));
+
+    ResponseJson(ApiResponse::success(UsageSummary {
+        activity,
+        issues,
+        projects,
+        total_executions,
+        total_seconds,
+    }))
+}

@@ -7,6 +7,56 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-indie.ym
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.27] - 2026-08-18
+
+### Added
+
+- **Project Memory (mem0)** — first-class cross-session memory for every coding
+  agent. Workspaces recall repository memories at launch and save verified facts
+  back on completion, keyed by repository slug so OpenCode, Claude Code, Qwen
+  Code, and any other CLI share the same memory:
+  - `memory_search`, `memory_recall`, and `memory_save` MCP tools exposed to agents.
+  - Backend recall in `start_workspace` (deterministic memory ordering) and a
+    `VK-MEMORY:` save-back tracker that persists only self-contained, verified facts.
+  - `memory` pipeline stage added to all eight pipelines.
+  - **Prompt cache-hit design**: the memory block is injected into the static
+    prefix (never after the user question), sorted deterministically so it is
+    byte-identical across sessions, injected once, and never mutated mid-session —
+    so cloud providers (Anthropic, OpenRouter, DeepSeek, NVIDIA) reuse the prefix
+    cache across terminals.
+  - Graph memory via mem0 + Qdrant + NetworkX; requires an extraction LLM key
+    (Groq / OpenRouter / llama-server) to populate entities and relations.
+- **Manual Review stage** — optional `review-manual` stage in every pipeline: the
+  agent commits, emits `VK-REVIEW-REQUEST`, and stops; the backend plays the
+  notification alarm so the operator reviews the result before any merge/PR.
+- **Usage Dashboard** — Settings → Usage with 30-day activity totals, a
+  GitHub-style day heatmap, executions-per-day-by-agent bars, and per-project
+  issue progress, served by a new `/api/usage/summary` endpoint.
+- **Project Archive** — archive a board from the sidebar (`+` → Archive) instead
+  of deleting it: it leaves the tree, becomes read-only, and keeps its history in
+  an Archived section with Restore and a destructive, cascade-confirmed Delete.
+  Backed by a new `projects.archived` column and `PATCH /v1/projects/{id}`.
+- **Unique project keys on collision** — when two project names derive the same
+  key ("teste" vs "teste2" → both `TEST`), the second now gets a numeric suffix
+  (`TEST2`) instead of failing with 400.
+- **Default pipeline is now Quick** — with the previously-added memory stage;
+  pipeline and stage selections persist in localStorage (`vk-pipeline-selection`).
+
+### Fixed
+
+- **Fallback REST routes** for `issue_relationships`, `pull_requests`, and
+  `pull_request_issues` in the local kanban router — resolves the Electric-sync
+  "string did not match the expected pattern" network errors at startup.
+- **Vite proxy port** — running the frontend dev server separately now requires
+  `BACKEND_PORT=3002` so `/api` and `/v1` requests reach the backend instead of
+  looping back to the frontend (project creation previously failed with 500).
+
+### Changed
+
+- Kanban cards show the issue **title** instead of the auto-generated ID;
+  priority and tags share one row; workspace cards are compact; the description
+  is collapsible; the create-workspace heading is smaller.
+
 ## [0.2.26] - 2026-08-17
 
 ### Added

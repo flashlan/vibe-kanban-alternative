@@ -30,7 +30,9 @@
         "mcp": "MCP Servers",
         "mcpDesc": "Model Context Protocol servers",
         "telegram": "Telegram",
-        "telegramDesc": "Agent escalations to Telegram"
+        "telegramDesc": "Agent escalations to Telegram",
+        "usage": "Usage",
+        "usageDesc": "Agent activity, tokens and project progress"
       }
     },
     "hostPicker": {

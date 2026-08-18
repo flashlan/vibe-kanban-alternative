@@ -50,6 +50,7 @@ pub mod speckit;
 pub mod tags;
 pub mod telegram;
 pub mod terminal;
+pub mod usage;
 pub mod workspaces;
 
 pub fn router(deployment: DeploymentImpl) -> IntoMakeService<Router> {
@@ -74,6 +75,7 @@ pub fn router(deployment: DeploymentImpl) -> IntoMakeService<Router> {
         .merge(spec_intake::router(&deployment))
         .merge(speckit::router(&deployment))
         .merge(terminal::router())
+        .merge(usage::router())
         .nest("/attachments", attachments::routes())
         .layer(ValidateRequestHeaderLayer::custom(
             middleware::validate_origin,

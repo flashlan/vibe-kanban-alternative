@@ -111,7 +111,11 @@ function ProjectTreeNode(
   // item label is "Orchestrator prompt" (NOT "Add …") — the column
   // always exists, "Add" would lie.
   const showAddMenu =
-    !isUnassigned && (onCreateChildBoard || onSelectOrchestratorPrompt);
+    !isUnassigned &&
+    (onCreateChildBoard ||
+      onSelectOrchestratorPrompt ||
+      onRenameProject ||
+      onArchiveProject);
   // Collapse-by-default (2026-08-07): row click toggles expand/collapse;
   // the open-page icon navigates to the project's kanban board. The
   // Unassigned pseudo-project has no board, so no icon.
