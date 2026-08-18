@@ -24,12 +24,42 @@ export interface ProjectProgress {
   open: number;
 }
 
+export interface Mem0TokenProvider {
+  provider: string;
+  model: string;
+  prompt: number;
+  completion: number;
+}
+
+export interface Mem0TokenDay {
+  day: string;
+  prompt: number;
+  completion: number;
+  total: number;
+  providers: Mem0TokenProvider[];
+}
+
+export interface Mem0TokenUsage {
+  days: Mem0TokenDay[];
+  providers: Mem0TokenProvider[];
+  total: number;
+}
+
 export interface UsageSummary {
   activity: DailyAgentActivity[];
   issues: DailyIssueActivity[];
   projects: ProjectProgress[];
   total_executions: number;
   total_seconds: number;
+  mem0_tokens: Mem0TokenUsage;
+}
+
+export interface ReExtractResponse {
+  ok: boolean;
+  scanned: number;
+  updated: number;
+  entities: number;
+  relations: number;
 }
 
 export async function fetchUsageSummary(): Promise<UsageSummary> {
@@ -38,6 +68,16 @@ export async function fetchUsageSummary(): Promise<UsageSummary> {
     cache: 'no-store',
   });
   return handleApiResponse<UsageSummary>(response);
+}
+
+export async function triggerReExtract(
+  userId: string
+): Promise<ReExtractResponse> {
+  const response = await makeRequest(
+    `/api/usage/re-extract?user_id=${encodeURIComponent(userId)}`,
+    { method: 'POST', cache: 'no-store' }
+  );
+  return handleApiResponse<ReExtractResponse>(response);
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -65,10 +105,23 @@ const ACTIVITY_COLORS = [
   'bg-brand',
 ];
 
+/** Stable color per extraction provider (llama / openrouter / groq / other). */
+function providerColor(provider: string): string {
+  const p = provider.toLowerCase();
+  if (p.includes('groq')) return 'bg-red-500/80';
+  if (p.includes('openrouter')) return 'bg-sky-500/80';
+  if (p.includes('llama') || p.includes('ollama')) return 'bg-emerald-500/80';
+  if (p.includes('openai')) return 'bg-amber-500/80';
+  return 'bg-purple-500/80';
+}
+
 export function UsageSettingsSection() {
   const { t } = useTranslation('settings');
   const [summary, setSummary] = useState<UsageSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reExtractUser, setReExtractUser] = useState('');
+  const [reExtractBusy, setReExtractBusy] = useState(false);
+  const [reExtractResult, setReExtractResult] = useState<ReExtractResponse | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -82,6 +135,22 @@ export function UsageSettingsSection() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const handleReExtract = async () => {
+    const userId = reExtractUser.trim() || 'default';
+    setReExtractBusy(true);
+    setReExtractResult(null);
+    try {
+      setError(null);
+      const res = await triggerReExtract(userId);
+      setReExtractResult(res);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Re-extraction failed');
+    } finally {
+      setReExtractBusy(false);
+    }
+  };
 
   // Build last-30-days grid. `activity` maps "YYYY-MM-DD" -> executions.
   const activityByDay = new Map<string, number>();
@@ -261,6 +330,121 @@ export function UsageSettingsSection() {
                   </div>
                 );
               })}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* mem0 extraction tokens — segmented bars per provider */}
+      <section>
+        <h3 className="mb-2 text-sm font-medium text-high">
+          {t('settings.usage.mem0Tokens', 'mem0 extraction tokens')}
+        </h3>
+        <div className="rounded-sm border border-border bg-panel p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-2xl font-semibold text-high">
+              {(summary?.mem0_tokens.total ?? 0).toLocaleString()}
+            </span>
+            <span className="text-xs text-low">
+              {t('settings.usage.totalTokens', 'total tokens')}
+            </span>
+          </div>
+          {(summary?.mem0_tokens.days ?? []).length === 0 ? (
+            <div className="text-sm text-low">
+              {t(
+                'settings.usage.noTokenData',
+                'No extraction tokens recorded yet (mem0 may be offline or the extraction LLM unused).'
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-col gap-3">
+                {(summary?.mem0_tokens.days ?? []).map((d) => {
+                  return (
+                    <div key={d.day} className="flex items-center gap-3">
+                      <span className="w-24 shrink-0 text-xs text-low">
+                        {d.day}
+                      </span>
+                      <div className="flex h-5 flex-1 overflow-hidden rounded-sm bg-secondary">
+                        {d.providers.map((p) => {
+                          const share =
+                            d.total > 0
+                              ? Math.max(1, Math.round((p.prompt + p.completion) / d.total * 100))
+                              : 0;
+                          return (
+                            <div
+                              key={`${p.provider}|${p.model}`}
+                              title={`${p.provider} · ${p.model}: ${(p.prompt + p.completion).toLocaleString()} tok`}
+                              className={providerColor(p.provider)}
+                              style={{ width: `${share}%` }}
+                            />
+                          );
+                        })}
+                      </div>
+                      <span className="w-16 shrink-0 text-right text-xs text-low">
+                        {d.total.toLocaleString()}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border pt-2">
+                {(summary?.mem0_tokens.providers ?? []).map((p) => (
+                  <span
+                    key={`${p.provider}|${p.model}`}
+                    className="flex items-center gap-1.5 text-xs text-low"
+                  >
+                    <span className={`h-2.5 w-2.5 rounded-sm ${providerColor(p.provider)}`} />
+                    {p.provider} · {p.model} ·{' '}
+                    {(p.prompt + p.completion).toLocaleString()}
+                  </span>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* Re-extract graph entities (for memories saved before an LLM was configured) */}
+      <section>
+        <h3 className="mb-2 text-sm font-medium text-high">
+          {t('settings.usage.reExtract', 'Re-extract graph entities')}
+        </h3>
+        <div className="rounded-sm border border-border bg-panel p-3">
+          <p className="mb-2 text-xs text-low">
+            {t(
+              'settings.usage.reExtractHint',
+              'Run graph extraction for memories stored before an extraction LLM was configured. Enter the repository slug (memories user_id), then trigger.'
+            )}
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={reExtractUser}
+              onChange={(e) => setReExtractUser(e.target.value)}
+              placeholder="repo-slug (e.g. vibe-kanban-alternative)"
+              className="min-w-0 flex-1 rounded-sm border border-border bg-secondary px-2 py-1.5 text-sm text-high placeholder:text-low focus:outline-none focus:ring-1 focus:ring-brand"
+            />
+            <button
+              type="button"
+              onClick={() => void handleReExtract()}
+              disabled={reExtractBusy}
+              className="shrink-0 rounded-sm bg-panel px-3 py-1.5 text-sm text-normal ring-1 ring-border hover:text-high disabled:opacity-50"
+            >
+              {reExtractBusy
+                ? t('settings.usage.reExtracting', 'Extracting…')
+                : t('settings.usage.reExtractBtn', 'Re-extract')}
+            </button>
+          </div>
+          {reExtractResult && (
+            <div className="mt-2 text-xs text-low">
+              {t('settings.usage.reExtractResult', 'Scanned', {
+                count: reExtractResult.scanned,
+              })}{' '}
+              · {reExtractResult.entities}{' '}
+              {t('settings.usage.reExtractEntities', 'entities')} ·{' '}
+              {reExtractResult.relations}{' '}
+              {t('settings.usage.reExtractRelations', 'relations')} extracted
             </div>
           )}
         </div>

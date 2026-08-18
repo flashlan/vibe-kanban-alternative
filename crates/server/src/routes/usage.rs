@@ -5,15 +5,25 @@
 //! summary. Token usage is not persisted yet, so this endpoint reports
 //! executions, duration, and issue activity rather than token counts.
 
-use axum::{Router, extract::State, response::Json as ResponseJson, routing::get};
+use axum::{
+    Router,
+    extract::State,
+    response::Json as ResponseJson,
+    routing::{get, post},
+};
 use deployment::Deployment;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use ts_rs::TS;
 use utils::response::ApiResponse;
 use uuid::Uuid;
 
 use crate::DeploymentImpl;
+
+/// Default mem0 server base URL; override with `MEM0_URL`.
+fn mem0_url() -> String {
+    std::env::var("MEM0_URL").unwrap_or_else(|_| "http://localhost:8000".to_string())
+}
 
 /// One day of activity for a single agent.
 #[derive(Debug, Serialize, TS)]
@@ -55,10 +65,69 @@ pub struct UsageSummary {
     /// Total executions + duration across the whole window.
     pub total_executions: i64,
     pub total_seconds: i64,
+    /// mem0 extraction-model token usage (best-effort; empty when mem0 is down).
+    pub mem0_tokens: Mem0TokenUsage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+pub struct Mem0TokenUsage {
+    pub days: Vec<Mem0TokenDay>,
+    pub providers: Vec<Mem0TokenProvider>,
+    pub total: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+pub struct Mem0TokenDay {
+    pub day: String,
+    pub prompt: i64,
+    pub completion: i64,
+    pub total: i64,
+    #[serde(default)]
+    pub providers: Vec<Mem0TokenProvider>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+pub struct Mem0TokenProvider {
+    pub provider: String,
+    pub model: String,
+    pub prompt: i64,
+    pub completion: i64,
+}
+
+/// Body-free result of `POST /api/usage/re-extract`.
+#[derive(Debug, Serialize, Deserialize, TS)]
+pub struct ReExtractResponse {
+    pub ok: bool,
+    pub scanned: i64,
+    pub updated: i64,
+    pub entities: i64,
+    pub relations: i64,
 }
 
 pub fn router() -> Router<DeploymentImpl> {
-    Router::new().route("/usage/summary", get(usage_summary))
+    Router::new()
+        .route("/usage/summary", get(usage_summary))
+        .route("/usage/re-extract", post(re_extract))
+}
+
+/// Fetch mem0 extraction-token usage (best-effort).
+async fn fetch_mem0_tokens() -> Mem0TokenUsage {
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return Mem0TokenUsage::default(),
+    };
+    let url = format!("{}/api/usage/tokens", mem0_url());
+    let resp = match client.get(&url).send().await {
+        Ok(r) if r.status().is_success() => r,
+        _ => return Mem0TokenUsage::default(),
+    };
+    match resp.json::<Mem0TokenUsage>().await {
+        Ok(t) => t,
+        Err(_) => Mem0TokenUsage::default(),
+    }
 }
 
 async fn usage_summary(
@@ -171,11 +240,53 @@ async fn usage_summary(
     .await
     .unwrap_or((0, 0));
 
+    let mem0_tokens = fetch_mem0_tokens().await;
+
     ResponseJson(ApiResponse::success(UsageSummary {
         activity,
         issues,
         projects,
         total_executions,
         total_seconds,
+        mem0_tokens,
     }))
+}
+
+/// Proxy to the mem0 server's `POST /api/re-extract/:user_id` — re-runs graph
+/// extraction for memories stored before an extraction LLM was configured.
+/// `?user_id=` selects which repository's memories to re-extract.
+async fn re_extract(
+    State(deployment): State<DeploymentImpl>,
+    axum::extract::Query(q): axum::extract::Query<ReExtractQuery>,
+) -> ResponseJson<ApiResponse<ReExtractResponse>> {
+    let _ = deployment;
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(300))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => {
+            return ResponseJson(ApiResponse::error("failed to build mem0 client"));
+        }
+    };
+    let user_id = q.user_id.unwrap_or_else(|| "default".to_string());
+    let url = format!("{}/api/re-extract/{}", mem0_url(), user_id);
+    match client.post(&url).send().await {
+        Ok(r) if r.status().is_success() => match r.json::<ReExtractResponse>().await {
+            Ok(res) => ResponseJson(ApiResponse::success(res)),
+            Err(_) => ResponseJson(ApiResponse::error(
+                "failed to parse mem0 re-extract response",
+            )),
+        },
+        Ok(r) => ResponseJson(ApiResponse::error(&format!(
+            "mem0 re-extract returned status {}",
+            r.status()
+        ))),
+        Err(e) => ResponseJson(ApiResponse::error(&format!("mem0 re-extract failed: {e}"))),
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct ReExtractQuery {
+    user_id: Option<String>,
 }
