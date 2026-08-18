@@ -7,6 +7,33 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-indie.ym
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.28] - 2026-08-18
+
+### Added
+
+- **Settings → Memory** — configure the mem0 graph memory at runtime, no
+  container restart needed:
+  - Enable/disable the memory graph (off = vector-only storage/search).
+  - Pick the extraction provider (Groq / OpenRouter / local llama /
+    OpenAI-compatible like DeepSeek) and set per-provider base URL, model, and
+    API key.
+  - **Masked API keys**: the mem0 container returns only a `has_key` flag —
+    keys are stored in the container and never round-trip to the frontend.
+    Leaving a key field empty keeps the existing key.
+  - Config persists in the mem0 volume (`/data/config.json`) across restarts.
+- **mem0 runtime config API** (`GET/POST /api/config`): live provider/graph
+  updates persisted without rebuilding the container.
+- **Extraction provider failover chain**: primary provider first, then any other
+  configured provider — falls over on 429 (after backoff), HTTP errors, or
+  responses without a parseable JSON object (thinking models like qwen3/gpt-oss
+  are handled).
+- **Extraction token ledger** (`GET /api/usage/tokens`) — Usage dashboard shows
+  tokens per day segmented by provider.
+- **Graph persistence as GraphML** on a mounted volume (`/data/graphs`),
+  lazy-loaded on first access so graphs survive container restarts.
+- **Manual re-extract** in Settings → Usage for memories stored before an
+  extraction LLM was configured.
+
 ## [0.2.27] - 2026-08-18
 
 ### Added

@@ -120,6 +120,15 @@ cp .env.example .env      # then set an extraction LLM key (see below)
 docker compose up -d --build
 ```
 
+**Configure from the app:** the app's **Settings → Memory** panel manages the
+mem0 graph at runtime — enable/disable the memory graph, pick the extraction
+provider, and set per-provider base URL / model / API key. Keys are stored in
+the mem0 container and **never displayed again** (only a "saved" indicator is
+returned); the config persists in the mem0 volume without a container restart.
+**Settings → Usage** shows extraction tokens segmented by provider and offers
+a **Re-extract graph entities** control for memories saved before an extraction
+LLM was configured.
+
 **Graph memory note:** entity/relation extraction (the memory graph) requires an
 extraction LLM. Providers form a **failover chain** — `MEM0_LLM_PROVIDER` sets
 the primary, and any other configured provider is tried automatically when the
