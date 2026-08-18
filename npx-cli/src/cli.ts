@@ -199,7 +199,7 @@ function checkForUpdates(): void {
       if (latest && latest !== CLI_VERSION) {
         setTimeout(() => {
           console.log(`\nUpdate available: ${CLI_VERSION} -> ${latest}`);
-          console.log(`Run: npx vibe-kanban-indie@latest`);
+          console.log(`Run: npx vibe-kanban-alternative@latest`);
         }, 2000);
       }
     })
@@ -244,15 +244,15 @@ async function runMain(desktopMode: boolean): Promise<void> {
   // Use --desktop to launch the desktop app instead.
   if (desktopMode && tauriPlatform) {
     if (!LOCAL_DEV_MODE) {
-      // Desktop bundles are not published for vibe-kanban-indie — the release
+      // Desktop bundles are not published for vibe-kanban-alternative — the release
       // workflow ships CLI binaries only. Skip the doomed fetch and fall back.
       console.error(
-        "Desktop builds are not published for vibe-kanban-indie; starting browser mode instead.",
+        "Desktop builds are not published for vibe-kanban-alternative; starting browser mode instead.",
       );
     } else {
       try {
         console.log(
-          `Starting vibe-kanban-indie desktop v${CLI_VERSION}${modeLabel}...`,
+          `Starting vibe-kanban-alternative desktop v${CLI_VERSION}${modeLabel}...`,
         );
         const bundleInfo = await ensureDesktopBundle(
           tauriPlatform,
@@ -270,7 +270,7 @@ async function runMain(desktopMode: boolean): Promise<void> {
   }
 
   // Browser mode (default — headless server + opens browser)
-  console.log(`Starting vibe-kanban-indie v${CLI_VERSION}${modeLabel}...`);
+  console.log(`Starting vibe-kanban-alternative v${CLI_VERSION}${modeLabel}...`);
   await extractAndRun("vibe-kanban", (bin) => {
     execSync(`"${bin}"`, { stdio: "inherit" });
   });
@@ -305,7 +305,7 @@ function runOrExit(task: Promise<void>): void {
 
 async function main(): Promise<void> {
   fs.mkdirSync(versionCacheDir, { recursive: true });
-  const cli = cac("vibe-kanban-indie");
+  const cli = cac("vibe-kanban-alternative");
 
   cli
     .command("[...args]", "Launch the local vibe-kanban app")
