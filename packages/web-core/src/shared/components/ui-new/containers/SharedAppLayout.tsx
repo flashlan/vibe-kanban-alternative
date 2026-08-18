@@ -39,8 +39,10 @@ import {
 import {
   PROJECT_ISSUES_SHAPE,
   PROJECT_PROJECT_STATUSES_SHAPE,
+  PROJECTS_SHAPE,
   type Project as RemoteProject,
 } from 'shared/remote-types';
+import { refreshShapeSource } from '@/shared/lib/electric/collections';
 import { useWorkspaceProjectMembership } from '@/shared/hooks/useWorkspaceProjectMembership';
 import { useWorkspaceContext } from '@/shared/hooks/useWorkspaceContext';
 import { compareWorkspaceDashboardRecency } from '@/shared/lib/workspaceStatus/workspaceStatus';
@@ -101,7 +103,6 @@ export function SharedAppLayout() {
     data: projects = [],
     isLoading,
     update: updateProject,
-    remove: removeProject,
     projectsById,
   } = useProjects();
   const sortedProjects = useMemo(
@@ -246,6 +247,12 @@ export function SharedAppLayout() {
   const projectsByIdRef = useRef(projectsById);
   projectsByIdRef.current = projectsById;
 
+  // Force the projects shape to re-fetch after a direct REST delete (the
+  // delete went around the collection mutation, which normally refreshes).
+  const refreshProjectsShape = useCallback(() => {
+    refreshShapeSource(PROJECTS_SHAPE, {});
+  }, []);
+
   // Rename a project from the sidebar `+` menu. The backend keeps the
   // project key stable on rename (issue IDs like `TEST-1` do not change).
   const handleRenameProject = useCallback(
@@ -316,8 +323,31 @@ export function SharedAppLayout() {
       });
       if (result !== 'confirmed') return;
 
+      // Ask whether the on-disk worktrees/branches of the project's workspaces
+      // should be removed too (otherwise they stay as orphaned dirs in the
+      // workspace folder).
+      const cleanupWs = await ConfirmDialog.show({
+        title: 'Delete workspaces on disk too?',
+        message: `Remove the workspace folders and git branches created for "${name}" from disk? The app database rows are deleted either way; this only affects the files on disk.`,
+        confirmText: 'Delete on disk',
+        cancelText: 'Keep on disk',
+        variant: 'destructive',
+      });
+
       try {
-        await removeProject(projectId);
+        const response = await fetch(
+          `/v1/projects/${projectId}${
+            cleanupWs === 'confirmed' ? '?cleanup_workspaces=true' : ''
+          }`,
+          { method: 'DELETE' }
+        );
+        if (!response.ok) {
+          const body = (await response.json().catch(() => ({}))) as {
+            message?: string;
+          };
+          throw new Error(body.message || 'Failed to delete project');
+        }
+        refreshProjectsShape();
         if (activeProjectId === projectId) {
           appNavigation.goToWorkspaces();
         }
@@ -335,7 +365,7 @@ export function SharedAppLayout() {
         });
       }
     },
-    [removeProject, appNavigation, activeProjectId]
+    [appNavigation, activeProjectId]
   );
 
   // ADR-007: project reorder is disabled tree-wide (see PLAN-sidebar-kanban-cross-dnd);

@@ -52,6 +52,7 @@ rand.workspace = true
 tokio-tungstenite.workspace = true
 bytes.workspace = true
 futures.workspace = true
+zip = "8.6.0"
 
 [build-dependencies]
 dotenv.workspace = true
