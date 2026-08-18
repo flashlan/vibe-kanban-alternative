@@ -120,10 +120,29 @@ cp .env.example .env      # then set an extraction LLM key (see below)
 docker compose up -d --build
 ```
 
-**Graph memory note:** entity/relation extraction (the memory graph) requires an extraction LLM — the stack supports Groq, OpenRouter, or a local llama-server. Set the matching `GROQ_API_KEY`, `MEM0_OPENROUTER_KEY`, or `MEM0_LLAMA_URL` in `.env`. Without a key, memories are still stored and searchable as vectors, but `entities`/`relations` remain empty and the graph won't populate. Verify with:
+**Graph memory note:** entity/relation extraction (the memory graph) requires an
+extraction LLM. Three providers are supported, one active at a time via
+`MEM0_LLM_PROVIDER`:
+
+| Provider | Config | Notes |
+|----------|--------|-------|
+| **Groq** (default) | `GROQ_API_KEY` + `GROQ_MODEL` | `qwen/qwen3.6-27b` works well; free tier is TPM-limited (~8k tokens/min) |
+| **OpenRouter** | `MEM0_OPENROUTER_KEY` + `MEM0_OPENROUTER_MODEL` | default `openai/gpt-oss-20b:free`; free tier is rate-limited upstream |
+| **Local llama** | `MEM0_LLAMA_URL` + `MEM0_LLAMA_MODEL` (OpenAI-compatible `/v1`) | no rate limits, fully private — recommended for heavy use |
+
+Extraction token usage is tracked per day and per provider and shown as
+**segmented bars** in Settings → Usage (llama / openrouter / groq). The same
+page has a **Re-extract graph entities** control: enter the repository slug and
+it re-runs graph extraction for memories that were saved before an extraction
+LLM was configured.
+
+Without a key, memories are still stored and searchable as vectors, but
+`entities`/`relations` remain empty and the graph won't populate. Verify with:
 
 ```bash
 curl http://localhost:8000/api/memories/vibe-kanban-alternative
+curl http://localhost:8000/api/usage/tokens        # extraction token ledger
+curl http://localhost:8001/graph/stats?user_id=vibe-kanban-alternative   # graph nodes/edges
 ```
 
 ## Usage Dashboard
