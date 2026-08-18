@@ -39,7 +39,7 @@ export function FeatherCaret({
 }
 
 /**
- * The VIBE KANBAN wordmark with the bordered INDIE tag, on a single line.
+ * The VIBE KANBAN wordmark with the ALTERNATIVE tag, on a single line.
  * Sizes are fixed in px (matching the original design lockup) so the
  * wordmark keeps its size even when the app's root font scale changes.
  */
@@ -64,8 +64,8 @@ export function BrandWordmark({ className }: { className?: string }) {
       >
         KANBAN
       </span>
-      <span className="self-center rounded-[3px] border border-border px-1.5 py-0.5 text-micro font-semibold leading-none tracking-[0.3em] text-low">
-        INDIE
+      <span className="self-center rounded-[3px] border border-border px-1.5 py-0.5 text-micro font-semibold leading-none tracking-[0.16em] text-low">
+        ALTERNATIVE
       </span>
     </span>
   );
