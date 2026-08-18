@@ -16,6 +16,8 @@ import {
   TrashIcon,
   PaperclipIcon,
   ImageIcon,
+  CaretDownIcon,
+  CaretRightIcon,
 } from '@phosphor-icons/react';
 import {
   IssueTagsRow,
@@ -209,6 +211,7 @@ export function KanbanIssuePanel({
   // Description edit state: in edit mode, show preview by default; in create mode, always editable
   const [isDescriptionEditing, setIsDescriptionEditing] =
     useState(isCreateMode);
+  const [isDescriptionCollapsed, setIsDescriptionCollapsed] = useState(false);
   const descriptionContainerRef = useRef<HTMLDivElement>(null);
 
   // Reset description editing state when switching between create/edit mode or when issue changes
@@ -354,14 +357,33 @@ export function KanbanIssuePanel({
                 'pointer-events-none absolute inset-0 px-base',
                 'text-high/50 font-medium text-lg',
                 'hidden',
-                "[[data-empty='true']_+_&]:block" // show placeholder when previous sibling data-empty=true
+                "[[data-empty='true']_+_&]:block"
               )}
             >
               {t('kanban.issueTitlePlaceholder')}
             </div>
           </div>
 
+          {/* Description collapse toggle (edit mode, non-create, with content) */}
+          {!isCreateMode && formData.description && !isDescriptionEditing && (
+            <div className="mt-base px-base">
+              <button
+                type="button"
+                onClick={() => setIsDescriptionCollapsed(!isDescriptionCollapsed)}
+                className="flex items-center gap-half text-sm font-medium text-high hover:text-normal transition-colors mb-half"
+              >
+                {isDescriptionCollapsed ? (
+                  <CaretRightIcon className="size-icon-sm" weight="bold" />
+                ) : (
+                  <CaretDownIcon className="size-icon-sm" weight="bold" />
+                )}
+                {t('kanban.description', 'Description')}
+              </button>
+            </div>
+          )}
+
           {/* Description WYSIWYG Editor with image dropzone */}
+          {!isDescriptionCollapsed && (
           <div
             ref={descriptionContainerRef}
             {...(isDescriptionEditing ? dropzoneProps?.getRootProps() : {})}
@@ -371,14 +393,12 @@ export function KanbanIssuePanel({
             )}
             onClick={() => {
               if (!isDescriptionEditing && !isCreateMode && !isSubmitting) {
-                // Don't enter edit mode if the user was selecting text
                 const selection = window.getSelection();
                 if (selection && selection.toString().length > 0) return;
                 setIsDescriptionEditing(true);
               }
             }}
             onBlur={(e) => {
-              // Exit edit mode when focus leaves the description container
               if (
                 descriptionContainerRef.current &&
                 !descriptionContainerRef.current.contains(
@@ -409,7 +429,7 @@ export function KanbanIssuePanel({
               autoFocus: false,
               className: cn(
                 'px-base',
-                isDescriptionEditing ? 'min-h-[100px]' : 'min-h-[2rem]',
+                isDescriptionEditing ? 'min-h-[100px]' : 'min-h-[2rem] max-h-[200px] overflow-y-auto',
                 !isDescriptionEditing && !formData.description && 'text-low'
               ),
               localAttachments,
@@ -480,6 +500,7 @@ export function KanbanIssuePanel({
               </div>
             )}
           </div>
+          )}
         </div>
 
         {/* "Generate spec" intake controls (Create mode only) */}

@@ -154,6 +154,7 @@ fn to_api_project(p: DbProject) -> ApiProject {
         // never ships on the list shape; the dedicated endpoints return
         // the raw and resolved values.
         has_orchestrator_prompt: !p.orchestrator_prompt.trim().is_empty(),
+        archived: p.archived,
         created_at: p.created_at,
         updated_at: p.updated_at,
     }

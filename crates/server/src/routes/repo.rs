@@ -255,7 +255,11 @@ pub async fn list_open_prs(
     let (gitea_base, gitea_token) = GitHostService::resolve_gitea_credentials(
         deployment.config().read().await.gitea.base_url.as_deref(),
     );
-    let git_host = match GitHostService::from_url(&remote.url, gitea_base.as_deref(), gitea_token.as_deref()) {
+    let git_host = match GitHostService::from_url(
+        &remote.url,
+        gitea_base.as_deref(),
+        gitea_token.as_deref(),
+    ) {
         Ok(host) => host,
         Err(GitHostError::UnsupportedProvider) => {
             return Ok(ResponseJson(ApiResponse::error_with_data(
@@ -298,18 +302,19 @@ pub async fn get_pr_info(
     let (gitea_base, gitea_token) = GitHostService::resolve_gitea_credentials(
         deployment.config().read().await.gitea.base_url.as_deref(),
     );
-    let git_host = match GitHostService::from_url(&query.url, gitea_base.as_deref(), gitea_token.as_deref()) {
-        Ok(host) => host,
-        Err(GitHostError::UnsupportedProvider) => {
-            return Ok(ResponseJson(ApiResponse::error_with_data(
-                ListPrsError::UnsupportedProvider,
-            )));
-        }
-        Err(e) => {
-            tracing::error!("Failed to create git host service: {}", e);
-            return Ok(ResponseJson(ApiResponse::error(&e.to_string())));
-        }
-    };
+    let git_host =
+        match GitHostService::from_url(&query.url, gitea_base.as_deref(), gitea_token.as_deref()) {
+            Ok(host) => host,
+            Err(GitHostError::UnsupportedProvider) => {
+                return Ok(ResponseJson(ApiResponse::error_with_data(
+                    ListPrsError::UnsupportedProvider,
+                )));
+            }
+            Err(e) => {
+                tracing::error!("Failed to create git host service: {}", e);
+                return Ok(ResponseJson(ApiResponse::error(&e.to_string())));
+            }
+        };
 
     match git_host.get_pr_status(&query.url).await {
         Ok(info) => Ok(ResponseJson(ApiResponse::success(info))),

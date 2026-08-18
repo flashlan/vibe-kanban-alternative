@@ -55,6 +55,7 @@ export interface IssueWorkspaceCardProps {
   showStatusBadge?: boolean;
   showNoPrText?: boolean;
   className?: string;
+  compact?: boolean;
 }
 
 export interface IssueWorkspaceCreateCardProps {
@@ -127,6 +128,7 @@ export function IssueWorkspaceCard({
   showStatusBadge = true,
   showNoPrText = true,
   className,
+  compact = false,
 }: IssueWorkspaceCardProps) {
   const { t } = useTranslation('common');
   const timeAgo = getTimeAgo(
@@ -144,6 +146,24 @@ export function IssueWorkspaceCard({
     isFailed ||
     isRunning ||
     (hasUnseenActivity && !isRunning);
+
+  if (compact) {
+    return (
+      <IssueWorkspaceCardContainer onClick={onClick} className={className}>
+        <div className="flex items-center gap-half min-w-0">
+          {isRunning && <RunningDots />}
+          {!isRunning && isFailed && (
+            <TriangleIcon className="size-icon-xs text-error shrink-0" weight="fill" />
+          )}
+          {hasUnseenActivity && !isRunning && !isFailed && (
+            <CircleIcon className="size-icon-xs text-brand shrink-0" weight="fill" />
+          )}
+          <span className="text-sm text-high truncate">{workspace.name ?? workspace.id}</span>
+          <span className="text-xs text-low whitespace-nowrap shrink-0">{timeAgo}</span>
+        </div>
+      </IssueWorkspaceCardContainer>
+    );
+  }
 
   return (
     <IssueWorkspaceCardContainer onClick={onClick} className={className}>

@@ -26,6 +26,9 @@ pub struct Project {
     // `resolve_orchestrator_prompt` returns the walked value with
     // provenance.
     pub has_orchestrator_prompt: bool,
+    // Archived boards are hidden from the sidebar, read-only, and keep their
+    // history until permanently deleted from the Archived section.
+    pub archived: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -52,6 +55,8 @@ pub struct UpdateProjectRequest {
     pub sort_order: Option<i32>,
     #[serde(default, deserialize_with = "some_if_present")]
     pub parent_id: Option<Uuid>,
+    #[serde(default, deserialize_with = "some_if_present")]
+    pub archived: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

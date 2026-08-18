@@ -1,0 +1,38 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT pri.id,\n                      pri.pull_request_id,\n                      pri.issue_id as \"issue_id!: Uuid\",\n                      pri.created_at as \"created_at!: DateTime<Utc>\"\n               FROM pull_request_issues pri\n               INNER JOIN issues i ON i.id = pri.issue_id\n               WHERE i.project_id = $1\n               ORDER BY pri.created_at ASC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "pull_request_id",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "issue_id!: Uuid",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 3,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "640c6824f07eae76af88d2c3dd91a71aebb3ae5b55ea8bf9b78b6de9ede1959d"
+}

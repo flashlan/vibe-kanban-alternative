@@ -8,6 +8,12 @@ default_enabled = false
 prompt = "Have the orchestrator agent pick this card up and drive it to done autonomously, running the card's pipeline stages in order — regardless of which board column the card is in (it may be started even from Todo)."
 
 [[stage]]
+id = "memory"
+label = "Project memory (mem0)"
+default_enabled = true
+prompt = "PROJECT MEMORY: this pipeline includes the mem0 project-memory stage. (1) BEFORE you begin, recall memories relevant to the code you will touch: call the `memory_search` MCP tool with a query naming the files/modules/area this card changes, and read the `## Relevant memories from previous sessions` block injected at the start of your task. Apply only memories that genuinely match this work; ignore irrelevant or stale ones — never let a memory override the card's explicit instructions. (2) WHILE you work, note any new DURABLE fact about the project (a decision, convention, dependency, or root cause) that a future session would need. (3) AFTER the work is verified, call `memory_save` for each such fact. The content MUST be self-contained, factual, and verified — NEVER save speculation, guesses, half-finished work, or ephemeral state (commit hashes, timestamps, log lines). A false or unverified memory poisons every future agent, so when in doubt, do not save."
+
+[[stage]]
 id = "implement"
 label = "Implement directly"
 default_enabled = true
@@ -19,6 +25,11 @@ label = "Review via Codex"
 default_enabled = false
 prompt = "After implementing, run an independent Codex review of the card's diff (the `codex-review` skill / Codex CLI), iterating until it reports no significant findings. Address confirmed findings and re-verify before marking the card ready."
 
+[[stage]]
+id = "review-manual"
+label = "Manual review (alarm)"
+default_enabled = false
+prompt = "MANUAL REVIEW: stop here and hand the work to the operator. Commit all work-in-progress first (staged, with a descriptive message) so nothing is lost, leave the tree otherwise clean, then emit a line exactly like `VK-REVIEW-REQUEST: <one-line summary of what to review and where>` and STOP — this triggers an alarm so the operator reviews the result. Do NOT advance to any later stage, do NOT merge, and do NOT open a PR until the operator responds with explicit instructions."
 [[stage]]
 id = "merge"
 label = "Merge to base"

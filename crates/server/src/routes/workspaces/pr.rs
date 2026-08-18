@@ -272,7 +272,11 @@ pub async fn create_pr(
     let (gitea_base, gitea_token) = GitHostService::resolve_gitea_credentials(
         deployment.config().read().await.gitea.base_url.as_deref(),
     );
-    let git_host = match GitHostService::from_url(&target_remote.url, gitea_base.as_deref(), gitea_token.as_deref()) {
+    let git_host = match GitHostService::from_url(
+        &target_remote.url,
+        gitea_base.as_deref(),
+        gitea_token.as_deref(),
+    ) {
         Ok(host) => host,
         Err(GitHostError::UnsupportedProvider) => {
             return Ok(ResponseJson(ApiResponse::error_with_data(
@@ -397,7 +401,11 @@ pub async fn attach_existing_pr(
     let (gitea_base, gitea_token) = GitHostService::resolve_gitea_credentials(
         deployment.config().read().await.gitea.base_url.as_deref(),
     );
-    let git_host = match GitHostService::from_url(&remote.url, gitea_base.as_deref(), gitea_token.as_deref()) {
+    let git_host = match GitHostService::from_url(
+        &remote.url,
+        gitea_base.as_deref(),
+        gitea_token.as_deref(),
+    ) {
         Ok(host) => host,
         Err(GitHostError::UnsupportedProvider) => {
             return Ok(ResponseJson(ApiResponse::error_with_data(
@@ -535,7 +543,11 @@ pub async fn get_pr_comments(
     let (gitea_base, gitea_token) = GitHostService::resolve_gitea_credentials(
         deployment.config().read().await.gitea.base_url.as_deref(),
     );
-    let git_host = match GitHostService::from_url(&remote.url, gitea_base.as_deref(), gitea_token.as_deref()) {
+    let git_host = match GitHostService::from_url(
+        &remote.url,
+        gitea_base.as_deref(),
+        gitea_token.as_deref(),
+    ) {
         Ok(host) => host,
         Err(GitHostError::CliNotInstalled { provider }) => {
             return Ok(ResponseJson(ApiResponse::error_with_data(

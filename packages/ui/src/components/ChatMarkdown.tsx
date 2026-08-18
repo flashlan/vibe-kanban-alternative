@@ -24,7 +24,7 @@ export function ChatMarkdown({
   const contentClassName = cn('whitespace-pre-wrap break-words', className);
 
   return (
-    <div className="text-sm" style={{ maxWidth }}>
+    <div className="text-xs" style={{ maxWidth }}>
       {renderContent({
         content,
         className: contentClassName,

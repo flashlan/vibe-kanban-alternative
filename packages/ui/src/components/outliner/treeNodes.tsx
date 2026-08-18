@@ -1,8 +1,10 @@
 import type { NodeApi, NodeRendererProps } from 'react-arborist';
 import {
+  ArchiveBoxIcon,
   ArrowSquareOutIcon,
   LightningIcon,
   NotePencilIcon,
+  PencilSimpleIcon,
   PlusIcon,
 } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
@@ -55,6 +57,8 @@ function ProjectTreeNode(
   props: TreeNodeRenderProps<ProjectNode> & {
     onCreateChildBoard?: (parentId: string) => void;
     onSelectOrchestratorPrompt?: (projectId: string) => void;
+    onRenameProject?: (projectId: string) => void;
+    onArchiveProject?: (projectId: string) => void;
     onOpenProjectPage?: (projectId: string) => void;
     /** Opens the most-recent workspace under the Orchestrator (Unassigned)
      *  pseudo-project. Rendered only on that row. */
@@ -70,6 +74,8 @@ function ProjectTreeNode(
     dragHandle,
     onCreateChildBoard,
     onSelectOrchestratorPrompt,
+    onRenameProject,
+    onArchiveProject,
     onOpenProjectPage,
     onOpenLastWorkspace,
     activeProjectId,
@@ -241,6 +247,14 @@ function ProjectTreeNode(
               align="end"
               onClick={(e) => e.stopPropagation()}
             >
+              {onRenameProject && !isUnassigned && (
+                <DropdownMenuItem
+                  onSelect={() => onRenameProject(project.id)}
+                >
+                  <PencilSimpleIcon className="size-4" weight="regular" aria-hidden />
+                  {t('sidebar.renameProject', 'Rename')}
+                </DropdownMenuItem>
+              )}
               {onCreateChildBoard && (
                 <DropdownMenuItem
                   onSelect={() => onCreateChildBoard(project.id)}
@@ -262,6 +276,14 @@ function ProjectTreeNode(
                     'sidebar.addOrchestratorPrompt',
                     'Add orchestrator prompt'
                   )}
+                </DropdownMenuItem>
+              )}
+              {onArchiveProject && !isUnassigned && (
+                <DropdownMenuItem
+                  onSelect={() => onArchiveProject(project.id)}
+                >
+                  <ArchiveBoxIcon className="size-4" weight="regular" aria-hidden />
+                  {t('sidebar.archiveProject', 'Archive')}
                 </DropdownMenuItem>
               )}
             </DropdownMenuContent>
@@ -390,6 +412,8 @@ export function TreeNodeRouter(
   props: NodeRendererProps<SidebarTreeNode> & {
     onCreateChildBoard?: (parentId: string) => void;
     onSelectOrchestratorPrompt?: (projectId: string) => void;
+    onRenameProject?: (projectId: string) => void;
+    onArchiveProject?: (projectId: string) => void;
     onOpenProjectPage?: (projectId: string) => void;
     onOpenWorkspacesPage?: (projectId: string) => void;
     onOpenLastWorkspace?: () => void;
@@ -413,6 +437,8 @@ export function TreeNodeRouter(
     dragHandle,
     onCreateChildBoard,
     onSelectOrchestratorPrompt,
+    onRenameProject,
+    onArchiveProject,
     onOpenProjectPage,
     onOpenWorkspacesPage,
     onOpenLastWorkspace,
@@ -442,6 +468,8 @@ export function TreeNodeRouter(
           dragHandle={dragHandle}
           onCreateChildBoard={onCreateChildBoard}
           onSelectOrchestratorPrompt={onSelectOrchestratorPrompt}
+          onRenameProject={onRenameProject}
+          onArchiveProject={onArchiveProject}
           onOpenProjectPage={onOpenProjectPage}
           onOpenLastWorkspace={onOpenLastWorkspace}
           activeProjectId={activeProjectId}

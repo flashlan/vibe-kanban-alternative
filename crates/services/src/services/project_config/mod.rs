@@ -251,6 +251,7 @@ async fn import_project(pool: &SqlitePool, cfg: &ProjectConfig) -> anyhow::Resul
                     sort_order: existing.sort_order,
                     default_agent_working_dir: working_dir,
                     parent_id: existing.parent_id,
+                    archived: existing.archived,
                 },
             )
             .await?

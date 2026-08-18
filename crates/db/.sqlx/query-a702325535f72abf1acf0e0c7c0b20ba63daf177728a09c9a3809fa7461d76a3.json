@@ -1,0 +1,86 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n                pr.id,\n                pr.workspace_id AS \"workspace_id: Uuid\",\n                pr.repo_id AS \"repo_id: Uuid\",\n                pr.pr_url,\n                pr.pr_number,\n                pr.pr_status AS \"pr_status: MergeStatus\",\n                pr.target_branch_name,\n                pr.merged_at AS \"merged_at: DateTime<Utc>\",\n                pr.merge_commit_sha,\n                pr.created_at AS \"created_at!: DateTime<Utc>\",\n                pr.updated_at AS \"updated_at!: DateTime<Utc>\",\n                pr.synced_at AS \"synced_at: DateTime<Utc>\"\n            FROM pull_requests pr\n            INNER JOIN issue_workspaces iw ON iw.workspace_id = pr.workspace_id\n            INNER JOIN issues i ON i.id = iw.issue_id\n            WHERE i.project_id = $1\n            ORDER BY pr.created_at ASC",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "workspace_id: Uuid",
+        "ordinal": 1,
+        "type_info": "Blob"
+      },
+      {
+        "name": "repo_id: Uuid",
+        "ordinal": 2,
+        "type_info": "Blob"
+      },
+      {
+        "name": "pr_url",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "pr_number",
+        "ordinal": 4,
+        "type_info": "Integer"
+      },
+      {
+        "name": "pr_status: MergeStatus",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "target_branch_name",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "merged_at: DateTime<Utc>",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "merge_commit_sha",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 9,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "updated_at!: DateTime<Utc>",
+        "ordinal": 10,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "synced_at: DateTime<Utc>",
+        "ordinal": 11,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "a702325535f72abf1acf0e0c7c0b20ba63daf177728a09c9a3809fa7461d76a3"
+}

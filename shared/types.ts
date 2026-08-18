@@ -18,7 +18,12 @@ key: string | null, color: string, sort_order: bigint, parent_id: string | null,
  * project-last). UPGRADE-SAFE: the migration sets DEFAULT '' so
  * existing rows are valid without rewrite.
  */
-orchestrator_prompt: string, created_at: Date, updated_at: Date, };
+orchestrator_prompt: string, 
+/**
+ * Archived boards are hidden from the sidebar, read-only, and keep their
+ * history until permanently deleted from the Archived section.
+ */
+archived: boolean, created_at: Date, updated_at: Date, };
 
 export type UpdateRepo = { display_name?: string | null, setup_script?: string | null, cleanup_script?: string | null, archive_script?: string | null, copy_files?: string | null, parallel_setup_script?: boolean | null, dev_server_script?: string | null, default_target_branch?: string | null, default_working_dir?: string | null, };
 

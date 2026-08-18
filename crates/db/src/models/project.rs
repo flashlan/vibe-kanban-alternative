@@ -45,6 +45,7 @@ pub struct ProjectUpdate<'a> {
     pub sort_order: i64,
     pub default_agent_working_dir: Option<&'a str>,
     pub parent_id: Option<Uuid>,
+    pub archived: bool,
 }
 
 #[derive(Debug, Clone, FromRow, Serialize, Deserialize, TS)]
@@ -64,6 +65,9 @@ pub struct Project {
     /// project-last). UPGRADE-SAFE: the migration sets DEFAULT '' so
     /// existing rows are valid without rewrite.
     pub orchestrator_prompt: String,
+    /// Archived boards are hidden from the sidebar, read-only, and keep their
+    /// history until permanently deleted from the Archived section.
+    pub archived: bool,
     #[ts(type = "Date")]
     pub created_at: DateTime<Utc>,
     #[ts(type = "Date")]
@@ -83,6 +87,7 @@ impl Project {
                       default_agent_working_dir,
                       remote_project_id as "remote_project_id: Uuid",
                       orchestrator_prompt,
+                      archived as "archived!: bool",
                       created_at as "created_at!: DateTime<Utc>",
                       updated_at as "updated_at!: DateTime<Utc>"
                FROM projects
@@ -104,6 +109,7 @@ impl Project {
                       default_agent_working_dir,
                       remote_project_id as "remote_project_id: Uuid",
                       orchestrator_prompt,
+                      archived as "archived!: bool",
                       created_at as "created_at!: DateTime<Utc>",
                       updated_at as "updated_at!: DateTime<Utc>"
                FROM projects
@@ -126,6 +132,7 @@ impl Project {
                       default_agent_working_dir,
                       remote_project_id as "remote_project_id: Uuid",
                       orchestrator_prompt,
+                      archived as "archived!: bool",
                       created_at as "created_at!: DateTime<Utc>",
                       updated_at as "updated_at!: DateTime<Utc>"
                FROM projects
@@ -151,6 +158,7 @@ impl Project {
                          default_agent_working_dir,
                          remote_project_id as "remote_project_id: Uuid",
                          orchestrator_prompt,
+                      archived as "archived!: bool",
                          created_at as "created_at!: DateTime<Utc>",
                          updated_at as "updated_at!: DateTime<Utc>""#,
             project.id,
@@ -181,6 +189,7 @@ impl Project {
                    sort_order = $5,
                    default_agent_working_dir = $6,
                    parent_id = $7,
+                   archived = $8,
                    updated_at = datetime('now', 'subsec')
                WHERE id = $1
                RETURNING id as "id!: Uuid",
@@ -192,6 +201,7 @@ impl Project {
                          default_agent_working_dir,
                          remote_project_id as "remote_project_id: Uuid",
                          orchestrator_prompt,
+                      archived as "archived!: bool",
                          created_at as "created_at!: DateTime<Utc>",
                          updated_at as "updated_at!: DateTime<Utc>""#,
             id,
@@ -201,6 +211,7 @@ impl Project {
             changes.sort_order,
             changes.default_agent_working_dir,
             changes.parent_id,
+            changes.archived,
         )
         .fetch_one(pool)
         .await
@@ -299,6 +310,7 @@ impl Project {
                          default_agent_working_dir,
                          remote_project_id as "remote_project_id: Uuid",
                          orchestrator_prompt,
+                      archived as "archived!: bool",
                          created_at as "created_at!: DateTime<Utc>",
                          updated_at as "updated_at!: DateTime<Utc>""#,
             id,

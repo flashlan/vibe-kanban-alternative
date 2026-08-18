@@ -1,4 +1,5 @@
 import { useId, type ReactNode } from 'react';
+import { ArrowClockwiseIcon, TrashIcon } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '../lib/cn';
 import { SidebarBar } from './SidebarBar';
@@ -16,8 +17,14 @@ import type {
 export type { WorkspaceProjectMembership } from './outliner/types';
 
 interface SidebarProps {
-  /** All projects to render at the root of the tree. */
+  /** All active (non-archived) projects to render at the root of the tree. */
   projects: readonly SidebarProject[];
+  /** Archived (read-only) projects, shown in a separate section below the tree. */
+  archivedProjects?: readonly SidebarProject[];
+  /** Restores an archived project back to the main tree. */
+  onRestoreProject?: (projectId: string) => void;
+  /** Permanently deletes an archived project (cascades issues/statuses/tags). */
+  onDeleteArchivedProject?: (projectId: string) => void;
   /** Project id whose destination the user is currently on, if any. */
   activeProjectId: string | null;
   /** Active (non-archived) workspaces, fed into each project's tree. */
@@ -56,6 +63,11 @@ interface SidebarProps {
   /** ADR-016: opens the per-project orchestrator-prompt editor pane.
    *  Triggered by the tree's `+` menu item and the prompt row's click. */
   onSelectOrchestratorPrompt?: (projectId: string) => void;
+  /** Renames the supplied project (sidebar `+` menu → Rename). */
+  onRenameProject?: (projectId: string) => void;
+  /** Archives the supplied project (sidebar `+` menu → Archive). Archived
+   *  boards leave the tree, become read-only, and keep their history. */
+  onArchiveProject?: (projectId: string) => void;
   /** ADR-016: project id whose prompt editor is currently open. Drives
    *  the rendered row's `aria-current` and active styling. */
   activeProjectPromptId?: string | null;
@@ -74,6 +86,9 @@ interface SidebarProps {
 
 export function Sidebar({
   projects,
+  archivedProjects = [],
+  onRestoreProject,
+  onDeleteArchivedProject,
   activeProjectId,
   activeProjectPromptId,
   workspaces,
@@ -93,6 +108,8 @@ export function Sidebar({
   onOpenLastWorkspace,
   onCreateChildBoard,
   onSelectOrchestratorPrompt,
+  onRenameProject,
+  onArchiveProject,
   isMultiSelectActive,
   headerActions,
   bottomActions,
@@ -143,9 +160,57 @@ export function Sidebar({
         onOpenLastWorkspace={onOpenLastWorkspace}
         onCreateChildBoard={onCreateChildBoard}
         onSelectOrchestratorPrompt={onSelectOrchestratorPrompt}
+        onRenameProject={onRenameProject}
+        onArchiveProject={onArchiveProject}
         isMultiSelectActive={isMultiSelectActive}
         ariaLabelledBy={titleId}
       />
+
+      {archivedProjects.length > 0 && (
+        <div className="flex min-h-0 flex-col">
+          <SidebarSeparator />
+          <SidebarSectionHeader
+            title={t('sidebar.archivedProjects', 'Archived')}
+          />
+          <div className="flex flex-col gap-px overflow-y-auto px-1 pb-1">
+            {archivedProjects.map((project) => (
+              <div
+                key={project.id}
+                className="group flex items-center gap-1 rounded-sm px-1 py-0.5 text-sm text-low"
+                title={t('sidebar.archivedReadOnly', 'Archived — read-only')}
+              >
+                <span
+                  className="h-2 w-2 shrink-0 rounded-full"
+                  style={{ backgroundColor: project.color }}
+                />
+                <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                {onRestoreProject && (
+                  <button
+                    type="button"
+                    onClick={() => onRestoreProject(project.id)}
+                    className="invisible shrink-0 rounded-sm p-0.5 text-low hover:bg-tertiary hover:text-high group-hover:visible"
+                    aria-label={t('sidebar.restoreProject', 'Restore')}
+                    title={t('sidebar.restoreProject', 'Restore')}
+                  >
+                    <ArrowClockwiseIcon className="size-3.5" weight="bold" />
+                  </button>
+                )}
+                {onDeleteArchivedProject && (
+                  <button
+                    type="button"
+                    onClick={() => onDeleteArchivedProject(project.id)}
+                    className="invisible shrink-0 rounded-sm p-0.5 text-low hover:bg-tertiary hover:text-error group-hover:visible"
+                    aria-label={t('sidebar.deleteArchivedProject', 'Delete')}
+                    title={t('sidebar.deleteArchivedProject', 'Delete')}
+                  >
+                    <TrashIcon className="size-3.5" weight="bold" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {bottomActions && (
         <SidebarBar

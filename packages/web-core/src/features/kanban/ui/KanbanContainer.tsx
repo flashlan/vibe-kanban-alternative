@@ -1405,6 +1405,7 @@ export function KanbanContainer() {
                                     showOwner={false}
                                     showStatusBadge={false}
                                     showNoPrText={false}
+                                    compact
                                   />
                                 ))}
                               </div>

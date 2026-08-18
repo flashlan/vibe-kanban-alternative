@@ -6,6 +6,9 @@
       "env": {
         "VIBE_BACKEND_URL": "http://127.0.0.1:8910"
       }
+    },
+    "mem0": {
+      "url": "http://localhost:8000/mcp"
     }
   }
 }

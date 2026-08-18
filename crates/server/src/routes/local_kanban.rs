@@ -26,11 +26,14 @@ use axum::{
 use db::models::{
     issue::{Issue as DbIssue, IssueUpdate, NewIssue},
     issue_comment::{IssueComment as DbIssueComment, NewIssueComment},
+    issue_relationship::IssueRelationship as DbIssueRelationship,
     issue_workspace::{IssueWorkspace, LinkedWorkspaceRow},
     kanban_tag::{IssueTag as DbIssueTag, KanbanTag},
     project::{self, NewProject, Project as DbProject, ProjectUpdate},
     project_repo::ProjectRepo,
     project_status::ProjectStatus as DbProjectStatus,
+    pull_request::PullRequest as DbPullRequest,
+    pull_request_issue::PullRequestIssue as DbPullRequestIssue,
     repo::Repo as DbRepo,
 };
 use deployment::Deployment;
@@ -83,6 +86,7 @@ fn to_api_project(p: DbProject) -> ApiProject {
         // sidebar tree's `hasOrchestratorPrompt` dot reads this bool, the
         // editor fetches the raw value via the dedicated endpoint).
         has_orchestrator_prompt: !p.orchestrator_prompt.trim().is_empty(),
+        archived: p.archived,
         created_at: p.created_at,
         updated_at: p.updated_at,
     }
@@ -218,6 +222,30 @@ async fn fb_workspaces(
     Ok(ResponseJson(json!({ "workspaces": mapped })))
 }
 
+async fn fb_issue_relationships(
+    State(deployment): State<DeploymentImpl>,
+    Query(q): Query<ProjectScope>,
+) -> Result<ResponseJson<Value>, ApiError> {
+    let rows = DbIssueRelationship::list_by_project(&deployment.db().pool, q.project_id).await?;
+    Ok(ResponseJson(json!({ "issue_relationships": rows })))
+}
+
+async fn fb_pull_requests(
+    State(deployment): State<DeploymentImpl>,
+    Query(q): Query<ProjectScope>,
+) -> Result<ResponseJson<Value>, ApiError> {
+    let rows = DbPullRequest::list_by_project(&deployment.db().pool, q.project_id).await?;
+    Ok(ResponseJson(json!({ "pull_requests": rows })))
+}
+
+async fn fb_pull_request_issues(
+    State(deployment): State<DeploymentImpl>,
+    Query(q): Query<ProjectScope>,
+) -> Result<ResponseJson<Value>, ApiError> {
+    let rows = DbPullRequestIssue::list_by_project(&deployment.db().pool, q.project_id).await?;
+    Ok(ResponseJson(json!({ "pull_request_issues": rows })))
+}
+
 // ---------------------------------------------------------------------------
 // Projects
 // ---------------------------------------------------------------------------
@@ -262,15 +290,24 @@ pub(crate) async fn create_project_record(
         ));
     }
     let key = derive_key(name);
-    if sibling_key_exists(pool, parent_id, &key).await? {
-        return Err(ApiError::BadRequest("project key already exists".into()));
+    // The 4-char key is derived from the name, so similar names collide
+    // ("teste" vs "teste2" both → "TEST"). Make it unique among siblings by
+    // appending a numeric suffix instead of failing the whole create.
+    let mut unique_key = key.clone();
+    let mut n = 2u32;
+    while sibling_key_exists(pool, parent_id, &unique_key).await? {
+        unique_key = format!("{key}{n}");
+        n += 1;
+        if n > 999 {
+            return Err(ApiError::BadRequest("project key already exists".into()));
+        }
     }
     let project = DbProject::create(
         pool,
         NewProject {
             id,
             name,
-            key: Some(&key),
+            key: Some(&unique_key),
             color,
             sort_order: 0,
             default_agent_working_dir: None,
@@ -409,6 +446,7 @@ async fn update_project(
         .sort_order
         .map(|v| v as i64)
         .unwrap_or(existing.sort_order);
+    let archived = req.archived.unwrap_or(existing.archived);
     let project = DbProject::update_fields(
         &deployment.db().pool,
         id,
@@ -419,6 +457,7 @@ async fn update_project(
             sort_order,
             default_agent_working_dir: existing.default_agent_working_dir.as_deref(),
             parent_id,
+            archived,
         },
     )
     .await?;
@@ -470,6 +509,7 @@ async fn bulk_projects(
                         sort_order,
                         default_agent_working_dir: existing.default_agent_working_dir.as_deref(),
                         parent_id: existing.parent_id,
+                        archived: existing.archived,
                     },
                 )
                 .await?;
@@ -1111,6 +1151,15 @@ pub fn router() -> Router<DeploymentImpl> {
             get(fb_project_workspaces),
         )
         .route("/v1/fallback/workspaces", get(fb_workspaces))
+        .route(
+            "/v1/fallback/issue_relationships",
+            get(fb_issue_relationships),
+        )
+        .route("/v1/fallback/pull_requests", get(fb_pull_requests))
+        .route(
+            "/v1/fallback/pull_request_issues",
+            get(fb_pull_request_issues),
+        )
         .route("/v1/projects", post(create_project))
         .route("/v1/projects/bulk", post(bulk_projects))
         .route(
@@ -1232,13 +1281,19 @@ mod tests {
             "ACME-SUB-X"
         );
 
-        let error = create_project_record(&pool, Uuid::new_v4(), "Sub", "#6366f1", Some(root_id))
-            .await
-            .unwrap_err();
-        assert!(matches!(
-            error,
-            ApiError::BadRequest(message) if message == "project key already exists"
-        ));
+        // A sibling with the same derived key no longer hard-fails: the
+        // record is created with a unique suffixed key instead ("SUB2").
+        let duplicate =
+            create_project_record(&pool, Uuid::new_v4(), "Sub", "#6366f1", Some(root_id))
+                .await
+                .unwrap();
+        assert_eq!(duplicate.key.as_deref(), Some("SUB2"));
+        // And a second collision gets the next suffix.
+        let duplicate2 =
+            create_project_record(&pool, Uuid::new_v4(), "Sub", "#6366f1", Some(root_id))
+                .await
+                .unwrap();
+        assert_eq!(duplicate2.key.as_deref(), Some("SUB3"));
     }
 
     /// Determinism: two consecutive reads of the same project id — each
@@ -1413,6 +1468,7 @@ mod tests {
                 color: None,
                 sort_order: Some(50),
                 parent_id: None,
+                archived: None,
             },
         };
         let mut bad_item = good_item.clone();

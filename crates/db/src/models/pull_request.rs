@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
+use serde::Serialize;
 use sqlx::{FromRow, SqlitePool};
 use uuid::Uuid;
 
 use super::merge::{Merge, MergeStatus, PrMerge, PullRequestInfo};
 
-#[derive(Debug, Clone, FromRow)]
+#[derive(Debug, Clone, FromRow, Serialize)]
 pub struct PullRequest {
     pub id: String,
     pub workspace_id: Option<Uuid>,
@@ -261,6 +262,36 @@ impl PullRequest {
             .into_iter()
             .filter_map(|pr| pr.workspace_id.map(|ws_id| (ws_id, pr)))
             .collect())
+    }
+
+    pub async fn list_by_project(
+        pool: &SqlitePool,
+        project_id: Uuid,
+    ) -> Result<Vec<PullRequest>, sqlx::Error> {
+        sqlx::query_as!(
+            PullRequest,
+            r#"SELECT
+                pr.id,
+                pr.workspace_id AS "workspace_id: Uuid",
+                pr.repo_id AS "repo_id: Uuid",
+                pr.pr_url,
+                pr.pr_number,
+                pr.pr_status AS "pr_status: MergeStatus",
+                pr.target_branch_name,
+                pr.merged_at AS "merged_at: DateTime<Utc>",
+                pr.merge_commit_sha,
+                pr.created_at AS "created_at!: DateTime<Utc>",
+                pr.updated_at AS "updated_at!: DateTime<Utc>",
+                pr.synced_at AS "synced_at: DateTime<Utc>"
+            FROM pull_requests pr
+            INNER JOIN issue_workspaces iw ON iw.workspace_id = pr.workspace_id
+            INNER JOIN issues i ON i.id = iw.issue_id
+            WHERE i.project_id = $1
+            ORDER BY pr.created_at ASC"#,
+            project_id
+        )
+        .fetch_all(pool)
+        .await
     }
 
     pub async fn find_all_with_workspace(

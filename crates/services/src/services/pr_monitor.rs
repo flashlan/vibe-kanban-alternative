@@ -114,7 +114,13 @@ impl<C: ContainerService + Send + Sync + 'static> PrMonitorService<C> {
     /// Check the status of a single open PR and handle state changes.
     async fn check_open_pr(&self, pr: &PullRequest) -> Result<(), PrMonitorError> {
         let (gitea_base, gitea_token) = GitHostService::resolve_gitea_credentials(
-            self.container.config().read().await.gitea.base_url.as_deref(),
+            self.container
+                .config()
+                .read()
+                .await
+                .gitea
+                .base_url
+                .as_deref(),
         );
         let git_host =
             GitHostService::from_url(&pr.pr_url, gitea_base.as_deref(), gitea_token.as_deref())?;

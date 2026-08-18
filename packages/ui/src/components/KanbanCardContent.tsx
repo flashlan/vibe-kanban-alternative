@@ -212,7 +212,7 @@ export function KanbanCardContent<TTag extends KanbanTag = KanbanTag>({
 
   return (
     <div className={cn('flex flex-col gap-half min-w-0', className)}>
-      {/* Row 1: Task ID + sub-issue indicator + loading dots + more actions */}
+      {/* Row 1: Title + loading dots + more actions */}
       <div className="flex items-center justify-between gap-half">
         <div className="flex items-center gap-half min-w-0">
           {isSubIssue && (
@@ -220,8 +220,8 @@ export function KanbanCardContent<TTag extends KanbanTag = KanbanTag>({
               {t('kanban.subIssueIndicator')}
             </span>
           )}
-          <span className="font-ibm-plex-mono text-sm text-low truncate">
-            {displayId}
+          <span className="text-base text-normal truncate font-medium">
+            {title || displayId}
           </span>
           {isLoading && <RunningDots />}
         </div>
@@ -248,10 +248,7 @@ export function KanbanCardContent<TTag extends KanbanTag = KanbanTag>({
         )}
       </div>
 
-      {/* Row 2: Title */}
-      <span className="text-base text-normal truncate">{title}</span>
-
-      {/* Row 3: Description (optional, truncated) */}
+      {/* Row 2: Description (optional, truncated) */}
       {previewDescription && (
         <p
           className={cn(
@@ -265,9 +262,9 @@ export function KanbanCardContent<TTag extends KanbanTag = KanbanTag>({
         </p>
       )}
 
-      {/* Row 4: Priority */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-half min-w-0">
+      {/* Row 3: Priority + Tags + PRs + Relationships (same line) */}
+      <div className="flex items-center gap-half flex-wrap min-w-0">
+        <div className="flex items-center">
           {onPriorityClick ? (
             <button
               type="button"
@@ -287,58 +284,49 @@ export function KanbanCardContent<TTag extends KanbanTag = KanbanTag>({
             <PriorityIcon priority={priority} />
           )}
         </div>
+        {tagEditProps ? (
+          (tagEditProps.renderTagEditor?.({
+            allTags: tagEditProps.allTags,
+            selectedTagIds: tagEditProps.selectedTagIds,
+            onTagToggle: tagEditProps.onTagToggle,
+            onCreateTag: tagEditProps.onCreateTag,
+            trigger: tagEditorTrigger,
+          }) ?? tagEditorTrigger)
+        ) : (
+          <>
+            {tags.slice(0, 2).map((tag) => (
+              <KanbanBadge key={tag.id} name={tag.name} color={tag.color} />
+            ))}
+            {tags.length > 2 && (
+              <span className="text-sm text-low">+{tags.length - 2}</span>
+            )}
+          </>
+        )}
+        {pullRequests.slice(0, 2).map((pr) => (
+          <PrBadge
+            key={pr.id}
+            number={pr.number}
+            url={pr.url}
+            status={pr.status}
+          />
+        ))}
+        {pullRequests.length > 2 && (
+          <span className="text-sm text-low">+{pullRequests.length - 2}</span>
+        )}
+        {relationships.slice(0, 2).map((rel) => (
+          <RelationshipBadge
+            key={rel.relationshipId}
+            displayType={rel.displayType}
+            relatedIssueDisplayId={rel.relatedIssueDisplayId}
+            compact
+          />
+        ))}
+        {relationships.length > 2 && (
+          <span className="text-sm text-low">
+            +{relationships.length - 2}
+          </span>
+        )}
       </div>
-
-      {/* Row 5: Tags, PRs, Relationships (own row to prevent overflow) */}
-      {(tags.length > 0 ||
-        tagEditProps ||
-        pullRequests.length > 0 ||
-        relationships.length > 0) && (
-        <div className="flex items-center gap-half flex-wrap min-w-0">
-          {tagEditProps ? (
-            (tagEditProps.renderTagEditor?.({
-              allTags: tagEditProps.allTags,
-              selectedTagIds: tagEditProps.selectedTagIds,
-              onTagToggle: tagEditProps.onTagToggle,
-              onCreateTag: tagEditProps.onCreateTag,
-              trigger: tagEditorTrigger,
-            }) ?? tagEditorTrigger)
-          ) : (
-            <>
-              {tags.slice(0, 2).map((tag) => (
-                <KanbanBadge key={tag.id} name={tag.name} color={tag.color} />
-              ))}
-              {tags.length > 2 && (
-                <span className="text-sm text-low">+{tags.length - 2}</span>
-              )}
-            </>
-          )}
-          {pullRequests.slice(0, 2).map((pr) => (
-            <PrBadge
-              key={pr.id}
-              number={pr.number}
-              url={pr.url}
-              status={pr.status}
-            />
-          ))}
-          {pullRequests.length > 2 && (
-            <span className="text-sm text-low">+{pullRequests.length - 2}</span>
-          )}
-          {relationships.slice(0, 2).map((rel) => (
-            <RelationshipBadge
-              key={rel.relationshipId}
-              displayType={rel.displayType}
-              relatedIssueDisplayId={rel.relatedIssueDisplayId}
-              compact
-            />
-          ))}
-          {relationships.length > 2 && (
-            <span className="text-sm text-low">
-              +{relationships.length - 2}
-            </span>
-          )}
-        </div>
-      )}
 
       {/* Row 6: Sub-issues expandable badge + sub-board link (parent cards). */}
       {!!subIssueCount &&

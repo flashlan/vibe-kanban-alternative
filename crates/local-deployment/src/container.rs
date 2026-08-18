@@ -2033,7 +2033,23 @@ impl LocalContainerService {
             // idempotency guard (keyed by execution_process_id) makes this
             // safe even if `start_execution` already spawned one.
             if process.run_reason == ExecutionProcessRunReason::CodingAgent {
-                spawn_pipeline_stage_tracker(store, ctx.workspace.id, exec_id, self.db.clone());
+                spawn_pipeline_stage_tracker(
+                    store.clone(),
+                    ctx.workspace.id,
+                    exec_id,
+                    self.db.clone(),
+                );
+                services::services::mem0::spawn_memory_tracker(
+                    store.clone(),
+                    ctx.workspace.id,
+                    exec_id,
+                    self.db.clone(),
+                );
+                services::services::review_request::spawn_review_request_tracker(
+                    store,
+                    exec_id,
+                    self.notification_service.clone(),
+                );
             }
 
             // OpenCode-headed sessions have no Claude transcript JSONL to tail;

@@ -22,6 +22,7 @@ import {
 } from '@vibe/ui/components/outliner/types';
 import { getProjectDestination } from '@/shared/lib/routes/appNavigation';
 import { CommandBarDialog } from '@/shared/dialogs/command-bar/CommandBarDialog';
+import { ConfirmDialog } from '@vibe/ui/components/ConfirmDialog';
 import {
   CreateProjectDialog,
   type CreateProjectResult,
@@ -96,7 +97,13 @@ export function SharedAppLayout() {
   }, [isMobile, mobileFontScale]);
 
   // Sidebar state - projects (ADR-018: tenant-less, no org selection)
-  const { data: projects = [], isLoading } = useProjects();
+  const {
+    data: projects = [],
+    isLoading,
+    update: updateProject,
+    remove: removeProject,
+    projectsById,
+  } = useProjects();
   const sortedProjects = useMemo(
     () => sortProjectsByOrder(projects),
     [projects]
@@ -234,6 +241,101 @@ export function SharedAppLayout() {
       }
     },
     [appNavigation]
+  );
+
+  const projectsByIdRef = useRef(projectsById);
+  projectsByIdRef.current = projectsById;
+
+  // Rename a project from the sidebar `+` menu. The backend keeps the
+  // project key stable on rename (issue IDs like `TEST-1` do not change).
+  const handleRenameProject = useCallback(
+    async (projectId: string) => {
+      const project = projectsByIdRef.current.get(projectId);
+      const currentName = project?.name ?? '';
+      const newName = window.prompt('Rename project', currentName);
+      if (newName === null) return; // cancelled
+      const trimmed = newName.trim();
+      if (!trimmed || trimmed === currentName) return;
+      try {
+        await updateProject(projectId, { name: trimmed });
+      } catch {
+        // Swallow — the shape collection surfaces errors via the row state.
+      }
+    },
+    [updateProject]
+  );
+
+  // Archive a project from the sidebar `+` menu. Safer than deleting: the
+  // board leaves the sidebar, becomes read-only, and keeps its history until
+  // it is permanently deleted from the Archived section.
+  const handleArchiveProject = useCallback(
+    async (projectId: string) => {
+      const project = projectsByIdRef.current.get(projectId);
+      const name = project?.name ?? projectId;
+      const result = await ConfirmDialog.show({
+        title: 'Archive project?',
+        message: `"${name}" will be moved to Archived and become read-only. You can restore it at any time.`,
+        confirmText: 'Archive',
+        variant: 'info',
+      });
+      if (result !== 'confirmed') return;
+      try {
+        await updateProject(projectId, { archived: true });
+        if (activeProjectId === projectId) {
+          appNavigation.goToWorkspaces();
+        }
+      } catch {
+        // Swallow — the shape collection surfaces errors via the row state.
+      }
+    },
+    [updateProject, appNavigation, activeProjectId]
+  );
+
+  const handleRestoreProject = useCallback(
+    async (projectId: string) => {
+      try {
+        await updateProject(projectId, { archived: false });
+      } catch {
+        // Swallow — the shape collection surfaces errors via the row state.
+      }
+    },
+    [updateProject]
+  );
+
+  // Permanently delete an ARCHIVED project from the Archived section.
+  // Cascades to the project's issues, statuses, tags, and links.
+  const handleDeleteArchivedProject = useCallback(
+    async (projectId: string) => {
+      const project = projectsByIdRef.current.get(projectId);
+      const name = project?.name ?? projectId;
+      const result = await ConfirmDialog.show({
+        title: 'Delete archived project?',
+        message: `"${name}" and all of its issues, statuses, and tags will be permanently deleted. This cannot be undone.`,
+        confirmText: 'Delete',
+        variant: 'destructive',
+      });
+      if (result !== 'confirmed') return;
+
+      try {
+        await removeProject(projectId);
+        if (activeProjectId === projectId) {
+          appNavigation.goToWorkspaces();
+        }
+      } catch (error) {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Failed to delete project. It may have child boards.';
+        await ConfirmDialog.show({
+          title: 'Could not delete project',
+          message,
+          confirmText: 'OK',
+          showCancelButton: false,
+          variant: 'info',
+        });
+      }
+    },
+    [removeProject, appNavigation, activeProjectId]
   );
 
   // ADR-007: project reorder is disabled tree-wide (see PLAN-sidebar-kanban-cross-dnd);
@@ -487,18 +589,34 @@ export function SharedAppLayout() {
 
   const sidebarProjects = useMemo(
     () =>
-      orderedProjects.map((p) => ({
-        id: p.id,
-        name: p.name,
-        color: p.color,
-        parentId: p.parent_id ?? null,
-        sortOrder: p.sort_order,
-        // ADR-016: mirror wire `has_orchestrator_prompt` so the tree's
-        // brand-coloured dot tracks the row on every refresh. The body
-        // never ships on the list shape — the editor's `resolve` GET
-        // fetches the resolved value with provenance.
-        hasOrchestratorPrompt: p.has_orchestrator_prompt,
-      })),
+      orderedProjects
+        .filter((p) => !p.archived)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          color: p.color,
+          parentId: p.parent_id ?? null,
+          sortOrder: p.sort_order,
+          // ADR-016: mirror wire `has_orchestrator_prompt` so the tree's
+          // brand-coloured dot tracks the row on every refresh. The body
+          // never ships on the list shape — the editor's `resolve` GET
+          // fetches the resolved value with provenance.
+          hasOrchestratorPrompt: p.has_orchestrator_prompt,
+        })),
+    [orderedProjects]
+  );
+  const archivedSidebarProjects = useMemo(
+    () =>
+      orderedProjects
+        .filter((p) => p.archived)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          color: p.color,
+          parentId: p.parent_id ?? null,
+          sortOrder: p.sort_order,
+          hasOrchestratorPrompt: p.has_orchestrator_prompt,
+        })),
     [orderedProjects]
   );
   const realProjectIds = useMemo(
@@ -601,6 +719,11 @@ export function SharedAppLayout() {
                     onOpenLastWorkspace={handleOpenLastOrchestratorWorkspace}
                     onSelectOrchestratorPrompt={handleSelectOrchestratorPrompt}
                     onCreateChildBoard={handleCreateChildBoard}
+                    onRenameProject={handleRenameProject}
+                    onArchiveProject={handleArchiveProject}
+                    archivedProjects={archivedSidebarProjects}
+                    onRestoreProject={handleRestoreProject}
+                    onDeleteArchivedProject={handleDeleteArchivedProject}
                     isMultiSelectActive={isMultiSelectActive}
                     headerActions={
                       <CreateProjectButton onClick={handleCreateProject} />
@@ -685,6 +808,17 @@ export function SharedAppLayout() {
                         setIsDrawerOpen(false);
                       }}
                       onCreateChildBoard={handleCreateChildBoard}
+                      onRenameProject={(id) => {
+                        void handleRenameProject(id);
+                        setIsDrawerOpen(false);
+                      }}
+                      onArchiveProject={(id) => {
+                        void handleArchiveProject(id);
+                        setIsDrawerOpen(false);
+                      }}
+                      archivedProjects={archivedSidebarProjects}
+                      onRestoreProject={handleRestoreProject}
+                      onDeleteArchivedProject={handleDeleteArchivedProject}
                       isMultiSelectActive={isMultiSelectActive}
                       headerActions={
                         <CreateProjectButton onClick={handleCreateProject} />

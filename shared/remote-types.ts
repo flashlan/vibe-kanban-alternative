@@ -4,7 +4,7 @@
 // Electric row types
 export type JsonValue = number | string | boolean | Array<JsonValue> | { [key in string]?: JsonValue } | null;
 
-export type Project = { id: string, name: string, color: string, sort_order: number, parent_id: string | null, has_orchestrator_prompt: boolean, created_at: string, updated_at: string, };
+export type Project = { id: string, name: string, color: string, sort_order: number, parent_id: string | null, has_orchestrator_prompt: boolean, archived: boolean, created_at: string, updated_at: string, };
 
 export type Workspace = { id: string, project_id: string, issue_id: string | null, local_workspace_id: string | null, name: string | null, archived: boolean, files_changed: number | null, lines_added: number | null, lines_removed: number | null, created_at: string, updated_at: string, };
 
@@ -56,7 +56,7 @@ export type CreateProjectRequest = {
  */
 id?: string, name: string, color: string, parent_id?: string | null, };
 
-export type UpdateProjectRequest = { name: string | null, color: string | null, sort_order: number | null, parent_id?: string | null, };
+export type UpdateProjectRequest = { name: string | null, color: string | null, sort_order: number | null, parent_id?: string | null, archived?: boolean | null, };
 
 export type CreateTagRequest = {
  /**

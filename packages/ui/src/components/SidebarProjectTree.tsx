@@ -63,6 +63,10 @@ interface SidebarProjectTreeProps {
    *  project id. The `+` menu's "Orchestrator prompt" item and the
    *  prompt row's click both route through this. */
   onSelectOrchestratorPrompt?: (projectId: string) => void;
+  /** Renames the supplied project (sidebar `+` menu → Rename). */
+  onRenameProject?: (projectId: string) => void;
+  /** Deletes the supplied project (sidebar `+` menu → Delete). */
+  onArchiveProject?: (projectId: string) => void;
   /** ADR-016: project id whose prompt editor is currently open. Drives
    *  the rendered row's `aria-current` and the active styling. */
   activeProjectPromptId?: string | null;
@@ -96,6 +100,8 @@ export function SidebarProjectTree({
   onOpenLastWorkspace,
   onCreateChildBoard,
   onSelectOrchestratorPrompt,
+  onRenameProject,
+  onArchiveProject,
   activeProjectPromptId = null,
   isMultiSelectActive = false,
   ariaLabelledBy,
@@ -535,6 +541,8 @@ export function SidebarProjectTree({
                   {...props}
                   onCreateChildBoard={onCreateChildBoard}
                   onSelectOrchestratorPrompt={onSelectOrchestratorPrompt}
+                  onRenameProject={onRenameProject}
+                  onArchiveProject={onArchiveProject}
                   onOpenProjectPage={onOpenProjectPage}
                   onOpenWorkspacesPage={onOpenWorkspacesPage}
                   onOpenLastWorkspace={onOpenLastWorkspace}

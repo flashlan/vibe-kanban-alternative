@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id as \"id!: Uuid\",\n                      name,\n                      key,\n                      color,\n                      sort_order,\n                      parent_id as \"parent_id: Uuid\",\n                      default_agent_working_dir,\n                      remote_project_id as \"remote_project_id: Uuid\",\n                      orchestrator_prompt,\n                      created_at as \"created_at!: DateTime<Utc>\",\n                      updated_at as \"updated_at!: DateTime<Utc>\"\n               FROM projects\n               ORDER BY sort_order ASC, created_at DESC",
+  "query": "SELECT id as \"id!: Uuid\",\n                      name,\n                      key,\n                      color,\n                      sort_order,\n                      parent_id as \"parent_id: Uuid\",\n                      default_agent_working_dir,\n                      remote_project_id as \"remote_project_id: Uuid\",\n                      orchestrator_prompt,\n                      archived as \"archived!: bool\",\n                      created_at as \"created_at!: DateTime<Utc>\",\n                      updated_at as \"updated_at!: DateTime<Utc>\"\n               FROM projects\n               ORDER BY sort_order ASC, created_at DESC",
   "describe": {
     "columns": [
       {
@@ -49,13 +49,18 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at!: DateTime<Utc>",
+        "name": "archived!: bool",
         "ordinal": 9,
+        "type_info": "Bool"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 10,
         "type_info": "Text"
       },
       {
         "name": "updated_at!: DateTime<Utc>",
-        "ordinal": 10,
+        "ordinal": 11,
         "type_info": "Text"
       }
     ],
@@ -73,8 +78,9 @@
       true,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "975a4aef1375eaa8d7c279e540d42e63b93be87299ad81b6d24930e032d818d6"
+  "hash": "7fbac233ba5d4ccc93a2c08e88bdd186f98c58e4b078e9f8fd5d7299a1ca65d9"
 }

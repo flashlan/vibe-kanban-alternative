@@ -520,3 +520,13 @@ body.dnd-dragging,
 body.dnd-dragging * {
   cursor: grabbing !important;
 }
+
+/* ===== Font size reduction (applies to all themes) ===== */
+/* Editor (Lexical) text — 16px → 13px */
+.wysiwyg {
+  font-size: 13px !important;
+}
+/* Normal text (paragraphs, list items) — 14px → 12px */
+.text-sm.text-normal {
+  font-size: 12px !important;
+}

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "UPDATE projects\n               SET name = $2,\n                   key = $3,\n                   color = $4,\n                   sort_order = $5,\n                   default_agent_working_dir = $6,\n                   parent_id = $7,\n                   updated_at = datetime('now', 'subsec')\n               WHERE id = $1\n               RETURNING id as \"id!: Uuid\",\n                         name,\n                         key,\n                         color,\n                         sort_order,\n                         parent_id as \"parent_id: Uuid\",\n                         default_agent_working_dir,\n                         remote_project_id as \"remote_project_id: Uuid\",\n                         orchestrator_prompt,\n                         created_at as \"created_at!: DateTime<Utc>\",\n                         updated_at as \"updated_at!: DateTime<Utc>\"",
+  "query": "UPDATE projects\n               SET name = $2,\n                   key = $3,\n                   color = $4,\n                   sort_order = $5,\n                   default_agent_working_dir = $6,\n                   parent_id = $7,\n                   archived = $8,\n                   updated_at = datetime('now', 'subsec')\n               WHERE id = $1\n               RETURNING id as \"id!: Uuid\",\n                         name,\n                         key,\n                         color,\n                         sort_order,\n                         parent_id as \"parent_id: Uuid\",\n                         default_agent_working_dir,\n                         remote_project_id as \"remote_project_id: Uuid\",\n                         orchestrator_prompt,\n                      archived as \"archived!: bool\",\n                         created_at as \"created_at!: DateTime<Utc>\",\n                         updated_at as \"updated_at!: DateTime<Utc>\"",
   "describe": {
     "columns": [
       {
@@ -49,18 +49,23 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at!: DateTime<Utc>",
+        "name": "archived!: bool",
         "ordinal": 9,
+        "type_info": "Bool"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 10,
         "type_info": "Text"
       },
       {
         "name": "updated_at!: DateTime<Utc>",
-        "ordinal": 10,
+        "ordinal": 11,
         "type_info": "Text"
       }
     ],
     "parameters": {
-      "Right": 7
+      "Right": 8
     },
     "nullable": [
       true,
@@ -73,8 +78,9 @@
       true,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "d1f11ea5870f5f75c9e66a1750b978424bf4596cb2a559e8228e78b7fa6a0f29"
+  "hash": "267f6218bcad7e210d3974ba0da01caead3518874656ad650f037eb0d0fd44e6"
 }

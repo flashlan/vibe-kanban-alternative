@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "UPDATE projects\n               SET orchestrator_prompt = $2,\n                   updated_at = datetime('now', 'subsec')\n               WHERE id = $1\n               RETURNING id as \"id!: Uuid\",\n                         name,\n                         key,\n                         color,\n                         sort_order,\n                         parent_id as \"parent_id: Uuid\",\n                         default_agent_working_dir,\n                         remote_project_id as \"remote_project_id: Uuid\",\n                         orchestrator_prompt,\n                         created_at as \"created_at!: DateTime<Utc>\",\n                         updated_at as \"updated_at!: DateTime<Utc>\"",
+  "query": "UPDATE projects\n               SET orchestrator_prompt = $2,\n                   updated_at = datetime('now', 'subsec')\n               WHERE id = $1\n               RETURNING id as \"id!: Uuid\",\n                         name,\n                         key,\n                         color,\n                         sort_order,\n                         parent_id as \"parent_id: Uuid\",\n                         default_agent_working_dir,\n                         remote_project_id as \"remote_project_id: Uuid\",\n                         orchestrator_prompt,\n                      archived as \"archived!: bool\",\n                         created_at as \"created_at!: DateTime<Utc>\",\n                         updated_at as \"updated_at!: DateTime<Utc>\"",
   "describe": {
     "columns": [
       {
@@ -49,13 +49,18 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at!: DateTime<Utc>",
+        "name": "archived!: bool",
         "ordinal": 9,
+        "type_info": "Bool"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 10,
         "type_info": "Text"
       },
       {
         "name": "updated_at!: DateTime<Utc>",
-        "ordinal": 10,
+        "ordinal": 11,
         "type_info": "Text"
       }
     ],
@@ -73,8 +78,9 @@
       true,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "85e8b42c6dea6484c2670e2c104bf4c61b75e3db7186a32de9454020224ab7e2"
+  "hash": "fc308b02f8953b2000177a3b1c670427d18e43bede3353bd1a8f5e0a116d07a6"
 }

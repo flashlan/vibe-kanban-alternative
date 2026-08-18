@@ -41,6 +41,7 @@ mod context;
 mod issue_relationships;
 mod issue_tags;
 mod issues;
+mod mem0;
 mod orchestrator_prompt;
 mod projects;
 mod repos;
@@ -73,6 +74,9 @@ impl McpServer {
             // auth-less DB (already exposed via the REST resolve endpoint);
             // mode was never a confidentiality boundary.
             + Self::orchestrator_prompt_tools_router()
+            // mem0 project memory (recall / search / save) for the coding
+            // agents driving workspaces.
+            + Self::mem0_tools_router()
     }
 
     pub fn orchestrator_mode_router() -> rmcp::handler::server::tool::ToolRouter<Self> {
@@ -519,6 +523,9 @@ mod tests {
             "list_sessions".to_string(),
             "list_tags".to_string(),
             "list_workspaces".to_string(),
+            "memory_recall".to_string(),
+            "memory_save".to_string(),
+            "memory_search".to_string(),
             "remove_issue_tag".to_string(),
             "respond_to_approval".to_string(),
             "run_issue_in_workspace".to_string(),

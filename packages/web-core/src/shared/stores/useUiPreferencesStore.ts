@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { create } from 'zustand';
 import type { RepoAction } from '@vibe/ui/components/RepoCard';
 import type { IssuePriority } from 'shared/remote-types';
@@ -57,6 +57,48 @@ const loadDefaultPipelineId = (): string | null => {
     // localStorage may be unavailable
   }
   return null;
+};
+
+// Combined pipeline selection (pipeline id + ticked stage ids), so a card
+// created with "Quick + memory on" re-opens the same way next time. Stored as
+// JSON `{ "id": "quick", "enabledIds": ["memory", "implement", ...] }`.
+const PIPELINE_SELECTION_KEY = 'vk-pipeline-selection';
+
+export interface PipelineSelectionPref {
+  id: string | null;
+  enabledIds: string[];
+}
+
+const loadPipelineSelectionPref = (): PipelineSelectionPref => {
+  try {
+    const stored = localStorage.getItem(PIPELINE_SELECTION_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored) as {
+        id?: string | null;
+        enabledIds?: unknown;
+      };
+      return {
+        id: parsed.id ?? null,
+        enabledIds: Array.isArray(parsed.enabledIds)
+          ? parsed.enabledIds.filter(
+              (v): v is string => typeof v === 'string'
+            )
+          : [],
+      };
+    }
+  } catch {
+    // localStorage may be unavailable or malformed
+  }
+  // Fall back to the legacy single-key preference.
+  return { id: loadDefaultPipelineId(), enabledIds: [] };
+};
+
+const savePipelineSelectionPref = (pref: PipelineSelectionPref): void => {
+  try {
+    localStorage.setItem(PIPELINE_SELECTION_KEY, JSON.stringify(pref));
+  } catch {
+    // localStorage may be unavailable
+  }
 };
 
 // Animated (shimmering) border around the message box while the workspace is
@@ -270,6 +312,7 @@ export const PERSIST_KEYS = {
   kanbanIssueSubIssues: 'kanban-issue-sub-issues',
   kanbanIssueRelationships: 'kanban-issue-relationships',
   kanbanIssueAttachments: 'kanban-issue-attachments',
+  kanbanIssuePipeline: 'kanban-issue-pipeline',
   // Dynamic keys (use helper functions)
   repoCard: (repoId: string) => `repo-card-${repoId}` as const,
 } as const;
@@ -296,6 +339,7 @@ export type PersistKey =
   | typeof PERSIST_KEYS.kanbanIssueSubIssues
   | typeof PERSIST_KEYS.kanbanIssueRelationships
   | typeof PERSIST_KEYS.kanbanIssueAttachments
+  | typeof PERSIST_KEYS.kanbanIssuePipeline
   | `repo-card-${string}`
   | `diff:${string}`
   | `edit:${string}`
@@ -1000,6 +1044,24 @@ export function useDefaultPipelineId() {
   const set = useUiPreferencesStore((s) => s.setDefaultPipelineId);
   return [id, set] as const;
 }
+
+// Hook for the combined pipeline selection (pipeline id + ticked stage ids),
+// persisted to localStorage so the operator's last pipeline/stage choice is
+// re-applied on the next card.
+export function useDefaultPipelineSelectionPref(): [
+  PipelineSelectionPref,
+  (pref: PipelineSelectionPref) => void,
+] {
+  const [pref, setPref] = useState<PipelineSelectionPref>(() =>
+    loadPipelineSelectionPref()
+  );
+  const set = useCallback((next: PipelineSelectionPref) => {
+    setPref(next);
+    savePipelineSelectionPref(next);
+  }, []);
+  return [pref, set];
+}
+
 
 // Hook for the animated running outline toggle
 export function useAnimateRunningOutline() {

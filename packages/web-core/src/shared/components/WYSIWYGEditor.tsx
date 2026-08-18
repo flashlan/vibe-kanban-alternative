@@ -387,11 +387,11 @@ const WYSIWYGEditor = forwardRef<WYSIWYGEditorRef, WysiwygProps>(
         theme: {
           paragraph: 'mb-1 last:mb-0',
           heading: {
-            h1: 'mt-4 mb-2 text-2xl font-semibold',
-            h2: 'mt-3 mb-2 text-xl font-semibold',
-            h3: 'mt-3 mb-2 text-lg font-semibold',
-            h4: 'mt-2 mb-1 text-base font-medium',
-            h5: 'mt-2 mb-1 text-sm font-medium',
+            h1: 'mt-4 mb-2 text-xl font-semibold',
+            h2: 'mt-3 mb-2 text-lg font-semibold',
+            h3: 'mt-3 mb-2 text-base font-semibold',
+            h4: 'mt-2 mb-1 text-sm font-medium',
+            h5: 'mt-2 mb-1 text-xs font-medium',
             h6: 'mt-2 mb-1 text-xs font-medium uppercase tracking-wide',
           },
           quote:
@@ -502,7 +502,7 @@ const WYSIWYGEditor = forwardRef<WYSIWYGEditorRef, WysiwygProps>(
     );
 
     const editorContent = (
-      <div className="wysiwyg text-base relative">
+      <div className="wysiwyg text-sm relative">
         <EditorWorkspaceContext.Provider value={workspaceId}>
           <SessionContext.Provider value={sessionId}>
             <LocalAttachmentsContext.Provider value={localAttachments ?? []}>

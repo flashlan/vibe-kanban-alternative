@@ -14,7 +14,7 @@ import {
   extractManualLines,
   type PipelineStage,
 } from '@/shared/lib/pipeline/cardPipeline';
-import { useDefaultPipelineId } from '@/shared/stores/useUiPreferencesStore';
+import { useDefaultPipelineId, useDefaultPipelineSelectionPref } from '@/shared/stores/useUiPreferencesStore';
 import {
   Select,
   SelectContent,
@@ -23,6 +23,24 @@ import {
   SelectValue,
 } from '@vibe/ui/components/Select';
 import { cn } from '@/shared/lib/utils';
+
+const PIPELINE_EXPANDED_KEY = 'vk-pipeline-expanded';
+
+function usePipelineExpanded(defaultValue = false): [boolean, (v: boolean) => void] {
+  const [value, setValue] = useState(() => {
+    try {
+      const stored = localStorage.getItem(PIPELINE_EXPANDED_KEY);
+      return stored !== null ? stored === 'true' : defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  });
+  const set = useCallback((v: boolean) => {
+    setValue(v);
+    try { localStorage.setItem(PIPELINE_EXPANDED_KEY, String(v)); } catch {}
+  }, []);
+  return [value, set];
+}
 
 export interface PipelineSelection {
   /** Selected pipeline ids. Single-select now, so at most one entry. */
@@ -80,12 +98,13 @@ interface PipelineSectionProps {
 export function PipelineSection({
   profiles,
   disabled,
-  expanded: expandedProp,
+  expanded: _expandedProp,
   initialSelection,
   onChange,
 }: PipelineSectionProps) {
   const { t } = useTranslation('common');
   const [rememberedDefaultId, setRememberedDefaultId] = useDefaultPipelineId();
+  const [pipelinePref, setPipelinePref] = useDefaultPipelineSelectionPref();
   const agents = useMemo(
     () => (profiles ? Object.keys(profiles).sort() : []),
     [profiles]
@@ -94,7 +113,7 @@ export function PipelineSection({
   const hasInitialSelection = initialSelection != null;
 
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
-  const [expanded, setExpanded] = useState(expandedProp ?? true);
+  const [expanded, setExpanded] = usePipelineExpanded(false);
   const [selectedId, setSelectedId] = useState<string | null>(
     () => initialSelection?.pipelineIds[0] ?? null
   );
@@ -158,10 +177,21 @@ export function PipelineSection({
           ? list.find((p) => p.id === rememberedDefaultId)
           : null;
         const def =
-          remembered ?? list.find((p) => p.id === 'basic') ?? list[0] ?? null;
+          remembered ?? list.find((p) => p.id === 'quick') ?? list[0] ?? null;
         if (!def) return;
         setSelectedId(def.id);
-        setEnabledIds(defaultStageIds(def));
+        // Prefer the remembered stage ticks (e.g. "Quick + memory on"); fall
+        // back to the pipeline's default-enabled stages when no ticks were
+        // saved yet.
+        const rememberedIds = pipelinePref.id === def.id
+          ? pipelinePref.enabledIds.filter((id) =>
+              def.stages.some((s) => s.id === id))
+          : [];
+        setEnabledIds(
+          rememberedIds.length > 0
+            ? new Set(rememberedIds)
+            : defaultStageIds(def)
+        );
         fullReplaceRef.current = true;
       })
       .catch(() => {
@@ -222,19 +252,27 @@ export function PipelineSection({
       const p = pipelines.find((x) => x.id === id) ?? null;
       setEnabledIds(defaultStageIds(p));
       fullReplaceRef.current = true;
+      setPipelinePref({ id, enabledIds: [...defaultStageIds(p)] });
     },
-    [pipelines, defaultStageIds, setRememberedDefaultId]
+    [pipelines, defaultStageIds, setRememberedDefaultId, setPipelinePref]
   );
 
-  const handleToggleStep = useCallback((id: string) => {
-    interactedRef.current = true;
-    setEnabledIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  const handleToggleStep = useCallback(
+    (id: string) => {
+      interactedRef.current = true;
+      setEnabledIds((prev) => {
+        const next = new Set(prev);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        setPipelinePref({
+          id: selectedId,
+          enabledIds: [...next],
+        });
+        return next;
+      });
+    },
+    [selectedId, setPipelinePref]
+  );
 
   const handleExecutorChange = useCallback((value: string) => {
     interactedRef.current = true;
@@ -250,7 +288,7 @@ export function PipelineSection({
     <div className="p-base border-t space-y-base">
       <button
         type="button"
-        onClick={() => setExpanded((v) => !v)}
+        onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-half text-sm font-medium text-high"
       >
         {expanded ? (

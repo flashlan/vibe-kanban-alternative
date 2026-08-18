@@ -304,7 +304,7 @@ export function CreateChatBoxContainer({
         <div className="flex w-chat max-w-full flex-col gap-base">
           {showRepoPickerStep && (
             <>
-              <h2 className="mb-double text-center text-4xl font-medium tracking-tight text-high">
+              <h2 className="mb-double text-center text-xl font-medium tracking-tight text-high">
                 {t('createMode.headings.repoStep')}
               </h2>
               <CreateModeRepoPickerBar
@@ -315,7 +315,7 @@ export function CreateChatBoxContainer({
 
           {showChatStep && (
             <>
-              <h2 className="mb-double text-center text-4xl font-medium tracking-tight text-high">
+              <h2 className="mb-double text-center text-xl font-medium tracking-tight text-high">
                 {t('createMode.headings.chatStep')}
               </h2>
 

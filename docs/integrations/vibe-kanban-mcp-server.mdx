@@ -105,6 +105,27 @@ For `update_issue`, the `parent_issue_id` field supports three states: omit it e
 
 Supported relationship types: `blocking`, `related`, `has_duplicate`.
 
+### Project Memory (mem0)
+
+The project-memory tools give coding agents shared, cross-session memory backed by
+a mem0 server (default `http://localhost:8000`, override with `MEM0_URL`). The
+`user_id` is the repository slug, so every CLI working in the same repository —
+opencode, Claude, and so on — reads and writes the same memory.
+
+| Tool | Purpose | Required Parameters | Optional Parameters | Returns |
+|------|---------|-------------------|-------------------|---------|
+| `memory_search` | Search the project's shared memory for facts relevant to a query | `query`<br/>`user_id` | None | Ranked memory list |
+| `memory_recall` | Fetch all memories stored for the project | `user_id` | None | Full memory list |
+| `memory_save` | Persist a verified, durable fact to the project's memory | `content`<br/>`user_id` | None | Confirmation |
+
+<Tip>
+Use `memory_search` **before** analysing code to recall decisions, conventions and
+lessons the project already learned. Save only **verified, self-contained facts**
+with `memory_save` — never speculation, so future agents do not pick up false
+memories. All three tools are best-effort: they return empty results (or
+`stored: false`) when the mem0 server is unreachable, and never block work.
+</Tip>
+
 ### Repository Management
 
 | Tool | Purpose | Required Parameters | Optional Parameters | Returns |
