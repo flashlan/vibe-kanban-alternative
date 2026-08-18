@@ -50,6 +50,7 @@ export function CreateChatBoxContainer({
     hasInitialValue,
     hasResolvedInitialRepoDefaults,
     linkedIssue,
+    projectId,
     clearLinkedIssue,
     preferredExecutorConfig,
     executorConfig: draftConfig,
@@ -258,9 +259,10 @@ export function CreateChatBoxContainer({
       onWorkspaceCreated(result.workspace.id);
     }
 
-    if (linkedIssue?.remoteProjectId) {
-      saveProjectRepoDefaults(linkedIssue.remoteProjectId, data.repos).catch(
-        (err) => console.warn('Failed to save project repo defaults:', err)
+    const defaultsProjectId = projectId ?? linkedIssue?.remoteProjectId ?? null;
+    if (defaultsProjectId) {
+      saveProjectRepoDefaults(defaultsProjectId, data.repos).catch((err) =>
+        console.warn('Failed to save project repo defaults:', err)
       );
     }
 
@@ -278,6 +280,7 @@ export function CreateChatBoxContainer({
     clearAttachments,
     clearDraft,
     linkedIssue,
+    projectId,
   ]);
 
   // Determine error to display

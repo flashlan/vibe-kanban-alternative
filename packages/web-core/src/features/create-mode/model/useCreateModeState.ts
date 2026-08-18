@@ -48,6 +48,7 @@ interface DraftState {
   repos: SelectedRepo[];
   message: string;
   linkedIssue: LinkedIssue | null;
+  projectId: string | null;
   executorConfig: ExecutorConfig | null;
   attachments: DraftWorkspaceAttachment[];
 }
@@ -84,12 +85,16 @@ const draftInitialState: DraftState = {
   repos: [],
   message: '',
   linkedIssue: null,
+  projectId: null,
   executorConfig: null,
   attachments: [],
 };
 
 function draftReducer(state: DraftState, action: DraftAction): DraftState {
   switch (action.type) {
+    case 'SET_PROJECT':
+      return { ...state, projectId: action.projectId };
+
     case 'INIT_COMPLETE':
       return {
         ...state,
@@ -232,6 +237,7 @@ interface UseCreateModeStateResult {
   isLoading: boolean;
   hasInitialValue: boolean;
   linkedIssue: LinkedIssue | null;
+  projectId: string | null;
   executorConfig: ExecutorConfig | null;
   setMessage: (message: string) => void;
   addRepo: (repo: Repo) => void;
@@ -271,6 +277,11 @@ export function useCreateModeState({
     initialState ?? null
   );
   const hasInitialized = useRef(false);
+  // Project whose repo defaults should pre-fill/be saved, independent of a
+  // linked issue (project-level create flow has no card).
+  const seedProjectIdRef = useRef<string | null>(
+    initialState?.project_id ?? null
+  );
 
   // Profile validator
   const isValidProfile = useCallback(
@@ -312,6 +323,13 @@ export function useCreateModeState({
       isValidProfile,
     })
       .then(({ data }) => {
+        dispatch({
+          type: 'SET_PROJECT',
+          projectId:
+            seedState?.project_id ??
+            seedState?.linkedIssue?.remoteProjectId ??
+            null,
+        });
         dispatch({ type: 'INIT_COMPLETE', data });
       })
       .catch((e) => {
@@ -440,7 +458,10 @@ export function useCreateModeState({
   const scratchDefaultsProjectRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const remoteProjectId = state.linkedIssue?.remoteProjectId;
+    // Project-level create flow (no linked card) still applies the project's
+    // saved repo defaults, keyed on the seed's project_id.
+    const remoteProjectId =
+      state.projectId ?? state.linkedIssue?.remoteProjectId ?? seedProjectIdRef.current;
     if (!remoteProjectId) return;
     if (state.repos.length > 0) return;
     if (scratchDefaultsProjectRef.current === remoteProjectId) return;
@@ -647,6 +668,7 @@ export function useCreateModeState({
     isLoading: scratchLoading,
     hasInitialValue: state.phase === 'ready',
     linkedIssue: state.linkedIssue,
+    projectId: state.projectId,
     executorConfig: state.executorConfig,
     setMessage,
     addRepo,

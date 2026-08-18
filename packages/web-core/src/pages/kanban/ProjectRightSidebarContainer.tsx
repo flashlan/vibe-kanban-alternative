@@ -546,6 +546,7 @@ export function ProjectRightSidebarContainer() {
         <CreateModeProvider
           key={rightPanelState.draftId}
           draftId={rightPanelState.draftId}
+          initialState={projectId ? { project_id: projectId } : null}
         >
           <CreateChatBoxContainer onWorkspaceCreated={handleWorkspaceCreated} />
         </CreateModeProvider>

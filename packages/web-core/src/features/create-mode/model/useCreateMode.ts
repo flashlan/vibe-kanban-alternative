@@ -29,6 +29,8 @@ export interface CreateModeContextValue {
   hasInitialValue: boolean;
   /** Issue to link the workspace to when created */
   linkedIssue: LinkedIssue | null;
+  /** Project the create flow belongs to (independent of a linked card). */
+  projectId: string | null;
   /** Clear the linked issue */
   clearLinkedIssue: () => void;
   /** Persisted executor config (model selector state) */
