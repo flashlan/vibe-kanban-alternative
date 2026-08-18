@@ -121,14 +121,22 @@ docker compose up -d --build
 ```
 
 **Graph memory note:** entity/relation extraction (the memory graph) requires an
-extraction LLM. Three providers are supported, one active at a time via
-`MEM0_LLM_PROVIDER`:
+extraction LLM. Providers form a **failover chain** — `MEM0_LLM_PROVIDER` sets
+the primary, and any other configured provider is tried automatically when the
+primary is rate-limited (429) or returns no usable JSON:
 
 | Provider | Config | Notes |
 |----------|--------|-------|
 | **Groq** (default) | `GROQ_API_KEY` + `GROQ_MODEL` | `qwen/qwen3.6-27b` works well; free tier is TPM-limited (~8k tokens/min) |
 | **OpenRouter** | `MEM0_OPENROUTER_KEY` + `MEM0_OPENROUTER_MODEL` | default `openai/gpt-oss-20b:free`; free tier is rate-limited upstream |
 | **Local llama** | `MEM0_LLAMA_URL` + `MEM0_LLAMA_MODEL` (OpenAI-compatible `/v1`) | no rate limits, fully private — recommended for heavy use |
+
+Configure more than one (e.g. Groq + OpenRouter + local llama) and the stack
+fails over gracefully instead of hammering a single free provider.
+
+**Graph persistence:** per-repository memory graphs are persisted as **GraphML**
+on disk (`/data/graphs/*.graphml`, Docker volume `graph_data`) and lazy-loaded
+on first access, so they survive container restarts.
 
 Extraction token usage is tracked per day and per provider and shown as
 **segmented bars** in Settings → Usage (llama / openrouter / groq). The same
