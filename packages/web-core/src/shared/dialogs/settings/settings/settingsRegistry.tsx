@@ -7,6 +7,7 @@ import {
   FlowArrowIcon,
   ClockCountdownIcon,
   ChartBarIcon,
+  DatabaseIcon,
 } from '@phosphor-icons/react';
 import type { Icon } from '@phosphor-icons/react';
 import { GeneralSettingsSection } from './GeneralSettingsSection';
@@ -17,6 +18,7 @@ import { AgentsSettingsSection } from './AgentsSettingsSection';
 import { McpSettingsSection } from './McpSettingsSection';
 import { TelegramSettingsSection } from './TelegramSettingsSection';
 import { UsageSettingsSection } from './UsageSettingsSection';
+import { MemorySettingsSection } from './MemorySettingsSection';
 
 // ADR-018 — `organizations` and `remote-projects` sections are gone.
 // Only host-scoped sections remain; the `universal` group is empty.
@@ -28,7 +30,8 @@ export type SettingsSectionType =
   | 'agents'
   | 'mcp'
   | 'telegram'
-  | 'usage';
+  | 'usage'
+  | 'memory';
 
 export type SettingsSectionGroup = 'host';
 
@@ -41,6 +44,7 @@ export type SettingsSectionInitialState = {
   mcp: undefined;
   telegram: undefined;
   usage: undefined;
+  memory: undefined;
 };
 
 export interface SettingsSectionDefinition {
@@ -58,6 +62,7 @@ export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
   { id: 'mcp', icon: PlugIcon, group: 'host' },
   { id: 'telegram', icon: TelegramLogoIcon, group: 'host' },
   { id: 'usage', icon: ChartBarIcon, group: 'host' },
+  { id: 'memory', icon: DatabaseIcon, group: 'host' },
 ];
 
 export function isHostSpecificSettingsSection(
@@ -95,6 +100,8 @@ export function renderSettingsSection(
       return <TelegramSettingsSection />;
     case 'usage':
       return <UsageSettingsSection />;
+    case 'memory':
+      return <MemorySettingsSection />;
     default:
       return <GeneralSettingsSection />;
   }

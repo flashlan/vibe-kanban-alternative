@@ -6,7 +6,7 @@
 //! executions, duration, and issue activity rather than token counts.
 
 use axum::{
-    Router,
+    Json, Router,
     extract::State,
     response::Json as ResponseJson,
     routing::{get, post},
@@ -104,10 +104,118 @@ pub struct ReExtractResponse {
     pub relations: i64,
 }
 
+/// mem0 runtime config (sanitized — keys never leave the mem0 container).
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+pub struct Mem0Config {
+    pub ok: bool,
+    pub provider: String,
+    pub graph_enabled: bool,
+    #[serde(default)]
+    pub graph_url: String,
+    #[serde(default)]
+    pub collection: String,
+    #[serde(default)]
+    pub providers: std::collections::HashMap<String, Mem0ProviderCfg>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+pub struct Mem0ProviderCfg {
+    #[serde(default)]
+    pub url: String,
+    #[serde(default)]
+    pub model: String,
+    #[serde(default)]
+    pub has_key: bool,
+}
+
+/// Body sent by Settings → Memory to update the mem0 runtime config.
+#[derive(Debug, Clone, Deserialize, TS)]
+pub struct UpdateMem0ConfigRequest {
+    #[serde(default)]
+    pub provider: Option<String>,
+    #[serde(default)]
+    pub graph_enabled: Option<bool>,
+    #[serde(default)]
+    pub providers: Option<std::collections::HashMap<String, Mem0ProviderPatch>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+pub struct Mem0ProviderPatch {
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    /// New key to set. Omit/empty to keep the existing (masked) key.
+    #[serde(default)]
+    pub key: Option<String>,
+}
+
 pub fn router() -> Router<DeploymentImpl> {
     Router::new()
         .route("/usage/summary", get(usage_summary))
         .route("/usage/re-extract", post(re_extract))
+        .route(
+            "/usage/mem0-config",
+            get(get_mem0_config).post(put_mem0_config),
+        )
+}
+
+async fn get_mem0_config(
+    State(deployment): State<DeploymentImpl>,
+) -> ResponseJson<ApiResponse<Mem0Config>> {
+    let _ = deployment;
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return ResponseJson(ApiResponse::error("failed to build mem0 client")),
+    };
+    let url = format!("{}/api/config", mem0_url());
+    match client.get(&url).send().await {
+        Ok(r) if r.status().is_success() => match r.json::<Mem0Config>().await {
+            Ok(cfg) => ResponseJson(ApiResponse::success(cfg)),
+            Err(_) => ResponseJson(ApiResponse::error("failed to parse mem0 config")),
+        },
+        Ok(r) => ResponseJson(ApiResponse::error(&format!(
+            "mem0 config returned status {}",
+            r.status()
+        ))),
+        Err(e) => ResponseJson(ApiResponse::error(&format!("mem0 config failed: {e}"))),
+    }
+}
+
+async fn put_mem0_config(
+    State(deployment): State<DeploymentImpl>,
+    Json(req): Json<UpdateMem0ConfigRequest>,
+) -> ResponseJson<ApiResponse<Mem0Config>> {
+    let _ = deployment;
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return ResponseJson(ApiResponse::error("failed to build mem0 client")),
+    };
+    let url = format!("{}/api/config", mem0_url());
+    let body = serde_json::json!({
+        "provider": req.provider,
+        "graph_enabled": req.graph_enabled,
+        "providers": req.providers,
+    });
+    match client.post(&url).json(&body).send().await {
+        Ok(r) if r.status().is_success() => match r.json::<Mem0Config>().await {
+            Ok(cfg) => ResponseJson(ApiResponse::success(cfg)),
+            Err(_) => ResponseJson(ApiResponse::error("failed to parse mem0 config")),
+        },
+        Ok(r) => ResponseJson(ApiResponse::error(&format!(
+            "mem0 config update returned status {}",
+            r.status()
+        ))),
+        Err(e) => ResponseJson(ApiResponse::error(&format!(
+            "mem0 config update failed: {e}"
+        ))),
+    }
 }
 
 /// Fetch mem0 extraction-token usage (best-effort).

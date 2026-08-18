@@ -32,7 +32,9 @@
         "telegram": "Telegram",
         "telegramDesc": "Agent escalations to Telegram",
         "usage": "Usage",
-        "usageDesc": "Agent activity, tokens and project progress"
+        "usageDesc": "Agent activity, tokens and project progress",
+        "memory": "Memory",
+        "memoryDesc": "mem0 graph memory and extraction providers"
       }
     },
     "hostPicker": {
