@@ -129,6 +129,8 @@ returned); the config persists in the mem0 volume without a container restart.
 a **Re-extract graph entities** control for memories saved before an extraction
 LLM was configured.
 
+![](packages/public/vibe-kanban-memory-settings.png)
+
 **Graph memory note:** entity/relation extraction (the memory graph) requires an
 extraction LLM. Providers form a **failover chain** — `MEM0_LLM_PROVIDER` sets
 the primary, and any other configured provider is tried automatically when the
