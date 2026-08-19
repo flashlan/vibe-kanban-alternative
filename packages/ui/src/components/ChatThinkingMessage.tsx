@@ -31,25 +31,24 @@ export function ChatThinkingMessage({
   renderMarkdown,
 }: ChatThinkingMessageProps) {
   return (
-    <div className={cn('flex flex-col text-sm', className)}>
+    <div className={cn('text-sm leading-none', className)}>
       <button
         type="button"
         onClick={onToggle}
-        className="flex items-center gap-1 self-start rounded-sm px-1 -mx-1 text-low transition-colors hover:bg-tertiary hover:text-normal"
+        className="flex h-4 items-center gap-0.5 self-start rounded-sm px-0.5 -mx-0.5 align-middle text-low transition-colors hover:bg-tertiary hover:text-normal"
       >
         {expanded ? (
-          <CaretDownIcon className="size-icon-xs" weight="bold" />
+          <CaretDownIcon className="size-3" weight="bold" />
         ) : (
-          <CaretRightIcon className="size-icon-xs" weight="bold" />
+          <CaretRightIcon className="size-3" weight="bold" />
         )}
-        <ChatDotsIcon className="size-icon-base text-low" />
-        <span className="text-xs font-medium uppercase tracking-wide">
+        <ChatDotsIcon className="size-3 text-low" />
+        <span className="text-[10px] font-medium uppercase tracking-wide">
           Thinking
         </span>
-        <span className="text-xs text-low/70">· {content.length} chars</span>
       </button>
       {expanded && (
-        <div className="mt-1 max-h-64 overflow-y-auto border-l-2 border-border pl-3 text-sm text-low">
+        <div className="mt-1 max-h-64 overflow-y-auto border-l-2 border-border pl-3 text-sm leading-relaxed text-low">
           {renderMarkdown({
             content,
             workspaceId,
