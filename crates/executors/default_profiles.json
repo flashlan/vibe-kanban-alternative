@@ -29,6 +29,13 @@
         }
       }
     },
+    "ANTIGRAVITY": {
+      "DEFAULT": {
+        "ANTIGRAVITY": {
+          "yolo": true
+        }
+      }
+    },
     "CODEX": {
       "DEFAULT": {
         "CODEX": {
