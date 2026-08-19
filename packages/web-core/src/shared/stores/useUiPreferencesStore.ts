@@ -349,6 +349,7 @@ export type PersistKey =
   | `subagent:${string}`
   | `user:${string}`
   | `system:${string}`
+  | `thinking:${string}`
   | `error:${string}`
   | `entry:${string}`
   | `list-section-${string}`;

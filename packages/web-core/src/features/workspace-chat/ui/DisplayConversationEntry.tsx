@@ -372,6 +372,9 @@ function DisplayConversationEntry(props: Props) {
       );
 
     case 'system_message':
+      // Suppress noise system lines (model init banner, token/usage metadata)
+      // so the history reads as only the essential model output.
+      if (isNoiseSystemMessage(entry.content)) return null;
       return (
         <SystemMessageEntry
           content={entry.content}
@@ -381,18 +384,11 @@ function DisplayConversationEntry(props: Props) {
 
     case 'thinking':
       return (
-        <ChatThinkingMessage
+        <ThinkingMessageEntry
           content={entry.content}
           workspaceId={workspaceWithSession?.id}
-          renderMarkdown={({ content, workspaceId, className }) => (
-            <AppChatMarkdown
-              content={content}
-              workspaceId={workspaceId}
-              sessionId={sessionId}
-              className={className}
-              maxWidth={undefined}
-            />
-          )}
+          sessionId={sessionId}
+          expansionKey={expansionKey}
         />
       );
 
@@ -1047,6 +1043,53 @@ function SystemMessageEntry({
       content={content}
       expanded={expanded}
       onToggle={toggle}
+    />
+  );
+}
+
+/** System lines that are pure noise (model init banner, token metadata). */
+const NOISE_SYSTEM_PATTERNS = [
+  /^system initialized with model:/i,
+  /thinking_tokens/i,
+  /^system:/i,
+];
+
+function isNoiseSystemMessage(content: string): boolean {
+  return NOISE_SYSTEM_PATTERNS.some((re) => re.test(content.trim()));
+}
+
+/** Thinking block — collapsed by default, expandable with a caret. */
+function ThinkingMessageEntry({
+  content,
+  workspaceId,
+  sessionId,
+  expansionKey,
+}: {
+  content: string;
+  workspaceId?: string;
+  sessionId: string | undefined;
+  expansionKey: string;
+}) {
+  const [expanded, toggle] = usePersistedExpanded(
+    `thinking:${expansionKey}`,
+    false
+  );
+
+  return (
+    <ChatThinkingMessage
+      content={content}
+      workspaceId={workspaceId}
+      expanded={expanded}
+      onToggle={toggle}
+      renderMarkdown={({ content, workspaceId, className }) => (
+        <AppChatMarkdown
+          content={content}
+          workspaceId={workspaceId}
+          sessionId={sessionId}
+          className={className}
+          maxWidth={undefined}
+        />
+      )}
     />
   );
 }
