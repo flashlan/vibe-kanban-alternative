@@ -14,18 +14,29 @@
 </p>
 
 <p align="center">
+  <a href="#quick-start">Quick Start</a> •
   <a href="#overview">Overview</a> •
   <a href="#whats-different-in-this-fork">What's Different</a> •
-  <a href="#quick-start">Quick Start</a> •
   <a href="#project-memory-mem0">Project Memory (mem0)</a> •
   <a href="#supported-coding-agents">Supported Agents</a> •
   <a href="#chat--terminal-interaction">Chat & Controls</a> •
   <a href="#usage--observability-dashboard">Usage Dashboard</a> •
   <a href="#terminal-ui-tui">TUI Cockpit</a> •
   <a href="#telegram-orchestration">Telegram Bridge</a> •
-  <a href="#gitea--forgejo-support">Gitea/Forgejo</a> •
   <a href="#development--self-hosting">Development</a>
 </p>
+
+---
+
+## ⚡ Quick Start (Instant Run)
+
+Launch the entire cockpit with a single command — no install, no accounts, no cloud setup:
+
+```bash
+npx vibe-kanban-alternative
+```
+
+> 💡 **Zero Setup Required**: Downloads prebuilt binaries and launches the local web cockpit directly at **`http://localhost:3001`** (with backend on `:3002`).
 
 ---
 
