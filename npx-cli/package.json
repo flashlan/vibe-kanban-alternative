@@ -20,7 +20,7 @@
   "engines": {
     "node": ">=20.19.0"
   },
-  "license": "",
+  "license": "Apache-2.0",
   "description": "NPX wrapper around vibe-kanban-alternative — the single-developer, self-hosted fork of vibe-kanban with a TUI cockpit and Telegram channel orchestration",
   "devDependencies": {
     "esbuild": "^0.27.2"
