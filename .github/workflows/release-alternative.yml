@@ -1,4 +1,4 @@
-name: Release indie (npm + GitHub binaries)
+name: Release alternative (npm + GitHub binaries)
 
 # Builds and publishes ONLY when a version tag is pushed (e.g. `v0.1.0`).
 # Ordinary commits/pushes do nothing. The release tag must equal the npm version
@@ -14,7 +14,7 @@ permissions:
   contents: write # create the GitHub Release + upload assets
 
 concurrency:
-  group: release-indie-${{ github.ref_name }}
+  group: release-alternative-${{ github.ref_name }}
   cancel-in-progress: false
 
 env:
