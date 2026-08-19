@@ -5,9 +5,11 @@ use derivative::Derivative;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
-use workspace_utils::msg_store::MsgStore;
+use workspace_utils::{
+    command_ext::GroupSpawnNoWindowExt,
+    msg_store::MsgStore,
+};
 
-pub use super::acp::AcpAgentHarness;
 use crate::{
     approvals::ExecutorApprovalService,
     command::{CmdOverrides, CommandBuildError, CommandBuilder, apply_overrides},
@@ -69,13 +71,18 @@ impl Antigravity {
     }
 
     fn build_command_builder(&self) -> Result<CommandBuilder, CommandBuildError> {
-        // ACP mode: `agy agentapi`. The base command is resolved at runtime.
+        // Antigravity has no ACP mode in the CLI — it runs single-shot via
+        // `agy --print <prompt>`. The prompt is piped to stdin.
         let mut builder = CommandBuilder::new(&Self::agy_binary());
 
-        builder = builder.extend_params(["agentapi"]);
+        builder = builder.extend_params(["--print"]);
 
         if let Some(model) = &self.model {
             builder = builder.extend_params(["--model", model.as_str()]);
+        }
+
+        if self.yolo.unwrap_or(false) {
+            builder = builder.extend_params(["--dangerously-skip-permissions"]);
         }
 
         apply_overrides(builder, &self.cmd)
@@ -120,6 +127,51 @@ impl Antigravity {
         }
         models
     }
+
+    /// Spawn `agy --print --model X`, pipe the prompt to stdin, and stream the
+    /// response. Antigravity's CLI has no ACP mode, so this is single-shot.
+    async fn spawn_print_mode(
+        &self,
+        current_dir: &Path,
+        prompt: &str,
+        env: &ExecutionEnv,
+    ) -> Result<SpawnedChild, ExecutorError> {
+        let command = self.build_command_builder()?.build_initial()?;
+        let (program_path, args) = command.into_resolved().await?;
+        let combined_prompt = self.append_prompt.combine_prompt(prompt);
+
+        let mut cmd = tokio::process::Command::new(&program_path);
+        cmd.args(&args)
+            .current_dir(current_dir)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+
+        env.clone()
+            .with_profile(&self.cmd)
+            .apply_to_command(&mut cmd);
+
+        let mut child = cmd.group_spawn_no_window()?;
+
+        // Pipe the prompt to the child's stdin, then close it so `agy --print`
+        // reads until EOF.
+        if let Some(mut stdin) = child.inner().stdin.take() {
+            let prompt = combined_prompt.clone();
+            tokio::spawn(async move {
+                use tokio::io::AsyncWriteExt;
+                let _ = stdin.write_all(prompt.as_bytes()).await;
+                let _ = stdin.flush().await;
+                // dropping stdin closes the pipe
+            });
+        }
+
+        let _ = &mut child;
+        Ok(SpawnedChild {
+            child,
+            exit_signal: None,
+            cancel: None,
+        })
+    }
 }
 
 #[async_trait]
@@ -146,53 +198,18 @@ impl StandardCodingAgentExecutor for Antigravity {
         prompt: &str,
         env: &ExecutionEnv,
     ) -> Result<SpawnedChild, ExecutorError> {
-        let harness = AcpAgentHarness::new();
-        let combined_prompt = self.append_prompt.combine_prompt(prompt);
-        let command = self.build_command_builder()?.build_initial()?;
-        let approvals = if self.yolo.unwrap_or(false) {
-            None
-        } else {
-            self.approvals.clone()
-        };
-        harness
-            .spawn_with_command(
-                current_dir,
-                combined_prompt,
-                command,
-                env,
-                &self.cmd,
-                approvals,
-            )
-            .await
+        self.spawn_print_mode(current_dir, prompt, env).await
     }
 
     async fn spawn_follow_up(
         &self,
         current_dir: &Path,
         prompt: &str,
-        session_id: &str,
+        _session_id: &str,
         _reset_to_message_id: Option<&str>,
         env: &ExecutionEnv,
     ) -> Result<SpawnedChild, ExecutorError> {
-        let harness = AcpAgentHarness::new();
-        let combined_prompt = self.append_prompt.combine_prompt(prompt);
-        let command = self.build_command_builder()?.build_follow_up(&[])?;
-        let approvals = if self.yolo.unwrap_or(false) {
-            None
-        } else {
-            self.approvals.clone()
-        };
-        harness
-            .spawn_follow_up_with_command(
-                current_dir,
-                combined_prompt,
-                session_id,
-                command,
-                env,
-                &self.cmd,
-                approvals,
-            )
-            .await
+        self.spawn_print_mode(current_dir, prompt, env).await
     }
 
     fn normalize_logs(
