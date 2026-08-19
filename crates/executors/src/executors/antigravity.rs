@@ -193,13 +193,33 @@ impl StandardCodingAgentExecutor for Antigravity {
     ) -> Result<futures::stream::BoxStream<'static, json_patch::Patch>, ExecutorError> {
         let options = ExecutorDiscoveredOptions {
             model_selector: ModelSelectorConfig {
-                models: vec![ModelInfo {
-                    id: "default".to_string(),
-                    name: "Antigravity default".to_string(),
-                    provider_id: None,
-                    reasoning_options: vec![],
-                }],
-                default_model: Some("default".to_string()),
+                models: vec![
+                    ModelInfo {
+                        id: "gemini-2.5-pro".to_string(),
+                        name: "Gemini 2.5 Pro".to_string(),
+                        provider_id: None,
+                        reasoning_options: vec![],
+                    },
+                    ModelInfo {
+                        id: "gemini-2.5-flash".to_string(),
+                        name: "Gemini 2.5 Flash".to_string(),
+                        provider_id: None,
+                        reasoning_options: vec![],
+                    },
+                    ModelInfo {
+                        id: "gemini-2.0-flash".to_string(),
+                        name: "Gemini 2.0 Flash".to_string(),
+                        provider_id: None,
+                        reasoning_options: vec![],
+                    },
+                    ModelInfo {
+                        id: "default".to_string(),
+                        name: "Antigravity default".to_string(),
+                        provider_id: None,
+                        reasoning_options: vec![],
+                    },
+                ],
+                default_model: Some("gemini-2.5-pro".to_string()),
                 permissions: vec![PermissionPolicy::Auto, PermissionPolicy::Supervised],
                 ..Default::default()
             },
