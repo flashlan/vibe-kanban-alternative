@@ -24,7 +24,7 @@ Two invariants keep everything in lockstep (enforced by CI):
   instead of downloading them. So **never run `local-build.sh` in the publish
   step** — that's only for local development.
 
-CI lives in [`.github/workflows/release-alternative.yml`](.github/workflows/release-alternative.yml):
+CI lives in [`.github/workflows/release-indie.yml`](.github/workflows/release-indie.yml):
 on a `v*` tag it builds the web app, cross-compiles the 6 targets
 (`linux/macos/windows` × `x64/arm64`), publishes a GitHub Release with the zips +
 `manifest.json`, then `npm publish`es via **OIDC trusted publishing** (no token
@@ -58,7 +58,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-`release-alternative.yml` runs. The **build** and **release** jobs create the GitHub
+`release-indie.yml` runs. The **build** and **release** jobs create the GitHub
 Release `v0.1.0` with all platform zips + `manifest.json`. The **`publish-npm`
 job will fail** on this first run — that's expected, because the package doesn't
 exist on npm yet and trusted publishing isn't configured. The binaries are what
@@ -93,14 +93,14 @@ cd /tmp && npx vibe-kanban-indie@0.1.0   # downloads binaries from the release
 
 ### 3. Configure the trusted publisher (enables automation)
 
-On npmjs.com → the **`vibe-kanban-indie`** package → **Settings → Trusted
+On npmjs.com → the **`vibe-kanban-alternative`** package → **Settings → Trusted
 Publisher → GitHub Actions**, enter:
 
 | Field            | Value                     |
 | ---------------- | ------------------------- |
-| Organization/user| `dexloom`                 |
-| Repository       | `vibe-kanban-indie`       |
-| Workflow filename| `release-alternative.yml`       |
+| Organization/user| `flashlan`                |
+| Repository       | `vibe-kanban-alternative` |
+| Workflow filename| `release-indie.yml`       |
 | Environment      | *(leave blank)*           |
 
 > If you later gate the `publish-npm` job behind a GitHub **Environment**, you
@@ -132,13 +132,13 @@ git tag v0.1.1
 git push origin v0.1.1
 ```
 
-> **Why the `make release-check` step matters.** `release-alternative.yml` triggers on
+> **Why the `make release-check` step matters.** `release-indie.yml` triggers on
 > the tag and goes straight to build → publish — it does *not* run the `Test`
 > workflow. The `Test` workflow runs separately on the `main` push, so nothing
 > stops you from tagging a commit whose tests are red. `make release-check`
 > mirrors every `Test` job locally; only push the tag once it's green.
 
-Pushing the `v0.1.1` tag triggers `release-alternative.yml`, which now runs end to end:
+Pushing the `v0.1.1` tag triggers `release-indie.yml`, which now runs end to end:
 build → GitHub Release (binaries + manifest) → `npm publish` via OIDC (with
 automatic build provenance). When it's green:
 
@@ -197,7 +197,7 @@ publishes to `@latest` as usual.
   ```
 - **Linux is built static (musl).** If a future dependency fails to build on
   musl, switch the two `*-unknown-linux-musl` matrix targets to
-  `*-unknown-linux-gnu` in `release-alternative.yml`.
+  `*-unknown-linux-gnu` in `release-indie.yml`.
 - **windows-arm64** cross-compilation can occasionally break on a dependency; if
   so, drop that entry from the matrix — the CLI errors cleanly on unsupported
   platforms.
@@ -207,4 +207,4 @@ publishes to `@latest` as usual.
   `remote-deploy-*`, `relay-release`, `remote-release`) and the old binary/npm
   release pipelines (`pre-release.yml`, `publish.yml`) have been **removed** —
   they dispatched to BloopAI's private deployment repo / used BloopAI custom
-  actions. This fork ships via `release-alternative.yml` only. CI is `test.yml`.
+  actions. This fork ships via `release-indie.yml` only. CI is `test.yml`.

@@ -252,7 +252,8 @@ jobs:
 
       - run: npm ci
       - run: npm run build
-      # No NODE_AUTH_TOKEN: npm authenticates via OIDC (trusted publisher must be
-      # configured on npmjs.com for this package + workflow) and auto-attaches
-      # build provenance.
+      # Authenticates via OIDC (Trusted Publishing configured on npmjs.com) or
+      # fallback NODE_AUTH_TOKEN if NPM_TOKEN secret is configured.
       - run: npm publish --access public --tag "$NPM_DIST_TAG"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
