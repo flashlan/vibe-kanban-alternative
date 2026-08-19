@@ -10,8 +10,6 @@
 
 <p align="center">Get 10X more out of Claude Code, Gemini CLI, Codex, Amp and other coding agents...</p>
 
-> **Fork by [evertonekacy](https://github.com/evertonekacy)** — adds [Gitea/Forgejo support](#gitea--forgejo-support) alongside GitHub, so you can manage PRs on self-hosted instances.
-
 ## What's different in this fork
 
 This fork targets self-hosted development workflows where GitHub is not the primary host. Changes are additive — all upstream features remain intact.
