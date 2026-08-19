@@ -195,31 +195,25 @@ impl StandardCodingAgentExecutor for Antigravity {
             model_selector: ModelSelectorConfig {
                 models: vec![
                     ModelInfo {
-                        id: "gemini-2.5-pro".to_string(),
-                        name: "Gemini 2.5 Pro".to_string(),
+                        id: "pro".to_string(),
+                        name: "Gemini Pro".to_string(),
                         provider_id: None,
                         reasoning_options: vec![],
                     },
                     ModelInfo {
-                        id: "gemini-2.5-flash".to_string(),
-                        name: "Gemini 2.5 Flash".to_string(),
+                        id: "flash".to_string(),
+                        name: "Gemini Flash".to_string(),
                         provider_id: None,
                         reasoning_options: vec![],
                     },
                     ModelInfo {
-                        id: "gemini-2.0-flash".to_string(),
-                        name: "Gemini 2.0 Flash".to_string(),
-                        provider_id: None,
-                        reasoning_options: vec![],
-                    },
-                    ModelInfo {
-                        id: "default".to_string(),
-                        name: "Antigravity default".to_string(),
+                        id: "flash_lite".to_string(),
+                        name: "Gemini Flash Lite".to_string(),
                         provider_id: None,
                         reasoning_options: vec![],
                     },
                 ],
-                default_model: Some("gemini-2.5-pro".to_string()),
+                default_model: Some("pro".to_string()),
                 permissions: vec![PermissionPolicy::Auto, PermissionPolicy::Supervised],
                 ..Default::default()
             },
