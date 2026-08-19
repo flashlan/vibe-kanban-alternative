@@ -323,7 +323,9 @@ For the full architecture (TUI, bridge, MCP approval tools, and the PM agent), s
 
 ## Claude Code Plugins (SombraX)
 
-The automation layer is driven from Claude Code by three plugins published in the **`sombrax_plugins`** marketplace: **vibe-kanban-alternative** (orchestration skills, the agent crew, and the bundled `vibe-kanban` MCP server), **sombrax-telegram** (the inbound Telegram channel listener that pairs with the send-only bridge above), and **sombrax-codex** (Codex CLI helpers for independent plan and code review).
+The automation layer can be driven from Claude Code by three **third-party** plugins published by the plugin author (dexloom) in the **`sombrax_plugins`** marketplace: **vibe-kanban-indie** (orchestration skills, the agent crew, and the bundled `vibe-kanban` MCP server), **sombrax-telegram** (the inbound Telegram channel listener that pairs with the send-only bridge above), and **sombrax-codex** (Codex CLI helpers for independent plan and code review).
+
+> **Note:** these plugins are maintained and published by their author under the `vibe-kanban-indie` name — they are **not** published by this fork. If they are unavailable in your marketplace, the app's web UI, board, workspaces, and TUI work without them.
 
 Add the marketplace once, then install the plugins you want — from inside Claude Code:
 
@@ -332,12 +334,12 @@ Add the marketplace once, then install the plugins you want — from inside Clau
 /plugin marketplace add dexloom/sombrax_plugins
 
 # Install the plugins
-/plugin install vibe-kanban-alternative@sombrax-plugins
+/plugin install vibe-kanban-indie@sombrax-plugins
 /plugin install sombrax-telegram@sombrax-plugins
 /plugin install sombrax-codex@sombrax-plugins
 ```
 
-The plugins are optional — Indie's web UI, board, and workspaces work without them. Install them when you want to drive the board and the agent crew from Claude Code. See [Claude Code plugins & skills](https://dexloom.mintlify.app/integrations/claude-code-plugins) for the full breakdown.
+The plugins are optional — the web UI, board, and workspaces work without them. Install them when you want to drive the board and the agent crew from Claude Code. See [Claude Code plugins & skills](https://dexloom.mintlify.app/integrations/claude-code-plugins) for the full breakdown.
 
 ## Documentation
 
