@@ -1453,6 +1453,19 @@ const DisplayConversationEntrySpaced = (props: Props) => {
   const { isEntryGreyed } = useMessageEditContext();
   const isGreyed = isEntryGreyed(props.expansionKey);
 
+  // Suppressed noise entries (system init banners, token metadata, next-action
+  // bars) render as nothing — not even the padded wrapper — so they don't
+  // leave blank lines.
+  const entryType = props.entry?.entry_type.type;
+  if (
+    (entryType === 'system_message' &&
+      isNoiseSystemMessage(props.entry?.content ?? '')) ||
+    entryType === 'next_action' ||
+    entryType === 'token_usage_info'
+  ) {
+    return null;
+  }
+
   return (
     <div
       className={cn(
