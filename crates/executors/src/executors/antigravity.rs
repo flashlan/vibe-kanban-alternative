@@ -43,19 +43,40 @@ pub struct Antigravity {
 }
 
 impl Antigravity {
+    /// Resolve the `agy` binary: PATH first, then the standard install location.
+    fn agy_binary() -> String {
+        if let Ok(path) = std::env::var("AGY_BIN") {
+            return path;
+        }
+        if let Ok(output) = std::process::Command::new("which").arg("agy").output()
+            && output.status.success()
+        {
+            if let Ok(s) = String::from_utf8(output.stdout) {
+                let s = s.trim();
+                if !s.is_empty() {
+                    return s.to_string();
+                }
+            }
+        }
+        // Standard install: ~/.local/bin/agy
+        if let Some(home) = dirs::home_dir() {
+            let candidate = home.join(".local").join("bin").join("agy");
+            if candidate.exists() {
+                return candidate.to_string_lossy().to_string();
+            }
+        }
+        "agy".to_string()
+    }
+
     fn build_command_builder(&self) -> Result<CommandBuilder, CommandBuildError> {
-        let mut builder = CommandBuilder::new("npx -y @google/antigravity@latest");
+        // ACP mode: `agy agentapi`. The base command is resolved at runtime.
+        let mut builder = CommandBuilder::new(&Self::agy_binary());
+
+        builder = builder.extend_params(["agentapi"]);
 
         if let Some(model) = &self.model {
             builder = builder.extend_params(["--model", model.as_str()]);
         }
-
-        if self.yolo.unwrap_or(false) {
-            builder = builder.extend_params(["--yolo"]);
-            builder = builder.extend_params(["--allowed-tools", "run_shell_command"]);
-        }
-
-        builder = builder.extend_params(["--experimental-acp"]);
 
         apply_overrides(builder, &self.cmd)
     }
