@@ -401,7 +401,9 @@ impl CodingAgent {
             | CodingAgent::ClaudeCodeHeaded(_)
             | CodingAgent::Amp(_)
             | CodingAgent::Droid(_) => Passthrough,
-            CodingAgent::QwenCode(_) | CodingAgent::Gemini(_) => Gemini,
+            CodingAgent::QwenCode(_) | CodingAgent::Gemini(_) | CodingAgent::Antigravity(_) => {
+                Gemini
+            }
             CodingAgent::CursorAgent(_) => Cursor,
             CodingAgent::Codex(_) => Codex,
             CodingAgent::Opencode(_) | CodingAgent::OpencodeHeaded(_) => Opencode,

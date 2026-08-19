@@ -78,12 +78,12 @@ You can have a board with a mix of GitHub and Gitea projects simultaneously — 
 
 Software engineering increasingly means **directing coding agents** — planning work, spawning a model to implement it, reviewing its diff, and shipping. The bottleneck is no longer typing code; it's orchestrating, reviewing, and keeping many agent sessions coherent. `vibe-kanban-alternative` is built to make that process fast, local, and *personal*: a single developer, entirely on their own machine, no team, no cloud, no account.
 
-At its core it's a **kanban board that plans and tracks agent work**, plus a **workspace runtime** that turns each card into a real branch, terminal, and dev-server where any of 10+ coding agents (Claude Code, OpenCode, Qwen Code, Codex, Gemini CLI, Copilot, Amp, Cursor, Droid, CCR) executes the plan. On top of that sits a growing **single-developer cockpit**:
+At its core it's a **kanban board that plans and tracks agent work**, plus a **workspace runtime** that turns each card into a real branch, terminal, and dev-server where any of 10+ coding agents (Claude Code, OpenCode, Qwen Code, Codex, Gemini CLI, Antigravity, Copilot, Amp, Cursor, Droid, CCR) executes the plan. On top of that sits a growing **single-developer cockpit**:
 
 - **Plan with kanban issues** — boards, columns, priorities, tags, sub-issues, pipelines; cards are the single source of truth for a piece of work.
 - **Run coding agents in workspaces** — each card launches a workspace: a branch, a terminal, a dev server, and an agent following a configurable pipeline (Quick, Basic, async variants).
 - **Review diffs and iterate** — inline comments, diffs, preview browser, and the **manual-review stage** that pauses the agent and raises an alarm so you approve the result before any merge or PR.
-- **Switch between 10+ coding agents** — drive Claude Code, OpenCode, Qwen Code, Codex, Gemini, Copilot, Amp, Cursor, Droid, and CCR from one board.
+- **Switch between 10+ coding agents** — drive Claude Code, OpenCode, Qwen Code, Codex, Gemini, Antigravity, Copilot, Amp, Cursor, Droid, and CCR from one board.
 - **Cross-session project memory (mem0)** — agents recall and persist verified facts about the repositories they work in, keyed per repository and shared across CLIs, with a **graph memory** that survives restarts.
 - **Usage & observability** — a Settings → Usage dashboard with per-day activity, per-agent execution bars, extraction-token monitoring, and project progress.
 - **Workspaces, PRs, and merge** — dispatch work to existing sessions, open PRs (GitHub or Gitea/Forgejo) with AI-generated descriptions, squash-merge to base.

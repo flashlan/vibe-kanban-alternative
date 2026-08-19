@@ -52,20 +52,14 @@ impl QwenCode {
     ///   `~/.qwen/settings.json`, so we strip the leading `provider/` segment.
     fn sanitize_model_id(raw: &str) -> String {
         let trimmed = raw.trim();
-        let unquoted = trimmed
-            .trim_matches(|c| c == '"' || c == '\'')
-            .trim();
+        let unquoted = trimmed.trim_matches(|c| c == '"' || c == '\'').trim();
         // Strip a single leading `provider/` segment if present.
         let bare = unquoted
             .split_once('/')
             .map(|(_, rest)| {
                 // Only treat as a prefix when there's no further slash in the
                 // remainder (real Qwen ids never contain `/`).
-                if rest.contains('/') {
-                    unquoted
-                } else {
-                    rest
-                }
+                if rest.contains('/') { unquoted } else { rest }
             })
             .unwrap_or(unquoted)
             .trim();
@@ -276,10 +270,7 @@ impl QwenCode {
         let mut providers = Vec::new();
         let mut models = Vec::new();
 
-        if let Some(provs) = parsed
-            .get("modelProviders")
-            .and_then(|p| p.as_object())
-        {
+        if let Some(provs) = parsed.get("modelProviders").and_then(|p| p.as_object()) {
             for (provider_id, entries) in provs {
                 let Some(arr) = entries.as_array() else {
                     continue;
