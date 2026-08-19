@@ -17,6 +17,12 @@
         "null"
       ]
     },
+    "effort": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "yolo": {
       "type": [
         "boolean",
@@ -54,6 +60,6 @@
       }
     }
   },
-  "description": "Antigravity (agy) — Google's agentic CLI, the ACP-capable successor to the\nGemini CLI. Modeled on the Gemini executor: both speak the Agent Client\nProtocol, so the same harness drives them.",
+  "description": "Antigravity (agy) — Google's agentic CLI.",
   "type": "object"
 }

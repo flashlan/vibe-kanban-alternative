@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { ExecutorConfig } from 'shared/types';
 import { sessionsApi } from '@/shared/lib/api';
+import { addPromptToHistory } from '@vibe/ui/lib/promptHistory';
 import { useCreateSession } from './useCreateSession';
 
 interface UseSessionSendOptions {
@@ -57,6 +58,7 @@ export function useSessionSend({
         return false;
       }
 
+      addPromptToHistory(trimmed);
       setError(null);
 
       if (isNewSessionMode) {

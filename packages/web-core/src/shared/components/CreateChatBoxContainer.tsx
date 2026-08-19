@@ -16,6 +16,7 @@ import {
 } from '@/shared/lib/string';
 import type { BaseCodingAgent, Repo } from 'shared/types';
 import { CreateChatBox } from '@vibe/ui/components/CreateChatBox';
+import { addPromptToHistory } from '@vibe/ui/lib/promptHistory';
 import { SettingsDialog } from '@/shared/dialogs/settings/SettingsDialog';
 import { CreateModeRepoPickerBar } from './CreateModeRepoPickerBar';
 import { ModelSelectorContainer } from '@/shared/components/ModelSelectorContainer';
@@ -226,6 +227,7 @@ export function CreateChatBoxContainer({
     setHasAttemptedSubmit(true);
     if (!canSubmit || !executorConfig) return;
 
+    addPromptToHistory(message);
     const { title } = splitMessageToTitleDescription(message);
     const data = {
       executor_config: executorConfig,

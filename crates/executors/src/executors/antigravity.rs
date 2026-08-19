@@ -1,4 +1,4 @@
-use std::{path::Path, sync::Arc};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use async_trait::async_trait;
 use derivative::Derivative;
@@ -17,19 +17,61 @@ use crate::{
         StandardCodingAgentExecutor,
     },
     logs::{
-        NormalizedEntry, NormalizedEntryType,
+        ActionType, CommandRunResult, NormalizedEntry, NormalizedEntryError, NormalizedEntryType,
+        ToolResult, ToolStatus,
         utils::{
             EntryIndexProvider, patch,
             patch::{add_normalized_entry, replace_normalized_entry},
+            shell_command_parsing::CommandCategory,
         },
     },
-    model_selector::{ModelInfo, ModelSelectorConfig, PermissionPolicy},
+    model_selector::{ModelInfo, ModelSelectorConfig, PermissionPolicy, ReasoningOption},
     profile::ExecutorConfig,
 };
 
-/// Antigravity (agy) — Google's agentic CLI, the ACP-capable successor to the
-/// Gemini CLI. Modeled on the Gemini executor: both speak the Agent Client
-/// Protocol, so the same harness drives them.
+#[derive(Deserialize, Debug)]
+#[serde(tag = "event", rename_all = "snake_case")]
+enum AgyEvent {
+    Init {
+        conversation_id: Option<String>,
+    },
+    StepUpdate {
+        step_update: AgyStepUpdate,
+    },
+    Result {
+        result: AgyResult,
+    },
+    #[serde(other)]
+    Other,
+}
+
+#[derive(Deserialize, Debug)]
+struct AgyStepUpdate {
+    step_type: Option<String>,
+    step_index: Option<usize>,
+    state: Option<String>,
+    tool_name: Option<String>,
+    tool_info: Option<AgyToolInfo>,
+    text_delta: Option<String>,
+    conversation_id: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+struct AgyToolInfo {
+    name: Option<String>,
+    parameters: Option<serde_json::Value>,
+    output: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+struct AgyResult {
+    conversation_id: Option<String>,
+    status: Option<String>,
+    response: Option<String>,
+    error: Option<String>,
+}
+
+/// Antigravity (agy) — Google's agentic CLI.
 #[derive(Derivative, Clone, Serialize, Deserialize, TS, JsonSchema)]
 #[derivative(Debug, PartialEq)]
 pub struct Antigravity {
@@ -37,6 +79,8 @@ pub struct Antigravity {
     pub append_prompt: AppendPrompt,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub yolo: Option<bool>,
     #[serde(flatten)]
@@ -48,7 +92,7 @@ pub struct Antigravity {
 }
 
 impl Antigravity {
-    /// Resolve the `agy` binary: PATH first, then the standard install location.
+    /// Resolve the `agy` binary: PATH first, then standard locations.
     fn agy_binary() -> String {
         if let Ok(path) = std::env::var("AGY_BIN") {
             return path;
@@ -63,7 +107,6 @@ impl Antigravity {
                 }
             }
         }
-        // Standard install: ~/.local/bin/agy
         if let Some(home) = dirs::home_dir() {
             let candidate = home.join(".local").join("bin").join("agy");
             if candidate.exists() {
@@ -73,78 +116,120 @@ impl Antigravity {
         "agy".to_string()
     }
 
-    fn build_command_builder(&self) -> Result<CommandBuilder, CommandBuildError> {
-        // Antigravity has no ACP mode in the CLI — it runs single-shot via
-        // `agy --print <prompt>`. The prompt is piped to stdin.
+    fn build_command_builder(
+        &self,
+        prompt: &str,
+        conversation_id: Option<&str>,
+    ) -> Result<CommandBuilder, CommandBuildError> {
         let mut builder = CommandBuilder::new(&Self::agy_binary());
 
-        builder = builder.extend_params(["--print"]);
+        builder = builder.extend_params(["--print", prompt]);
+        builder = builder.extend_params(["--output-format", "stream-json"]);
+
+        if let Some(conv_id) = conversation_id {
+            builder = builder.extend_params(["--conversation", conv_id]);
+        }
 
         if let Some(model) = &self.model {
             builder = builder.extend_params(["--model", model.as_str()]);
         }
 
-        if self.yolo.unwrap_or(false) {
+        let effort = self.effort.as_deref().or_else(|| {
+            if let Some(model) = &self.model {
+                if model.contains("3.7") || model.contains("gemini-3.7") {
+                    Some("high")
+                } else {
+                    None
+                }
+            } else {
+                Some("high")
+            }
+        });
+
+        if let Some(effort) = effort {
+            if !effort.is_empty() {
+                builder = builder.extend_params(["--effort", effort]);
+            }
+        }
+
+        if self.yolo.unwrap_or(true) {
             builder = builder.extend_params(["--dangerously-skip-permissions"]);
         }
 
         apply_overrides(builder, &self.cmd)
     }
 
-    /// Run `agy models` and parse `id\tname` lines into `ModelInfo`.
-    async fn fetch_cli_models() -> Vec<ModelInfo> {
-        let mut cmd = tokio::process::Command::new(Self::agy_binary());
-        cmd.arg("models");
-        if let Some(home) = dirs::home_dir() {
-            cmd.env("HOME", &home);
-        }
-        let Ok(output) = cmd.output().await else {
-            return vec![];
-        };
-        let Ok(text) = String::from_utf8(output.stdout) else {
-            return vec![];
-        };
-
-        let mut models = Vec::new();
-        for line in text.lines() {
-            let trimmed = line.trim();
-            if trimmed.is_empty() || trimmed.starts_with("Fetching") || trimmed.starts_with("Error")
-            {
-                continue;
-            }
-            let (id, name) = match trimmed.split_once('\t') {
-                Some((id, name)) => (id.trim().to_string(), name.trim().to_string()),
-                None => continue,
-            };
-            if id.is_empty() {
-                continue;
-            }
-            models.push(ModelInfo {
-                id: id.clone(),
-                name: if name.is_empty() { id } else { name },
+    fn default_models() -> Vec<ModelInfo> {
+        let effort_options = ReasoningOption::from_names(["low", "medium", "high"]);
+        vec![
+            ModelInfo {
+                id: "gemini-3.7-flash".to_string(),
+                name: "Gemini 3.7 Flash".to_string(),
+                provider_id: None,
+                reasoning_options: effort_options.clone(),
+            },
+            ModelInfo {
+                id: "gemini-2.5-pro".to_string(),
+                name: "Gemini 2.5 Pro".to_string(),
+                provider_id: None,
+                reasoning_options: effort_options.clone(),
+            },
+            ModelInfo {
+                id: "gemini-2.5-flash".to_string(),
+                name: "Gemini 2.5 Flash".to_string(),
+                provider_id: None,
+                reasoning_options: effort_options.clone(),
+            },
+            ModelInfo {
+                id: "gemini-2.5-flash-lite".to_string(),
+                name: "Gemini 2.5 Flash Lite".to_string(),
                 provider_id: None,
                 reasoning_options: vec![],
-            });
-        }
-        models
+            },
+            ModelInfo {
+                id: "pro".to_string(),
+                name: "Pro (High Capability)".to_string(),
+                provider_id: None,
+                reasoning_options: effort_options.clone(),
+            },
+            ModelInfo {
+                id: "flash".to_string(),
+                name: "Flash (Fast & Economical)".to_string(),
+                provider_id: None,
+                reasoning_options: effort_options,
+            },
+            ModelInfo {
+                id: "flash_lite".to_string(),
+                name: "Flash Lite (Lightweight)".to_string(),
+                provider_id: None,
+                reasoning_options: vec![],
+            },
+            ModelInfo {
+                id: "inherit".to_string(),
+                name: "Inherit".to_string(),
+                provider_id: None,
+                reasoning_options: vec![],
+            },
+        ]
     }
 
-    /// Spawn `agy --print --model X`, pipe the prompt to stdin, and stream the
-    /// response. Antigravity's CLI has no ACP mode, so this is single-shot.
     async fn spawn_print_mode(
         &self,
         current_dir: &Path,
         prompt: &str,
+        conversation_id: Option<&str>,
         env: &ExecutionEnv,
     ) -> Result<SpawnedChild, ExecutorError> {
-        let command = self.build_command_builder()?.build_initial()?;
-        let (program_path, args) = command.into_resolved().await?;
         let combined_prompt = self.append_prompt.combine_prompt(prompt);
+        let command = self
+            .build_command_builder(&combined_prompt, conversation_id)?
+            .build_initial()?;
+        let (program_path, args) = command.into_resolved().await?;
 
         let mut cmd = tokio::process::Command::new(&program_path);
         cmd.args(&args)
             .current_dir(current_dir)
-            .stdin(std::process::Stdio::piped())
+            .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
 
@@ -152,21 +237,8 @@ impl Antigravity {
             .with_profile(&self.cmd)
             .apply_to_command(&mut cmd);
 
-        let mut child = cmd.group_spawn_no_window()?;
+        let child = cmd.group_spawn_no_window()?;
 
-        // Pipe the prompt to the child's stdin, then close it so `agy --print`
-        // reads until EOF.
-        if let Some(mut stdin) = child.inner().stdin.take() {
-            let prompt = combined_prompt.clone();
-            tokio::spawn(async move {
-                use tokio::io::AsyncWriteExt;
-                let _ = stdin.write_all(prompt.as_bytes()).await;
-                let _ = stdin.flush().await;
-                // dropping stdin closes the pipe
-            });
-        }
-
-        let _ = &mut child;
         Ok(SpawnedChild {
             child,
             exit_signal: None,
@@ -180,6 +252,9 @@ impl StandardCodingAgentExecutor for Antigravity {
     fn apply_overrides(&mut self, executor_config: &ExecutorConfig) {
         if let Some(model_id) = &executor_config.model_id {
             self.model = Some(model_id.clone());
+        }
+        if let Some(reasoning_id) = &executor_config.reasoning_id {
+            self.effort = Some(reasoning_id.clone());
         }
         if let Some(permission_policy) = executor_config.permission_policy.clone() {
             self.yolo = Some(matches!(
@@ -199,18 +274,19 @@ impl StandardCodingAgentExecutor for Antigravity {
         prompt: &str,
         env: &ExecutionEnv,
     ) -> Result<SpawnedChild, ExecutorError> {
-        self.spawn_print_mode(current_dir, prompt, env).await
+        self.spawn_print_mode(current_dir, prompt, None, env).await
     }
 
     async fn spawn_follow_up(
         &self,
         current_dir: &Path,
         prompt: &str,
-        _session_id: &str,
+        session_id: &str,
         _reset_to_message_id: Option<&str>,
         env: &ExecutionEnv,
     ) -> Result<SpawnedChild, ExecutorError> {
-        self.spawn_print_mode(current_dir, prompt, env).await
+        self.spawn_print_mode(current_dir, prompt, Some(session_id), env)
+            .await
     }
 
     fn normalize_logs(
@@ -218,24 +294,250 @@ impl StandardCodingAgentExecutor for Antigravity {
         msg_store: Arc<MsgStore>,
         _worktree_path: &Path,
     ) -> Vec<tokio::task::JoinHandle<()>> {
-        // Antigravity's `--print` mode emits plain text (not ACP JSON), so we
-        // accumulate stdout lines into a streaming AssistantMessage entry.
         use futures::StreamExt;
 
         let entry_index = EntryIndexProvider::start_from(&msg_store);
         let handle = tokio::spawn(async move {
             let mut stdout_lines = msg_store.stdout_lines_stream();
-            let mut current: Option<(usize, String)> = None;
+            let mut current_assistant: Option<(usize, String)> = None;
+            let mut active_tools: HashMap<usize, usize> = HashMap::new();
+            let mut session_id_reported = false;
 
             while let Some(Ok(line)) = stdout_lines.next().await {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                // Check if line is a JSON stream event
+                if let Ok(event) = serde_json::from_str::<AgyEvent>(trimmed) {
+                    match event {
+                        AgyEvent::Init { conversation_id } => {
+                            if let Some(conv_id) = conversation_id {
+                                msg_store.push_session_id(conv_id);
+                                session_id_reported = true;
+                            }
+                        }
+                        AgyEvent::StepUpdate { step_update } => {
+                            if !session_id_reported
+                                && let Some(conv_id) = step_update.conversation_id
+                            {
+                                msg_store.push_session_id(conv_id);
+                                session_id_reported = true;
+                            }
+
+                            let step_type = step_update.step_type.as_deref().unwrap_or("");
+                            let step_idx = step_update.step_index.unwrap_or(0);
+                            let state = step_update.state.as_deref().unwrap_or("DONE");
+
+                            if step_type == "agent_response" {
+                                if let Some(delta) = step_update.text_delta {
+                                    if !delta.is_empty() {
+                                        let entry = match &mut current_assistant {
+                                            Some((_, content)) => {
+                                                content.push_str(&delta);
+                                                NormalizedEntry {
+                                                    timestamp: None,
+                                                    entry_type:
+                                                        NormalizedEntryType::AssistantMessage,
+                                                    content: content.clone(),
+                                                    metadata: None,
+                                                }
+                                            }
+                                            None => NormalizedEntry {
+                                                timestamp: None,
+                                                entry_type: NormalizedEntryType::AssistantMessage,
+                                                content: delta.clone(),
+                                                metadata: None,
+                                            },
+                                        };
+
+                                        match &mut current_assistant {
+                                            Some((index, _)) => {
+                                                replace_normalized_entry(&msg_store, *index, entry);
+                                            }
+                                            None => {
+                                                let index = add_normalized_entry(
+                                                    &msg_store,
+                                                    &entry_index,
+                                                    entry,
+                                                );
+                                                current_assistant = Some((index, delta));
+                                            }
+                                        }
+                                    }
+                                }
+                            } else if step_type == "tool" {
+                                // Close current assistant message turn
+                                current_assistant = None;
+
+                                let tool_name =
+                                    step_update.tool_name.unwrap_or_else(|| "tool".to_string());
+                                let tool_info = step_update.tool_info;
+                                let params = tool_info.as_ref().and_then(|i| i.parameters.clone());
+                                let output = tool_info
+                                    .as_ref()
+                                    .and_then(|i| i.output.clone())
+                                    .unwrap_or_default();
+
+                                let status = if state == "ACTIVE" {
+                                    ToolStatus::Created
+                                } else {
+                                    ToolStatus::Success
+                                };
+
+                                let action_type = match tool_name.as_str() {
+                                    "view_file" | "read_file" => {
+                                        let path = params
+                                            .as_ref()
+                                            .and_then(|p| {
+                                                p.get("AbsolutePath").or_else(|| p.get("path"))
+                                            })
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        ActionType::FileRead { path }
+                                    }
+                                    "grep_search" | "find_by_name" | "search_web" => {
+                                        let query = params
+                                            .as_ref()
+                                            .and_then(|p| {
+                                                p.get("Query").or_else(|| {
+                                                    p.get("query").or_else(|| p.get("Pattern"))
+                                                })
+                                            })
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        ActionType::Search { query }
+                                    }
+                                    "run_command" => {
+                                        let command = params
+                                            .as_ref()
+                                            .and_then(|p| {
+                                                p.get("CommandLine").or_else(|| p.get("command"))
+                                            })
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        ActionType::CommandRun {
+                                            command,
+                                            result: Some(CommandRunResult {
+                                                exit_status: None,
+                                                output: if output.is_empty() {
+                                                    None
+                                                } else {
+                                                    Some(output.clone())
+                                                },
+                                            }),
+                                            category: CommandCategory::Other,
+                                        }
+                                    }
+                                    "replace_file_content" | "write_to_file" => {
+                                        let path = params
+                                            .as_ref()
+                                            .and_then(|p| {
+                                                p.get("TargetFile").or_else(|| p.get("path"))
+                                            })
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        ActionType::FileEdit {
+                                            path,
+                                            changes: vec![],
+                                        }
+                                    }
+                                    _ => ActionType::Tool {
+                                        tool_name: tool_name.clone(),
+                                        arguments: params,
+                                        result: Some(ToolResult::markdown(output.clone())),
+                                    },
+                                };
+
+                                let entry = NormalizedEntry {
+                                    timestamp: None,
+                                    entry_type: NormalizedEntryType::ToolUse {
+                                        tool_name,
+                                        action_type,
+                                        status,
+                                    },
+                                    content: output,
+                                    metadata: None,
+                                };
+
+                                if let Some(&existing_idx) = active_tools.get(&step_idx) {
+                                    replace_normalized_entry(&msg_store, existing_idx, entry);
+                                } else {
+                                    let idx = add_normalized_entry(&msg_store, &entry_index, entry);
+                                    if state == "ACTIVE" {
+                                        active_tools.insert(step_idx, idx);
+                                    }
+                                }
+                            }
+                        }
+                        AgyEvent::Result { result } => {
+                            if !session_id_reported && let Some(conv_id) = result.conversation_id {
+                                msg_store.push_session_id(conv_id);
+                                session_id_reported = true;
+                            }
+
+                            if let Some(response) = result.response {
+                                if !response.trim().is_empty() {
+                                    let entry = NormalizedEntry {
+                                        timestamp: None,
+                                        entry_type: NormalizedEntryType::AssistantMessage,
+                                        content: response.clone(),
+                                        metadata: None,
+                                    };
+                                    match &mut current_assistant {
+                                        Some((index, _)) => {
+                                            replace_normalized_entry(&msg_store, *index, entry);
+                                        }
+                                        None => {
+                                            let index = add_normalized_entry(
+                                                &msg_store,
+                                                &entry_index,
+                                                entry,
+                                            );
+                                            current_assistant = Some((index, response));
+                                        }
+                                    }
+                                }
+                            }
+
+                            if let Some(error) = result.error {
+                                if !error.trim().is_empty() {
+                                    let entry = NormalizedEntry {
+                                        timestamp: None,
+                                        entry_type: NormalizedEntryType::ErrorMessage {
+                                            error_type: NormalizedEntryError::Other,
+                                        },
+                                        content: error,
+                                        metadata: None,
+                                    };
+                                    add_normalized_entry(&msg_store, &entry_index, entry);
+                                }
+                            }
+                        }
+                        AgyEvent::Other => {}
+                    }
+                    continue;
+                }
+
+                // If line looks like a JSON event that failed parsing, do NOT dump raw json to chat
+                if trimmed.starts_with('{') && trimmed.contains("\"event\"") {
+                    continue;
+                }
+
+                // Plain text fallback (e.g. CLI banner or non-stream output)
                 let cleaned = strip_ansi_escapes::strip_str(&line);
-                if cleaned.trim().is_empty() && current.is_none() {
+                if cleaned.trim().is_empty() && current_assistant.is_none() {
                     continue;
                 }
                 let entry = NormalizedEntry {
                     timestamp: None,
                     entry_type: NormalizedEntryType::AssistantMessage,
-                    content: match &mut current {
+                    content: match &mut current_assistant {
                         Some((_, content)) => {
                             content.push('\n');
                             content.push_str(&cleaned);
@@ -245,13 +547,13 @@ impl StandardCodingAgentExecutor for Antigravity {
                     },
                     metadata: None,
                 };
-                match &mut current {
+                match &mut current_assistant {
                     Some((index, _)) => {
                         replace_normalized_entry(&msg_store, *index, entry);
                     }
                     None => {
                         let index = add_normalized_entry(&msg_store, &entry_index, entry);
-                        current = Some((index, cleaned));
+                        current_assistant = Some((index, cleaned));
                     }
                 }
             }
@@ -292,8 +594,8 @@ impl StandardCodingAgentExecutor for Antigravity {
             variant: None,
             model_id: self.model.clone(),
             agent_id: None,
-            reasoning_id: None,
-            permission_policy: Some(if self.yolo.unwrap_or(false) {
+            reasoning_id: self.effort.clone(),
+            permission_policy: Some(if self.yolo.unwrap_or(true) {
                 PermissionPolicy::Auto
             } else {
                 PermissionPolicy::Supervised
@@ -306,15 +608,27 @@ impl StandardCodingAgentExecutor for Antigravity {
         _workdir: Option<&std::path::Path>,
         _repo_path: Option<&std::path::Path>,
     ) -> Result<futures::stream::BoxStream<'static, json_patch::Patch>, ExecutorError> {
-        // Pull the real model list from the installed CLI (`agy models`), so the
-        // dropdown always matches what the CLI actually supports — no hardcoding.
-        let models = Self::fetch_cli_models().await;
+        let mut models = Self::default_models();
 
-        let default_model = models
-            .iter()
-            .find(|m| m.id.contains("flash"))
-            .or_else(|| models.first())
-            .map(|m| m.id.clone());
+        // If user already configured a model, ensure it's in the list
+        if let Some(configured_model) = &self.model {
+            if !models.iter().any(|m| m.id == *configured_model) {
+                models.insert(
+                    0,
+                    ModelInfo {
+                        id: configured_model.clone(),
+                        name: configured_model.clone(),
+                        provider_id: None,
+                        reasoning_options: vec![],
+                    },
+                );
+            }
+        }
+
+        let default_model = self
+            .model
+            .clone()
+            .or_else(|| Some("gemini-3.7-flash".to_string()));
 
         let options = ExecutorDiscoveredOptions {
             model_selector: ModelSelectorConfig {

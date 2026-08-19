@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE issues\n               SET status_id = $1,\n                   completed_at = CASE\n                       WHEN $2 THEN COALESCE(completed_at, datetime('now', 'subsec'))\n                       ELSE NULL\n                   END,\n                   updated_at = datetime('now', 'subsec')\n               WHERE id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "faf7bd01a172d666098dfb12e46ac2f1d323de001db2e6bc70e827844e0dc627"
+}
