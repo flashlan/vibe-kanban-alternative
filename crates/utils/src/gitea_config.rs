@@ -125,7 +125,7 @@ pub fn resolve_token(cfg: &GiteaSecretConfig) -> Option<(String, TokenSource)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::{tempdir, TempDir};
+    use tempfile::{TempDir, tempdir};
 
     fn write_toml(dir: &TempDir, name: &str, content: &str) -> std::path::PathBuf {
         let path = dir.path().join(name);
@@ -136,11 +136,7 @@ mod tests {
     #[test]
     fn resolves_token_from_toml() {
         let dir = tempdir().unwrap();
-        let path = write_toml(
-            &dir,
-            "gitea.toml",
-            "token = \"pat-from-toml\"\n",
-        );
+        let path = write_toml(&dir, "gitea.toml", "token = \"pat-from-toml\"\n");
         std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", path);
         std::env::remove_var("GITEA_TOKEN");
 
@@ -167,11 +163,7 @@ mod tests {
     #[test]
     fn toml_takes_priority_over_env() {
         let dir = tempdir().unwrap();
-        let path = write_toml(
-            &dir,
-            "gitea.toml",
-            "token = \"pat-from-toml\"\n",
-        );
+        let path = write_toml(&dir, "gitea.toml", "token = \"pat-from-toml\"\n");
         std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", path);
         std::env::set_var("GITEA_TOKEN", "pat-from-env");
 
@@ -203,11 +195,7 @@ mod tests {
     #[test]
     fn empty_token_is_treated_as_absent() {
         let dir = tempdir().unwrap();
-        let path = write_toml(
-            &dir,
-            "gitea.toml",
-            "token = \"   \"\n",
-        );
+        let path = write_toml(&dir, "gitea.toml", "token = \"   \"\n");
         std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", path);
         std::env::remove_var("GITEA_TOKEN");
 

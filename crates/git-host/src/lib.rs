@@ -145,12 +145,14 @@ impl GitHostProvider for GitHostService {
         branch_name: &str,
     ) -> Result<Vec<PullRequestDetail>, GitHostError> {
         match self {
-            Self::GitHub(p) => p
-                .list_prs_for_branch(repo_path, remote_url, branch_name)
-                .await,
-            Self::Gitea(p) => p
-                .list_prs_for_branch(repo_path, remote_url, branch_name)
-                .await,
+            Self::GitHub(p) => {
+                p.list_prs_for_branch(repo_path, remote_url, branch_name)
+                    .await
+            }
+            Self::Gitea(p) => {
+                p.list_prs_for_branch(repo_path, remote_url, branch_name)
+                    .await
+            }
         }
     }
 

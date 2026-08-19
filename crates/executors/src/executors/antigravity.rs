@@ -5,10 +5,7 @@ use derivative::Derivative;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
-use workspace_utils::{
-    command_ext::GroupSpawnNoWindowExt,
-    msg_store::MsgStore,
-};
+use workspace_utils::{command_ext::GroupSpawnNoWindowExt, msg_store::MsgStore};
 
 use crate::{
     approvals::ExecutorApprovalService,
@@ -20,12 +17,11 @@ use crate::{
         StandardCodingAgentExecutor,
     },
     logs::{
-        utils::{
-            patch,
-            patch::{add_normalized_entry, replace_normalized_entry},
-            EntryIndexProvider,
-        },
         NormalizedEntry, NormalizedEntryType,
+        utils::{
+            EntryIndexProvider, patch,
+            patch::{add_normalized_entry, replace_normalized_entry},
+        },
     },
     model_selector::{ModelInfo, ModelSelectorConfig, PermissionPolicy},
     profile::ExecutorConfig,
@@ -112,9 +108,7 @@ impl Antigravity {
         let mut models = Vec::new();
         for line in text.lines() {
             let trimmed = line.trim();
-            if trimmed.is_empty()
-                || trimmed.starts_with("Fetching")
-                || trimmed.starts_with("Error")
+            if trimmed.is_empty() || trimmed.starts_with("Fetching") || trimmed.starts_with("Error")
             {
                 continue;
             }
@@ -267,7 +261,11 @@ impl StandardCodingAgentExecutor for Antigravity {
     }
 
     fn default_mcp_config_path(&self) -> Option<std::path::PathBuf> {
-        dirs::home_dir().map(|home| home.join(".gemini").join("antigravity-cli").join("settings.json"))
+        dirs::home_dir().map(|home| {
+            home.join(".gemini")
+                .join("antigravity-cli")
+                .join("settings.json")
+        })
     }
 
     fn get_availability_info(&self) -> AvailabilityInfo {

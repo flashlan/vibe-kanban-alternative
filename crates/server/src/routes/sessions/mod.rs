@@ -341,8 +341,8 @@ pub(crate) async fn run_follow_up(
     // context. This only affects what's sent to the agent's stdin; the chat UI
     // renders messages from the message store, so nothing extra is surfaced.
     if matches!(executor_profile_id.executor, BaseCodingAgent::Antigravity)
-        && let Ok(history) = CodingAgentTurn::find_conversation_history_for_session(pool, session.id)
-            .await
+        && let Ok(history) =
+            CodingAgentTurn::find_conversation_history_for_session(pool, session.id).await
         && !history.is_empty()
     {
         let mut ctx = String::from(

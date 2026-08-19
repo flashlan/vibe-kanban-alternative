@@ -1,13 +1,13 @@
-# Vibe Kanban
+# vibe-kanban-alternative
 
-> A visual project management tool for developers that integrates with git repositories and coding agents like Claude Code and Amp.
+> The independent, self-hosted fork of vibe-kanban — drive a crew of coding agents from the terminal or your phone.
 
 ## Quick Start
 
-Run vibe kanban instantly without installation:
+Run vibe-kanban-alternative instantly without installation:
 
 ```bash
-npx vibe-kanban-indie
+npx vibe-kanban-alternative
 ```
 
 This will launch the application locally and open it in your browser automatically.
@@ -15,15 +15,15 @@ This will launch the application locally and open it in your browser automatical
 Helpful entrypoints:
 
 ```bash
-npx vibe-kanban-indie --help
-npx vibe-kanban-indie --version
-npx vibe-kanban-indie review --help
-npx vibe-kanban-indie mcp --help
+npx vibe-kanban-alternative --help
+npx vibe-kanban-alternative --version
+npx vibe-kanban-alternative review --help
+npx vibe-kanban-alternative mcp --help
 ```
 
-## What is Vibe Kanban?
+## What is vibe-kanban-alternative?
 
-Vibe Kanban is a modern project management tool designed specifically for developers. It helps you organize your coding projects with kanban-style task management while providing powerful integrations with git repositories and AI coding agents.
+vibe-kanban-alternative is a modern project management tool designed specifically for solo developers. It helps you organize your coding projects with kanban-style task management while providing powerful integrations with git repositories and AI coding agents — entirely local, no cloud, no auth.
 
 ### ✨ Key Features
 
@@ -176,7 +176,7 @@ Vibe Kanban supports customization through its configuration system:
 **Ready to supercharge your development workflow?**
 
 ```bash
-npx vibe-kanban-indie
+npx vibe-kanban-alternative
 ```
 
 _Start managing your projects with the power of AI coding agents today!_

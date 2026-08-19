@@ -435,23 +435,20 @@ async fn fetch_comments(
     if !(200..300).contains(&status.as_u16()) {
         return Err(map_status(status.as_u16(), &text));
     }
-    let items: Vec<GiteaIssueComment> = serde_json::from_str(&text).map_err(|e| {
-        GitHostError::PullRequest(format!("Failed to parse Gitea comments: {e}"))
-    })?;
+    let items: Vec<GiteaIssueComment> = serde_json::from_str(&text)
+        .map_err(|e| GitHostError::PullRequest(format!("Failed to parse Gitea comments: {e}")))?;
     Ok(items
         .into_iter()
-        .map(|c| {
-            UnifiedPrComment::General {
-                id: c.id.to_string(),
-                author: c
-                    .user
-                    .and_then(|u| u.login)
-                    .unwrap_or_else(|| "unknown".to_string()),
-                author_association: None,
-                body: c.body,
-                created_at: c.created_at.unwrap_or_else(Utc::now),
-                url: None,
-            }
+        .map(|c| UnifiedPrComment::General {
+            id: c.id.to_string(),
+            author: c
+                .user
+                .and_then(|u| u.login)
+                .unwrap_or_else(|| "unknown".to_string()),
+            author_association: None,
+            body: c.body,
+            created_at: c.created_at.unwrap_or_else(Utc::now),
+            url: None,
         })
         .collect())
 }
@@ -471,7 +468,8 @@ fn map_status(code: u16, body: &str) -> GitHostError {
     match code {
         401 => GitHostError::AuthFailed(format!("Gitea auth failed ({code}): {body}")),
         403 if body.to_lowercase().contains("permission")
-            || body.to_lowercase().contains("forbidden") => {
+            || body.to_lowercase().contains("forbidden") =>
+        {
             GitHostError::InsufficientPermissions(body.to_string())
         }
         403 => GitHostError::AuthFailed(format!("Gitea auth failed ({code}): {body}")),
