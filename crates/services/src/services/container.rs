@@ -353,12 +353,35 @@ pub trait ContainerService {
             .name
             .as_deref()
             .unwrap_or(&ctx.workspace.branch);
-        let title = format!("Workspace Complete: {}", workspace_name);
+
+        // A cleanup-script completion is the "everything is done" bell — the
+        // coding agent finished AND the operator's cleanup hook (build, install,
+        // notify) ran to completion. Give it a distinct title so it reads as the
+        // final bell rather than a duplicate "Workspace Complete".
+        let is_cleanup = matches!(
+            ctx.execution_process.run_reason,
+            ExecutionProcessRunReason::CleanupScript
+        );
+
+        let title = if is_cleanup {
+            format!("✓ Cleanup finished: {workspace_name}")
+        } else {
+            format!("Workspace Complete: {workspace_name}")
+        };
         let message = match ctx.execution_process.status {
-            ExecutionProcessStatus::Completed => format!(
-                "✅ '{}' completed successfully\nBranch: {:?}\nExecutor: {:?}",
-                workspace_name, ctx.workspace.branch, ctx.session.executor
-            ),
+            ExecutionProcessStatus::Completed => {
+                if is_cleanup {
+                    format!(
+                        "▶ '{}' finished the cleanup hook (branch {})\nAll agent work is done.",
+                        workspace_name, ctx.workspace.branch
+                    )
+                } else {
+                    format!(
+                        "✅ '{}' completed successfully\nBranch: {:?}\nExecutor: {:?}",
+                        workspace_name, ctx.workspace.branch, ctx.session.executor
+                    )
+                }
+            }
             ExecutionProcessStatus::Failed => format!(
                 "❌ '{}' execution failed\nBranch: {:?}\nExecutor: {:?}",
                 workspace_name, ctx.workspace.branch, ctx.session.executor
