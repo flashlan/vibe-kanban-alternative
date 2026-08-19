@@ -150,20 +150,20 @@ impl StandardCodingAgentExecutor for Antigravity {
     }
 
     fn default_mcp_config_path(&self) -> Option<std::path::PathBuf> {
-        dirs::home_dir().map(|home| home.join(".antigravity").join("settings.json"))
+        dirs::home_dir().map(|home| home.join(".gemini").join("antigravity-cli").join("settings.json"))
     }
 
     fn get_availability_info(&self) -> AvailabilityInfo {
-        let mcp_config_found = self
+        let settings_found = self
             .default_mcp_config_path()
             .map(|p| p.exists())
             .unwrap_or(false);
 
         let installation_indicator_found = dirs::home_dir()
-            .map(|home| home.join(".antigravity").exists())
+            .map(|home| home.join(".gemini").join("antigravity-cli").exists())
             .unwrap_or(false);
 
-        if mcp_config_found || installation_indicator_found {
+        if settings_found || installation_indicator_found {
             AvailabilityInfo::InstallationFound
         } else {
             AvailabilityInfo::NotFound
