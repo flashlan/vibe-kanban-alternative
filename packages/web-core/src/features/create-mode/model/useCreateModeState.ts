@@ -461,7 +461,9 @@ export function useCreateModeState({
     // Project-level create flow (no linked card) still applies the project's
     // saved repo defaults, keyed on the seed's project_id.
     const remoteProjectId =
-      state.projectId ?? state.linkedIssue?.remoteProjectId ?? seedProjectIdRef.current;
+      state.projectId ??
+      state.linkedIssue?.remoteProjectId ??
+      seedProjectIdRef.current;
     if (!remoteProjectId) return;
     if (state.repos.length > 0) return;
     if (scratchDefaultsProjectRef.current === remoteProjectId) return;

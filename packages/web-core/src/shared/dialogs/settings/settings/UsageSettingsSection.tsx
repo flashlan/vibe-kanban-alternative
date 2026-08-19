@@ -121,7 +121,8 @@ export function UsageSettingsSection() {
   const [error, setError] = useState<string | null>(null);
   const [reExtractUser, setReExtractUser] = useState('');
   const [reExtractBusy, setReExtractBusy] = useState(false);
-  const [reExtractResult, setReExtractResult] = useState<ReExtractResponse | null>(null);
+  const [reExtractResult, setReExtractResult] =
+    useState<ReExtractResponse | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -170,13 +171,20 @@ export function UsageSettingsSection() {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const label = d.toISOString().slice(0, 10);
-    days.push({ date: d, label, level: activityLevel(activityByDay.get(label) ?? 0, maxDaily) });
+    days.push({
+      date: d,
+      label,
+      level: activityLevel(activityByDay.get(label) ?? 0, maxDaily),
+    });
   }
 
   // Agent totals across the window.
   const agentTotals = new Map<string, number>();
   for (const row of summary?.activity ?? []) {
-    agentTotals.set(row.agent, (agentTotals.get(row.agent) ?? 0) + row.executions);
+    agentTotals.set(
+      row.agent,
+      (agentTotals.get(row.agent) ?? 0) + row.executions
+    );
   }
   const agents = [...agentTotals.entries()].sort((a, b) => b[1] - a[1]);
 
@@ -217,7 +225,9 @@ export function UsageSettingsSection() {
         </div>
         <div className="rounded-sm border border-border bg-panel p-3">
           <div className="text-2xl font-semibold text-high">
-            {summary ? `${summary.projects.reduce((n, p) => n + p.open, 0)}` : '—'}
+            {summary
+              ? `${summary.projects.reduce((n, p) => n + p.open, 0)}`
+              : '—'}
           </div>
           <div className="text-xs text-low">
             {t('settings.usage.openIssues', 'Open issues')}
@@ -270,7 +280,10 @@ export function UsageSettingsSection() {
                   <div className="flex h-14 flex-1 items-end gap-px">
                     {days.map((d) => {
                       const n = byDayAgent.get(d.label)?.get(agent) ?? 0;
-                      const h = maxDaily > 0 ? Math.max(2, Math.round((n / maxDaily) * 56)) : 2;
+                      const h =
+                        maxDaily > 0
+                          ? Math.max(2, Math.round((n / maxDaily) * 56))
+                          : 2;
                       return (
                         <div
                           key={d.label}
@@ -304,7 +317,8 @@ export function UsageSettingsSection() {
           ) : (
             <div className="flex flex-col gap-3">
               {(summary?.projects ?? []).map((p) => {
-                const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
+                const pct =
+                  p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
                 return (
                   <div key={p.project_id}>
                     <div className="mb-1 flex items-center justify-between text-xs">
@@ -369,7 +383,12 @@ export function UsageSettingsSection() {
                         {d.providers.map((p) => {
                           const share =
                             d.total > 0
-                              ? Math.max(1, Math.round((p.prompt + p.completion) / d.total * 100))
+                              ? Math.max(
+                                  1,
+                                  Math.round(
+                                    ((p.prompt + p.completion) / d.total) * 100
+                                  )
+                                )
                               : 0;
                           return (
                             <div
@@ -394,7 +413,9 @@ export function UsageSettingsSection() {
                     key={`${p.provider}|${p.model}`}
                     className="flex items-center gap-1.5 text-xs text-low"
                   >
-                    <span className={`h-2.5 w-2.5 rounded-sm ${providerColor(p.provider)}`} />
+                    <span
+                      className={`h-2.5 w-2.5 rounded-sm ${providerColor(p.provider)}`}
+                    />
                     {p.provider} · {p.model} ·{' '}
                     {(p.prompt + p.completion).toLocaleString()}
                   </span>

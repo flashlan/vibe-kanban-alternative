@@ -14,7 +14,10 @@ import {
   extractManualLines,
   type PipelineStage,
 } from '@/shared/lib/pipeline/cardPipeline';
-import { useDefaultPipelineId, useDefaultPipelineSelectionPref } from '@/shared/stores/useUiPreferencesStore';
+import {
+  useDefaultPipelineId,
+  useDefaultPipelineSelectionPref,
+} from '@/shared/stores/useUiPreferencesStore';
 import {
   Select,
   SelectContent,
@@ -26,7 +29,9 @@ import { cn } from '@/shared/lib/utils';
 
 const PIPELINE_EXPANDED_KEY = 'vk-pipeline-expanded';
 
-function usePipelineExpanded(defaultValue = false): [boolean, (v: boolean) => void] {
+function usePipelineExpanded(
+  defaultValue = false
+): [boolean, (v: boolean) => void] {
   const [value, setValue] = useState(() => {
     try {
       const stored = localStorage.getItem(PIPELINE_EXPANDED_KEY);
@@ -37,7 +42,9 @@ function usePipelineExpanded(defaultValue = false): [boolean, (v: boolean) => vo
   });
   const set = useCallback((v: boolean) => {
     setValue(v);
-    try { localStorage.setItem(PIPELINE_EXPANDED_KEY, String(v)); } catch {}
+    try {
+      localStorage.setItem(PIPELINE_EXPANDED_KEY, String(v));
+    } catch {}
   }, []);
   return [value, set];
 }
@@ -183,10 +190,12 @@ export function PipelineSection({
         // Prefer the remembered stage ticks (e.g. "Quick + memory on"); fall
         // back to the pipeline's default-enabled stages when no ticks were
         // saved yet.
-        const rememberedIds = pipelinePref.id === def.id
-          ? pipelinePref.enabledIds.filter((id) =>
-              def.stages.some((s) => s.id === id))
-          : [];
+        const rememberedIds =
+          pipelinePref.id === def.id
+            ? pipelinePref.enabledIds.filter((id) =>
+                def.stages.some((s) => s.id === id)
+              )
+            : [];
         setEnabledIds(
           rememberedIds.length > 0
             ? new Set(rememberedIds)

@@ -31,10 +31,7 @@ async function fetchMem0Config(): Promise<Mem0Config> {
 async function updateMem0Config(body: {
   provider?: string;
   graph_enabled?: boolean;
-  providers?: Record<
-    string,
-    { url?: string; model?: string; key?: string }
-  >;
+  providers?: Record<string, { url?: string; model?: string; key?: string }>;
 }): Promise<Mem0Config> {
   const response = await makeRequest('/api/usage/mem0-config', {
     method: 'POST',
@@ -94,7 +91,10 @@ export function MemorySettingsSection() {
     setSaved(false);
     setError(null);
     try {
-      const providers: Record<string, { url: string; model: string; key?: string }> = {};
+      const providers: Record<
+        string,
+        { url: string; model: string; key?: string }
+      > = {};
       for (const p of PROVIDER_ORDER) {
         const d = drafts[p] ?? { url: '', model: '', key: '' };
         const patch: { url: string; model: string; key?: string } = {
@@ -162,7 +162,10 @@ export function MemorySettingsSection() {
                 <div className="text-xs text-low">
                   {config.graph_url
                     ? `mem0 · ${config.collection} · ${config.graph_url}`
-                    : t('settings.memory.graphDisabled', 'Graph service not configured')}
+                    : t(
+                        'settings.memory.graphDisabled',
+                        'Graph service not configured'
+                      )}
                 </div>
               </div>
               <button

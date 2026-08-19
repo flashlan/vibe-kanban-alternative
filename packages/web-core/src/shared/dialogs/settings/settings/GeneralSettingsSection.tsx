@@ -699,7 +699,9 @@ export function GeneralSettingsSection() {
           <p className="text-sm font-medium text-normal">
             {t('settings.gitea.token.title')}
           </p>
-          <p className="text-sm text-low">{t('settings.gitea.token.description')}</p>
+          <p className="text-sm text-low">
+            {t('settings.gitea.token.description')}
+          </p>
           <p className="text-sm text-low mt-half">
             {t('settings.gitea.token.hint')}
           </p>

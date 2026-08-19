@@ -80,9 +80,7 @@ const loadPipelineSelectionPref = (): PipelineSelectionPref => {
       return {
         id: parsed.id ?? null,
         enabledIds: Array.isArray(parsed.enabledIds)
-          ? parsed.enabledIds.filter(
-              (v): v is string => typeof v === 'string'
-            )
+          ? parsed.enabledIds.filter((v): v is string => typeof v === 'string')
           : [],
       };
     }
@@ -1062,7 +1060,6 @@ export function useDefaultPipelineSelectionPref(): [
   }, []);
   return [pref, set];
 }
-
 
 // Hook for the animated running outline toggle
 export function useAnimateRunningOutline() {

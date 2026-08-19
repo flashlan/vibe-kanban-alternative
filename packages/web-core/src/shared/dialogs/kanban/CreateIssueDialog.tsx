@@ -95,6 +95,8 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
     const titleInputRef = useRef<HTMLInputElement | null>(null);
     const descriptionTextareaRef = useRef<HTMLTextAreaElement | null>(null);
     const pipelineSelectionRef = useRef<PipelineSelection | null>(null);
+    const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+    const closeButtonRef = useRef<HTMLButtonElement | null>(null);
 
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -252,31 +254,57 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
       t,
     ]);
 
+    // When the issue is created, automatically scroll to the bottom of the modal
+    // and switch focus to the Close button so the user can immediately press Enter to close.
+    useEffect(() => {
+      if (!savedIssueId) return;
+
+      const scrollToBottomAndFocusClose = () => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop =
+            scrollContainerRef.current.scrollHeight;
+        }
+        closeButtonRef.current?.focus();
+      };
+
+      const frameId1 = window.requestAnimationFrame(() => {
+        scrollToBottomAndFocusClose();
+        window.requestAnimationFrame(scrollToBottomAndFocusClose);
+      });
+
+      return () => window.cancelAnimationFrame(frameId1);
+    }, [savedIssueId]);
+
     // Enter submits when focus is in the title input; Cmd/Ctrl+Enter submits
-    // globally. While the textarea is focused, Enter is left alone so the user
+    // globally. When the issue is already saved, Enter closes the dialog.
+    // While the textarea is focused, unadorned Enter is left alone so the user
     // can add line breaks.
     const handleTitleKeyDown = useCallback(
       (event: ReactKeyboardEvent<HTMLInputElement>) => {
         if (event.key === 'Enter' && !event.shiftKey) {
           event.preventDefault();
-          void handleSubmit();
+          if (savedIssueId) {
+            handleClose();
+          } else {
+            void handleSubmit();
+          }
         }
       },
-      [handleSubmit]
+      [handleSubmit, savedIssueId, handleClose]
     );
 
     const handleDescriptionKeyDown = useCallback(
       (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-        if (
-          event.key === 'Enter' &&
-          (event.metaKey || event.ctrlKey) &&
-          canSubmit
-        ) {
+        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
           event.preventDefault();
-          void handleSubmit();
+          if (savedIssueId) {
+            handleClose();
+          } else if (canSubmit) {
+            void handleSubmit();
+          }
         }
       },
-      [handleSubmit, canSubmit]
+      [handleSubmit, canSubmit, savedIssueId, handleClose]
     );
 
     // Overlay close (Esc, click outside) MUST resolve so the awaiting caller
@@ -307,7 +335,10 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
             ) : null}
           </DialogHeader>
 
-          <div className="flex flex-1 flex-col gap-4 overflow-y-auto py-2 min-h-0">
+          <div
+            ref={scrollContainerRef}
+            className="flex flex-1 flex-col gap-4 overflow-y-auto py-2 min-h-0"
+          >
             <div className="flex flex-col gap-2">
               <input
                 ref={titleInputRef}
@@ -417,6 +448,7 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
 
           <DialogFooter>
             <Button
+              ref={closeButtonRef}
               variant="outline"
               onClick={handleCancel}
               disabled={isSubmitting}
