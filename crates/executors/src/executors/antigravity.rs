@@ -19,7 +19,14 @@ use crate::{
         AppendPrompt, AvailabilityInfo, BaseCodingAgent, ExecutorError, SpawnedChild,
         StandardCodingAgentExecutor,
     },
-    logs::utils::patch,
+    logs::{
+        utils::{
+            patch,
+            patch::{add_normalized_entry, replace_normalized_entry},
+            EntryIndexProvider,
+        },
+        NormalizedEntry, NormalizedEntryType,
+    },
     model_selector::{ModelInfo, ModelSelectorConfig, PermissionPolicy},
     profile::ExecutorConfig,
 };
@@ -215,16 +222,48 @@ impl StandardCodingAgentExecutor for Antigravity {
     fn normalize_logs(
         &self,
         msg_store: Arc<MsgStore>,
-        worktree_path: &Path,
+        _worktree_path: &Path,
     ) -> Vec<tokio::task::JoinHandle<()>> {
-        super::acp::normalize_logs_with_suppressed_stderr_patterns(
-            msg_store,
-            worktree_path,
-            &[
-                "was started but never ended. Skipping metrics.",
-                "YOLO mode is enabled. All tool calls will be automatically approved.",
-            ],
-        )
+        // Antigravity's `--print` mode emits plain text (not ACP JSON), so we
+        // accumulate stdout lines into a streaming AssistantMessage entry.
+        use futures::StreamExt;
+
+        let entry_index = EntryIndexProvider::start_from(&msg_store);
+        let handle = tokio::spawn(async move {
+            let mut stdout_lines = msg_store.stdout_lines_stream();
+            let mut current: Option<(usize, String)> = None;
+
+            while let Some(Ok(line)) = stdout_lines.next().await {
+                let cleaned = strip_ansi_escapes::strip_str(&line);
+                if cleaned.trim().is_empty() && current.is_none() {
+                    continue;
+                }
+                let entry = NormalizedEntry {
+                    timestamp: None,
+                    entry_type: NormalizedEntryType::AssistantMessage,
+                    content: match &mut current {
+                        Some((_, content)) => {
+                            content.push('\n');
+                            content.push_str(&cleaned);
+                            content.clone()
+                        }
+                        None => cleaned.clone(),
+                    },
+                    metadata: None,
+                };
+                match &mut current {
+                    Some((index, _)) => {
+                        replace_normalized_entry(&msg_store, *index, entry);
+                    }
+                    None => {
+                        let index = add_normalized_entry(&msg_store, &entry_index, entry);
+                        current = Some((index, cleaned));
+                    }
+                }
+            }
+        });
+
+        vec![handle]
     }
 
     fn default_mcp_config_path(&self) -> Option<std::path::PathBuf> {
