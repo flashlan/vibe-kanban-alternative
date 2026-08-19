@@ -7,6 +7,31 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-indie.ym
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.30] - 2026-08-19
+
+### Added
+
+- **Google Antigravity (`agy`) First-Class Integration**:
+  - Full stream-JSON protocol support with real-time parsing of `step_update`, `agent_response`, and `result` events.
+  - Native visual cards (`ToolUse`) in chat for file inspection (`view_file`), search (`grep_search`, `find_by_name`), bash commands (`run_command`), and file edits (`write_to_file`, `replace_file_content`).
+  - Streaming text responses via `text_delta` with complete suppression of raw JSON lines in the timeline.
+  - Multi-level **Reasoning Effort** selection (`Low`, `Medium`, `High`) in the model selector popover, with automatic safe fallback to `--effort high` for `gemini-3.7-flash`.
+  - Auto-permission bypass support (`--dangerously-skip-permissions`).
+- **Chat Input Prompt History Navigation**:
+  - Terminal-style `ArrowUp` / `ArrowDown` command history navigation in the chat editor.
+  - Automatic draft preservation when browsing history and returning to the bottom.
+  - Persistent prompt history across browser sessions.
+- **Customizable Send Shortcuts**:
+  - `Enter` mode enabled by default (send with `Enter`, insert newline with `Ctrl+Enter`, `Cmd+Enter`, or `Shift+Enter`).
+
+### Fixed
+
+- **Proxy Port & Lifecycle Resiliency**:
+  - Corrected Vite dev proxy fallback port to `3002` to prevent WebSocket reconnect loops.
+  - Added clean process shutdown in `restart.sh` to prevent `cargo-watch` deadlocks on `target/debug/.cargo-lock`.
+- **mem0 Memory Refinements**:
+  - Shifted from eager startup dumps to on-demand agent MCP retrieval (`memory_search`, `memory_save`) for optimal prompt-cache efficiency.
+
 ## [0.2.28] - 2026-08-18
 
 ### Added
