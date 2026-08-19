@@ -22,6 +22,7 @@ use executors::{
     actions::{
         ExecutorAction, ExecutorActionType, coding_agent_follow_up::CodingAgentFollowUpRequest,
     },
+    executors::BaseCodingAgent,
     interactive::InteractiveTmuxConfig,
     profile::ExecutorConfig,
 };
@@ -203,7 +204,7 @@ pub(crate) async fn run_follow_up(
     deployment: &DeploymentImpl,
     session: Session,
     workspace: Workspace,
-    prompt: String,
+    mut prompt: String,
     executor_config: ExecutorConfig,
     retry_process_id: Option<Uuid>,
     force_when_dirty: Option<bool>,
@@ -332,6 +333,34 @@ pub(crate) async fn run_follow_up(
                 Err(e) => return Err(e.into()),
             }
         }
+    }
+
+    // Antigravity's CLI has no ACP mode — it runs single-shot via `--print`,
+    // so it loses all conversation context between turns. Rebuild the prior
+    // conversation (prompt + summary pairs) into the prompt as background
+    // context. This only affects what's sent to the agent's stdin; the chat UI
+    // renders messages from the message store, so nothing extra is surfaced.
+    if matches!(executor_profile_id.executor, BaseCodingAgent::Antigravity)
+        && let Ok(history) = CodingAgentTurn::find_conversation_history_for_session(pool, session.id)
+            .await
+        && !history.is_empty()
+    {
+        let mut ctx = String::from(
+            "The following is the conversation history so far. Use it for context, \
+             but do not repeat it back.\n",
+        );
+        for (user, assistant) in &history {
+            if !user.is_empty() {
+                ctx.push_str("\nUser: ");
+                ctx.push_str(user);
+            }
+            if !assistant.is_empty() {
+                ctx.push_str("\nAssistant: ");
+                ctx.push_str(assistant);
+            }
+        }
+        ctx.push_str("\n\n---\n");
+        prompt = format!("{ctx}{prompt}");
     }
 
     let action_type = if let Some(info) = latest_session_info {

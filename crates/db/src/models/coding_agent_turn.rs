@@ -81,6 +81,47 @@ impl CodingAgentTurn {
         .await
     }
 
+    /// Conversation history (prompt + summary pairs) for a session, most
+    /// recent last. Used to give context-only executors (e.g. Antigravity's
+    /// single-shot `--print`) prior turns without surfacing them in the UI.
+    pub async fn find_conversation_history_for_session(
+        pool: &SqlitePool,
+        session_id: Uuid,
+    ) -> Result<Vec<(String, String)>, sqlx::Error> {
+        struct Row {
+            prompt: Option<String>,
+            summary: Option<String>,
+        }
+        let rows = sqlx::query_as!(
+            Row,
+            r#"SELECT
+                cat.prompt,
+                cat.summary
+               FROM execution_processes ep
+               JOIN coding_agent_turns cat ON ep.id = cat.execution_process_id
+               WHERE ep.session_id = $1
+                 AND ep.run_reason = 'codingagent'
+                 AND ep.dropped = FALSE
+               ORDER BY ep.created_at ASC"#,
+            session_id
+        )
+        .fetch_all(pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .filter_map(|r| {
+                let p = r.prompt.unwrap_or_default().trim().to_string();
+                let s = r.summary.unwrap_or_default().trim().to_string();
+                if p.is_empty() && s.is_empty() {
+                    None
+                } else {
+                    Some((p, s))
+                }
+            })
+            .collect())
+    }
+
     /// Create a new coding agent turn
     pub async fn create(
         pool: &SqlitePool,

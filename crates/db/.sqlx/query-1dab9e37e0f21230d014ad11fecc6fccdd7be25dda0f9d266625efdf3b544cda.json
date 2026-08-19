@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT\n                cat.prompt,\n                cat.summary\n               FROM execution_processes ep\n               JOIN coding_agent_turns cat ON ep.id = cat.execution_process_id\n               WHERE ep.session_id = $1\n                 AND ep.run_reason = 'codingagent'\n                 AND ep.dropped = FALSE\n               ORDER BY ep.created_at ASC",
+  "describe": {
+    "columns": [
+      {
+        "name": "prompt",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "summary",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "1dab9e37e0f21230d014ad11fecc6fccdd7be25dda0f9d266625efdf3b544cda"
+}
