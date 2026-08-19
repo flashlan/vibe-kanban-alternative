@@ -80,6 +80,46 @@ impl Antigravity {
 
         apply_overrides(builder, &self.cmd)
     }
+
+    /// Run `agy models` and parse `id\tname` lines into `ModelInfo`.
+    async fn fetch_cli_models() -> Vec<ModelInfo> {
+        let mut cmd = tokio::process::Command::new(Self::agy_binary());
+        cmd.arg("models");
+        if let Some(home) = dirs::home_dir() {
+            cmd.env("HOME", &home);
+        }
+        let Ok(output) = cmd.output().await else {
+            return vec![];
+        };
+        let Ok(text) = String::from_utf8(output.stdout) else {
+            return vec![];
+        };
+
+        let mut models = Vec::new();
+        for line in text.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty()
+                || trimmed.starts_with("Fetching")
+                || trimmed.starts_with("Error")
+            {
+                continue;
+            }
+            let (id, name) = match trimmed.split_once('\t') {
+                Some((id, name)) => (id.trim().to_string(), name.trim().to_string()),
+                None => continue,
+            };
+            if id.is_empty() {
+                continue;
+            }
+            models.push(ModelInfo {
+                id: id.clone(),
+                name: if name.is_empty() { id } else { name },
+                provider_id: None,
+                reasoning_options: vec![],
+            });
+        }
+        models
+    }
 }
 
 #[async_trait]
@@ -212,29 +252,20 @@ impl StandardCodingAgentExecutor for Antigravity {
         _workdir: Option<&std::path::Path>,
         _repo_path: Option<&std::path::Path>,
     ) -> Result<futures::stream::BoxStream<'static, json_patch::Patch>, ExecutorError> {
+        // Pull the real model list from the installed CLI (`agy models`), so the
+        // dropdown always matches what the CLI actually supports — no hardcoding.
+        let models = Self::fetch_cli_models().await;
+
+        let default_model = models
+            .iter()
+            .find(|m| m.id.contains("flash"))
+            .or_else(|| models.first())
+            .map(|m| m.id.clone());
+
         let options = ExecutorDiscoveredOptions {
             model_selector: ModelSelectorConfig {
-                models: vec![
-                    ModelInfo {
-                        id: "pro".to_string(),
-                        name: "Gemini Pro".to_string(),
-                        provider_id: None,
-                        reasoning_options: vec![],
-                    },
-                    ModelInfo {
-                        id: "flash".to_string(),
-                        name: "Gemini Flash".to_string(),
-                        provider_id: None,
-                        reasoning_options: vec![],
-                    },
-                    ModelInfo {
-                        id: "flash_lite".to_string(),
-                        name: "Gemini Flash Lite".to_string(),
-                        provider_id: None,
-                        reasoning_options: vec![],
-                    },
-                ],
-                default_model: Some("pro".to_string()),
+                models,
+                default_model,
                 permissions: vec![PermissionPolicy::Auto, PermissionPolicy::Supervised],
                 ..Default::default()
             },
