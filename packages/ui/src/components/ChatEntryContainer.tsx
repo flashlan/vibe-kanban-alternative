@@ -100,7 +100,7 @@ export function ChatEntryContainer({
       {/* Header */}
       <div
         className={cn(
-          'flex items-center px-double py-base gap-base rounded-sm overflow-hidden',
+          'flex items-center px-double py-1 gap-base rounded-sm overflow-hidden',
           config.headerBg,
           onToggle && 'cursor-pointer'
         )}
@@ -130,7 +130,7 @@ export function ChatEntryContainer({
 
       {/* Actions footer - optional */}
       {actions && (
-        <div className="bg-brand/20 backdrop-blur-sm flex items-center gap-base px-double py-base border-t sticky bottom-0 rounded-md">
+        <div className="bg-brand/20 backdrop-blur-sm flex items-center gap-base px-double py-1 border-t sticky bottom-0 rounded-md">
           {actions}
         </div>
       )}

@@ -131,7 +131,7 @@ export function ChatSubagentEntry({
       {/* Header */}
       <div
         className={cn(
-          'flex items-center px-double py-base gap-base',
+          'flex items-center px-double py-1 gap-base',
           isErrorStatus && 'bg-error/10',
           status?.status === 'success' && 'bg-success/5',
           isInteractive && 'cursor-pointer'
