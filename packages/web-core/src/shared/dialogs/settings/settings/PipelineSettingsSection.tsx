@@ -17,6 +17,7 @@ import { useSettingsDirty } from './SettingsDirtyContext';
 // gates the per-pipeline Reset button, and the server's reset_one accepts
 // exactly these ids. A missing id silently hides a Reset that would work.
 const BUNDLED_IDS = new Set([
+  'swarm-multi-agent',
   'quick',
   'basic',
   'wikillm',

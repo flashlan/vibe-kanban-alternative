@@ -65,6 +65,15 @@ pub struct PipelineStep {
     /// renders a badge and it starts unticked by convention.
     #[serde(default)]
     pub heavy: bool,
+    /// Optional executor bound to this stage (e.g. "antigravity", "claude", "codex", "opencode").
+    #[serde(default)]
+    pub executor: Option<String>,
+    /// Optional model bound to this stage (e.g. "gemini-2.5-pro", "claude-3-7-sonnet").
+    #[serde(default)]
+    pub model: Option<String>,
+    /// Optional reasoning effort (e.g. "high", "medium", "low").
+    #[serde(default)]
+    pub reasoning_effort: Option<String>,
 }
 
 /// Non-secret Gitea (or any Forgejo-compatible) instance configuration,
@@ -302,6 +311,9 @@ mod tests {
                 prompt_fragment: "Write a spec.".to_string(),
                 default_enabled: true,
                 heavy: false,
+                executor: None,
+                model: None,
+                reasoning_effort: None,
             }]),
             ..Default::default()
         };

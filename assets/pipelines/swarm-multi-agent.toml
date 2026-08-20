@@ -1,0 +1,32 @@
+name = "Swarm Multi-Agent"
+description = "Plan (Gemini 2.5 Pro) → Implement (Claude 3.7 Sonnet) → Review (Codex) → Squash-merge"
+
+[[stage]]
+id = "plan"
+label = "1. Architecture & Plan (Gemini 2.5 Pro)"
+default_enabled = true
+executor = "antigravity"
+model = "gemini-2.5-pro"
+reasoning_effort = "high"
+prompt = "Analyze the codebase, project context, and requirements. Write a technical spec to `SPEC.md` and a step-by-step implementation plan to `IMPLEMENTATION_PLAN.md` at the workspace root (one level above the repo) with explicit task checklists before proceeding."
+
+[[stage]]
+id = "implement"
+label = "2. Code Implementation (Claude 3.7 Sonnet)"
+default_enabled = true
+executor = "claude"
+model = "claude-3-7-sonnet"
+prompt = "Read `IMPLEMENTATION_PLAN.md` and `SPEC.md` from the workspace root. Implement each planned task in order, writing clean code and tests, running the test suite to verify, and committing incrementally."
+
+[[stage]]
+id = "code-review"
+label = "3. Independent Review (Codex)"
+default_enabled = true
+executor = "codex"
+prompt = "Run an independent Codex review of the card's diff against the base branch, checking for correctness, regressions, and security findings. Address confirmed findings and verify tests pass."
+
+[[stage]]
+id = "merge"
+label = "4. Squash-merge to base"
+default_enabled = true
+prompt = "Squash-merge this card's branch into the base branch yourself once the build and review pass. Local only — do NOT git push, do NOT open a PR. Report that you squash-merged to the base branch with the SHA."

@@ -715,7 +715,19 @@ default_enabled: boolean,
  * Whether this stage is marked "heavy" (resource-intensive); the UI
  * renders a badge and it starts unticked by convention.
  */
-heavy: boolean, };
+heavy: boolean, 
+/**
+ * Optional executor bound to this stage (e.g. "antigravity", "claude", "codex", "opencode").
+ */
+executor: string | null, 
+/**
+ * Optional model bound to this stage (e.g. "gemini-2.5-pro", "claude-3-7-sonnet").
+ */
+model: string | null, 
+/**
+ * Optional reasoning effort (e.g. "high", "medium", "low").
+ */
+reasoning_effort: string | null, };
 
 export type Pipeline = { 
 /**

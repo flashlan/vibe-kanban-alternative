@@ -389,10 +389,16 @@ export function PipelineSection({
                     disabled={disabled}
                     onChange={() => handleToggleStep(step.id)}
                   />
-                  <span>
-                    {step.label}
+                  <span className="flex items-center flex-wrap gap-1">
+                    <span>{step.label}</span>
+                    {step.executor ? (
+                      <span className="rounded-sm border border-brand/30 bg-brand/10 px-1 py-0.5 text-[11px] font-medium text-brand">
+                        🤖 {step.executor}
+                        {step.model ? ` (${step.model})` : ''}
+                      </span>
+                    ) : null}
                     {step.heavy ? (
-                      <span className="ml-half rounded-sm border px-half text-xs text-low">
+                      <span className="rounded-sm border px-half text-xs text-low">
                         {t('cardPipeline.heavyBadge')}
                       </span>
                     ) : null}

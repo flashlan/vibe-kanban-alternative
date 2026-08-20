@@ -39,6 +39,10 @@ use super::config::PipelineStep;
 /// pipeline (implement + merge, no spec/plan).
 const BUNDLED: &[(&str, &str)] = &[
     (
+        "swarm-multi-agent.toml",
+        include_str!("../../../../../assets/pipelines/swarm-multi-agent.toml"),
+    ),
+    (
         "quick.toml",
         include_str!("../../../../../assets/pipelines/quick.toml"),
     ),
@@ -276,6 +280,12 @@ struct RawStage {
     default_enabled: bool,
     #[serde(default)]
     heavy: bool,
+    #[serde(default)]
+    executor: Option<String>,
+    #[serde(default)]
+    model: Option<String>,
+    #[serde(default)]
+    reasoning_effort: Option<String>,
 }
 
 /// A slug is a non-empty run of ASCII alphanumerics, `-`, or `_`. Used for both
@@ -338,6 +348,9 @@ pub fn parse_pipeline(id: &str, raw: &str) -> Result<Pipeline, PipelineError> {
             prompt_fragment: st.prompt,
             default_enabled: st.default_enabled,
             heavy: st.heavy,
+            executor: st.executor,
+            model: st.model,
+            reasoning_effort: st.reasoning_effort,
         });
     }
     Ok(Pipeline {
@@ -799,6 +812,7 @@ mod tests {
         assert_eq!(
             ids,
             vec![
+                "swarm-multi-agent",
                 "quick",
                 "basic",
                 "wikillm",

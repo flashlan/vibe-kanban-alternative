@@ -7,6 +7,16 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-indie.ym
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.34] - Unreleased
+
+### Added
+
+- **Multi-Agent Handoff Pipelines (ADR-025)**:
+  - Added support for per-stage `executor`, `model`, and `reasoning_effort` fields in pipeline configurations (`[[stage]]`).
+  - Added bundled `Swarm Multi-Agent` pipeline (`swarm-multi-agent.toml`) with Plan (Gemini 2.5 Pro) → Implement (Claude 3.7 Sonnet) → Review (Codex) stages.
+  - Enhanced Issue/Card Creation and Pipeline Settings UI to display specialized agent/model badges next to each stage.
+  - Documented complete architecture in [`docs/ADR/ADR-025-multi-agent-handoff-pipelines.md`](docs/ADR/ADR-025-multi-agent-handoff-pipelines.md).
+
 ## [0.2.33] - 2026-08-19
 
 ### Fixed
