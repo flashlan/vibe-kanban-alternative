@@ -17,8 +17,13 @@ for port in 3001 3002 3003; do
   fi
 done
 
-# Limpar possíveis travas órfãs do cargo no target
-rm -f target/.rustc_info.json target/debug/.cargo-lock 2>/dev/null || true
+# Limpar cache do Vite para garantir carregamento dos novos componentes visuais
+rm -rf packages/local-web/node_modules/.vite node_modules/.vite target/.rustc_info.json target/debug/.cargo-lock 2>/dev/null || true
+
+# Atualizar pipeline bundled no diretório local do usuário se existir
+if [ -d "$HOME/.vibe-kanban/pipelines" ]; then
+  cp assets/pipelines/swarm-multi-agent.toml "$HOME/.vibe-kanban/pipelines/swarm-multi-agent.toml" 2>/dev/null || true
+fi
 
 echo "🔄 Atualizando tipos compartilhados..."
 pnpm run generate-types
