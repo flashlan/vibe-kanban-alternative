@@ -1045,9 +1045,67 @@ async fn bulk_issues(
 async fn delete_issue(
     State(deployment): State<DeploymentImpl>,
     Path(id): Path<Uuid>,
+    Query(q): Query<DeleteIssueQuery>,
 ) -> Result<ResponseJson<DeleteResponse>, ApiError> {
+    if q.cleanup_workspaces.unwrap_or(false) {
+        delete_issue_workspaces(&deployment, id).await?;
+    }
     DbIssue::delete(&deployment.db().pool, id).await?;
     Ok(deleted())
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct DeleteIssueQuery {
+    /// Also delete the on-disk worktrees/workspace dirs of the issue's
+    /// linked workspaces (and their branches), instead of leaving them
+    /// orphaned. The `issue_workspaces` join row is cascade-deleted with
+    /// the issue either way, but the `workspaces` row and its worktree
+    /// directory are NOT — this makes that cleanup explicit, matching
+    /// `delete_project`'s `cleanup_workspaces` flag.
+    #[serde(default)]
+    cleanup_workspaces: Option<bool>,
+}
+
+/// Remove every workspace linked to this issue (directly, or via a linked
+/// pull request): delete the DB record and spawn the background
+/// worktree/branch cleanup for each. Mirrors `delete_project_workspaces`.
+/// `pub(crate)` — also called from `routes::kanban`'s MCP-facing `delete_issue`.
+pub(crate) async fn delete_issue_workspaces(
+    deployment: &DeploymentImpl,
+    issue_id: Uuid,
+) -> Result<(), ApiError> {
+    let pool = &deployment.db().pool;
+    let workspace_rows = sqlx::query_as::<_, (Uuid,)>(
+        r#"SELECT w.id FROM workspaces w
+           JOIN issue_workspaces iw ON iw.workspace_id = w.id
+           WHERE iw.issue_id = ?
+           UNION
+           SELECT w.id FROM workspaces w
+           WHERE w.id IN (SELECT pr.workspace_id FROM pull_requests pr
+                          JOIN pull_request_issues pri ON pri.pull_request_id = pr.id
+                          WHERE pri.issue_id = ?)"#,
+    )
+    .bind(issue_id)
+    .bind(issue_id)
+    .fetch_all(pool)
+    .await?;
+
+    for (workspace_id,) in workspace_rows {
+        let Some(ws) = db::models::workspace::Workspace::find_by_id(pool, workspace_id).await?
+        else {
+            continue;
+        };
+        let manager = deployment.workspace_manager();
+        let Ok(managed) = manager.load_managed_workspace(ws).await else {
+            continue;
+        };
+        let Ok(ctx) = managed.prepare_deletion_context().await else {
+            continue;
+        };
+        let _ = managed.delete_record().await;
+        WorkspaceManager::spawn_workspace_deletion_cleanup(ctx, true);
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

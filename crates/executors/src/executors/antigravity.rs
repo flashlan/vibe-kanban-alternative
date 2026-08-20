@@ -25,7 +25,7 @@ use crate::{
             shell_command_parsing::CommandCategory,
         },
     },
-    model_selector::{ModelInfo, ModelSelectorConfig, PermissionPolicy, ReasoningOption},
+    model_selector::{ModelInfo, ModelSelectorConfig, PermissionPolicy},
     profile::ExecutorConfig,
 };
 
@@ -159,58 +159,61 @@ impl Antigravity {
         apply_overrides(builder, &self.cmd)
     }
 
-    fn default_models() -> Vec<ModelInfo> {
-        let effort_options = ReasoningOption::from_names(["low", "medium", "high"]);
-        vec![
-            ModelInfo {
-                id: "gemini-3.7-flash".to_string(),
-                name: "Gemini 3.7 Flash".to_string(),
-                provider_id: None,
-                reasoning_options: effort_options.clone(),
-            },
-            ModelInfo {
-                id: "gemini-2.5-pro".to_string(),
-                name: "Gemini 2.5 Pro".to_string(),
-                provider_id: None,
-                reasoning_options: effort_options.clone(),
-            },
-            ModelInfo {
-                id: "gemini-2.5-flash".to_string(),
-                name: "Gemini 2.5 Flash".to_string(),
-                provider_id: None,
-                reasoning_options: effort_options.clone(),
-            },
-            ModelInfo {
-                id: "gemini-2.5-flash-lite".to_string(),
-                name: "Gemini 2.5 Flash Lite".to_string(),
-                provider_id: None,
-                reasoning_options: vec![],
-            },
-            ModelInfo {
-                id: "pro".to_string(),
-                name: "Pro (High Capability)".to_string(),
-                provider_id: None,
-                reasoning_options: effort_options.clone(),
-            },
-            ModelInfo {
-                id: "flash".to_string(),
-                name: "Flash (Fast & Economical)".to_string(),
-                provider_id: None,
-                reasoning_options: effort_options,
-            },
-            ModelInfo {
-                id: "flash_lite".to_string(),
-                name: "Flash Lite (Lightweight)".to_string(),
-                provider_id: None,
-                reasoning_options: vec![],
-            },
-            ModelInfo {
-                id: "inherit".to_string(),
-                name: "Inherit".to_string(),
-                provider_id: None,
-                reasoning_options: vec![],
-            },
-        ]
+    /// Live-query `agy models` (a real subcommand: "List available models")
+    /// for the currently available model list. `agy` prints one
+    /// `id\tdisplay name` row per line to stdout (status/progress text goes
+    /// to stderr, so stdout is clean to parse) — e.g. `gemini-3.7-flash-high
+    /// \tGemini 3.7 Flash (High)`. Effort variants come back as distinct
+    /// rows already, so no separate `reasoning_options` need attaching here.
+    ///
+    /// Returns empty when `agy` isn't installed or the command fails —
+    /// never a stale guess. This replaced a hardcoded model list that had
+    /// drifted (still listing retired `gemini-2.5-*` ids) — models here
+    /// change too often to hand-maintain.
+    async fn discover_models_live() -> Vec<ModelInfo> {
+        let mut cmd = tokio::process::Command::new(Self::agy_binary());
+        cmd.arg("models")
+            // Without this, `agy` inherits this process's stdin — which
+            // isn't a TTY here — and some CLIs block waiting for input that
+            // will never arrive instead of treating it as closed. Confirmed
+            // live: without `Stdio::null()` the spawned `agy models` child
+            // hangs forever (never even hits the network) when launched
+            // from the server, despite running instantly from a terminal.
+            .stdin(std::process::Stdio::null());
+
+        let output = tokio::time::timeout(std::time::Duration::from_secs(15), cmd.output()).await;
+
+        let Ok(Ok(output)) = output else {
+            return Vec::new();
+        };
+        if !output.status.success() {
+            return Vec::new();
+        }
+        let Ok(stdout) = String::from_utf8(output.stdout) else {
+            return Vec::new();
+        };
+
+        stdout
+            .lines()
+            .filter_map(|line| {
+                let line = line.trim();
+                if line.is_empty() {
+                    return None;
+                }
+                let mut parts = line.splitn(2, '\t');
+                let id = parts.next()?.trim();
+                if id.is_empty() {
+                    return None;
+                }
+                let name = parts.next().map(str::trim).unwrap_or(id);
+                Some(ModelInfo {
+                    id: id.to_string(),
+                    name: name.to_string(),
+                    provider_id: None,
+                    reasoning_options: vec![],
+                })
+            })
+            .collect()
     }
 
     async fn spawn_print_mode(
@@ -608,7 +611,7 @@ impl StandardCodingAgentExecutor for Antigravity {
         _workdir: Option<&std::path::Path>,
         _repo_path: Option<&std::path::Path>,
     ) -> Result<futures::stream::BoxStream<'static, json_patch::Patch>, ExecutorError> {
-        let mut models = Self::default_models();
+        let mut models = Self::discover_models_live().await;
 
         // If user already configured a model, ensure it's in the list
         if let Some(configured_model) = &self.model {
@@ -628,7 +631,7 @@ impl StandardCodingAgentExecutor for Antigravity {
         let default_model = self
             .model
             .clone()
-            .or_else(|| Some("gemini-3.7-flash".to_string()));
+            .or_else(|| models.first().map(|m| m.id.clone()));
 
         let options = ExecutorDiscoveredOptions {
             model_selector: ModelSelectorConfig {

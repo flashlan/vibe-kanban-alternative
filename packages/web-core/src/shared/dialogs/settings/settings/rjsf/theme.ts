@@ -5,6 +5,7 @@ import {
   CheckboxWidget,
   TextareaWidget,
 } from './Widgets.tsx';
+import { ModelSelectWidget } from './ModelSelectWidget.tsx';
 import {
   FieldTemplate,
   ObjectFieldTemplate,
@@ -20,6 +21,7 @@ export const settingsWidgets: RegistryWidgetsType = {
   CheckboxWidget,
   TextareaWidget,
   textarea: TextareaWidget,
+  ModelSelectWidget,
 };
 
 export const settingsTemplates = {

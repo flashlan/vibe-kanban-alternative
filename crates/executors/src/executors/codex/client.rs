@@ -16,12 +16,12 @@ use codex_app_server_protocol::{
     GetAccountParams, GetAccountRateLimitsResponse, GetAccountResponse, InitializeCapabilities,
     InitializeParams, InitializeResponse, ItemCompletedNotification, JSONRPCError,
     JSONRPCNotification, JSONRPCRequest, JSONRPCResponse, ListMcpServerStatusParams,
-    ListMcpServerStatusResponse, McpServerStatusDetail, RequestId, ReviewStartParams,
-    ReviewStartResponse, ReviewTarget, ServerRequest, ThreadCompactStartParams,
-    ThreadCompactStartResponse, ThreadForkParams, ThreadForkResponse, ThreadItem, ThreadReadParams,
-    ThreadReadResponse, ThreadStartParams, ThreadStartResponse, ToolRequestUserInputAnswer,
-    ToolRequestUserInputQuestion, ToolRequestUserInputResponse, TurnCompletedNotification,
-    TurnStartParams, TurnStartResponse, TurnStatus, UserInput,
+    ListMcpServerStatusResponse, McpServerStatusDetail, ModelListParams, ModelListResponse,
+    RequestId, ReviewStartParams, ReviewStartResponse, ReviewTarget, ServerRequest,
+    ThreadCompactStartParams, ThreadCompactStartResponse, ThreadForkParams, ThreadForkResponse,
+    ThreadItem, ThreadReadParams, ThreadReadResponse, ThreadStartParams, ThreadStartResponse,
+    ToolRequestUserInputAnswer, ToolRequestUserInputQuestion, ToolRequestUserInputResponse,
+    TurnCompletedNotification, TurnStartParams, TurnStartResponse, TurnStatus, UserInput,
 };
 use codex_protocol::config_types::{CollaborationMode, ModeKind, Settings};
 use futures::TryFutureExt;
@@ -202,6 +202,18 @@ impl AppServerClient {
             },
         };
         self.send_request(request, "account/read").await
+    }
+
+    pub async fn list_models(&self) -> Result<ModelListResponse, ExecutorError> {
+        let request = ClientRequest::ModelList {
+            request_id: self.next_request_id(),
+            params: ModelListParams {
+                cursor: None,
+                limit: None,
+                include_hidden: Some(true),
+            },
+        };
+        self.send_request(request, "model/list").await
     }
 
     pub async fn start_review(

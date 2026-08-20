@@ -12,6 +12,9 @@ export function TerminalPanelContainer() {
     createTab,
     closeTab,
     setActiveTab,
+    updateTabCwd,
+    updateTabTitle,
+    setTmuxSessionName,
     clearWorkspaceTabs,
   } = useTerminal();
 
@@ -52,22 +55,48 @@ export function TerminalPanelContainer() {
 
   return (
     <TerminalPanel
-      tabs={tabs.map((t) => ({ id: t.id, title: t.title }))}
+      tabs={tabs.map((t) => ({
+        id: t.id,
+        title: t.title,
+        cwd: t.cwd,
+      }))}
       activeTabId={activeTab?.id ?? null}
       onSelectTab={(tabId) => workspaceId && setActiveTab(workspaceId, tabId)}
       onCloseTab={(tabId) => workspaceId && closeTab(workspaceId, tabId)}
-      renderTab={(tabId, isActive) => (
-        <XTermInstance
-          key={tabId}
-          tabId={tabId}
-          workspaceId={workspaceId ?? ''}
-          isActive={isActive}
-          executionProcessId={
-            tabs.find((t) => t.id === tabId)?.executionProcessId
-          }
-          onClose={() => workspaceId && closeTab(workspaceId, tabId)}
-        />
-      )}
+      onNewTab={() => {
+        if (workspaceId && containerRef) {
+          createTab(workspaceId, containerRef);
+        }
+      }}
+      renderTab={(tabId, isActive) => {
+        const tab = tabs.find((t) => t.id === tabId);
+        return (
+          <XTermInstance
+            key={tabId}
+            tabId={tabId}
+            workspaceId={workspaceId ?? ''}
+            isActive={isActive}
+            executionProcessId={tab?.executionProcessId}
+            tmuxSessionName={tab?.tmuxSessionName}
+            onClose={() => workspaceId && closeTab(workspaceId, tabId)}
+            onCwdChange={(cwd) => {
+              if (workspaceId) {
+                updateTabCwd(workspaceId, tabId, cwd);
+              }
+            }}
+            onTitleChange={(title) => {
+              if (workspaceId) {
+                updateTabTitle(workspaceId, tabId, title);
+              }
+            }}
+            onSessionName={(name) => {
+              if (workspaceId) {
+                setTmuxSessionName(workspaceId, tabId, name);
+              }
+            }}
+          />
+        );
+      }}
     />
   );
 }

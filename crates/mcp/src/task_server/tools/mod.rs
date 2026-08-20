@@ -523,7 +523,6 @@ mod tests {
             "list_sessions".to_string(),
             "list_tags".to_string(),
             "list_workspaces".to_string(),
-            "memory_recall".to_string(),
             "memory_save".to_string(),
             "memory_search".to_string(),
             "remove_issue_tag".to_string(),

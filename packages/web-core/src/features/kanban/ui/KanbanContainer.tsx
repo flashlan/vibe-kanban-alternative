@@ -1384,7 +1384,10 @@ export function KanbanContainer() {
                               }}
                             />
                             {/* Inline sub-issues (expanded). Rendered under the
-                                parent card, each row opens that sub-issue. */}
+                                parent card, each row opens that sub-issue.
+                                Sub-issue workspaces render exactly like the parent
+                                card's compact workspace bars — clicking a workspace
+                                opens the workspace chat, not the card details. */}
                             {isSubIssuesExpanded &&
                               subIssueChildren.length > 0 && (
                                 <div className="mt-half flex flex-col gap-half border-l-2 border-border pl-half">
@@ -1392,31 +1395,66 @@ export function KanbanContainer() {
                                     const childStatus = statusById.get(
                                       child.status_id
                                     );
+                                    const childWorkspaces =
+                                      workspacesByIssueId.get(child.id) ?? [];
                                     return (
-                                      <button
+                                      <div
                                         key={child.id}
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openIssue(child.id);
-                                        }}
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        className="flex w-full items-center gap-half rounded-sm px-half py-half text-left text-sm text-normal hover:bg-secondary transition-colors"
+                                        className="flex flex-col gap-half rounded-sm px-half py-half hover:bg-secondary transition-colors"
                                       >
-                                        <span
-                                          aria-hidden="true"
-                                          className="size-2 shrink-0 rounded-full"
-                                          style={{
-                                            backgroundColor: `hsl(${childStatus?.color ?? '0 0% 60%'})`,
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openIssue(child.id);
                                           }}
-                                        />
-                                        <span className="shrink-0 font-ibm-plex-mono text-sm text-low">
-                                          {child.simple_id}
-                                        </span>
-                                        <span className="truncate">
-                                          {child.title}
-                                        </span>
-                                      </button>
+                                          onMouseDown={(e) =>
+                                            e.stopPropagation()
+                                          }
+                                          className="flex w-full items-center gap-half text-left text-sm text-normal"
+                                        >
+                                          <span
+                                            aria-hidden="true"
+                                            className="size-2 shrink-0 rounded-full"
+                                            style={{
+                                              backgroundColor: `hsl(${childStatus?.color ?? '0 0% 60%'})`,
+                                            }}
+                                          />
+                                          <span className="shrink-0 font-ibm-plex-mono text-sm text-low">
+                                            {child.simple_id}
+                                          </span>
+                                          <span className="truncate">
+                                            {child.title}
+                                          </span>
+                                        </button>
+                                        {childWorkspaces.length > 0 && (
+                                          <div className="flex flex-col gap-half pl-3">
+                                            {childWorkspaces.map(
+                                              (workspace) => (
+                                                <IssueWorkspaceCard
+                                                  key={workspace.id}
+                                                  workspace={workspace}
+                                                  onClick={
+                                                    workspace.localWorkspaceId
+                                                      ? () => {
+                                                          // Stop parent KanbanCard navigation.
+                                                          openIssueWorkspace(
+                                                            child.id,
+                                                            workspace.localWorkspaceId!
+                                                          );
+                                                        }
+                                                      : undefined
+                                                  }
+                                                  showOwner={false}
+                                                  showStatusBadge={false}
+                                                  showNoPrText={false}
+                                                  compact
+                                                />
+                                              )
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
                                     );
                                   })}
                                 </div>

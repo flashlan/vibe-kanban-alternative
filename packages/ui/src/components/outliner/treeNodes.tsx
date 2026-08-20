@@ -252,10 +252,12 @@ function ProjectTreeNode(
               onClick={(e) => e.stopPropagation()}
             >
               {onRenameProject && !isUnassigned && (
-                <DropdownMenuItem
-                  onSelect={() => onRenameProject(project.id)}
-                >
-                  <PencilSimpleIcon className="size-4" weight="regular" aria-hidden />
+                <DropdownMenuItem onSelect={() => onRenameProject(project.id)}>
+                  <PencilSimpleIcon
+                    className="size-4"
+                    weight="regular"
+                    aria-hidden
+                  />
                   {t('sidebar.renameProject', 'Rename')}
                 </DropdownMenuItem>
               )}
@@ -283,10 +285,12 @@ function ProjectTreeNode(
                 </DropdownMenuItem>
               )}
               {onArchiveProject && !isUnassigned && (
-                <DropdownMenuItem
-                  onSelect={() => onArchiveProject(project.id)}
-                >
-                  <ArchiveBoxIcon className="size-4" weight="regular" aria-hidden />
+                <DropdownMenuItem onSelect={() => onArchiveProject(project.id)}>
+                  <ArchiveBoxIcon
+                    className="size-4"
+                    weight="regular"
+                    aria-hidden
+                  />
                   {t('sidebar.archiveProject', 'Archive')}
                 </DropdownMenuItem>
               )}

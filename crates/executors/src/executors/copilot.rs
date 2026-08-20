@@ -18,7 +18,7 @@ use crate::{
         StandardCodingAgentExecutor,
     },
     logs::utils::patch,
-    model_selector::{ModelInfo, ModelSelectorConfig, PermissionPolicy},
+    model_selector::{ModelSelectorConfig, PermissionPolicy},
     profile::ExecutorConfig,
 };
 
@@ -194,36 +194,15 @@ impl StandardCodingAgentExecutor for Copilot {
         _workdir: Option<&std::path::Path>,
         _repo_path: Option<&std::path::Path>,
     ) -> Result<futures::stream::BoxStream<'static, json_patch::Patch>, ExecutorError> {
+        // `copilot` isn't available in this dev environment to verify a real
+        // query command, and this multi-vendor roster (GPT/Claude/Gemini
+        // ids) turns over fast enough that a hand-copied snapshot goes stale
+        // quickly. Leave blank until a real discovery command is wired up
+        // (or confirmed not to exist for this CLI); the model selector's
+        // free-text field still lets a user type their own id.
         let options = ExecutorDiscoveredOptions {
             model_selector: ModelSelectorConfig {
-                models: [
-                    ("gpt-5.4", "GPT-5.4"),
-                    ("claude-opus-4.6", "Claude Opus 4.6"),
-                    ("claude-opus-4.6-fast", "Claude Opus 4.6 Fast"),
-                    ("gpt-5.3-codex", "GPT-5.3 Codex"),
-                    ("claude-sonnet-4.6", "Claude Sonnet 4.6"),
-                    ("claude-haiku-4.5", "Claude Haiku 4.5"),
-                    ("gemini-3-pro-preview", "Gemini 3 Pro Preview"),
-                    ("gpt-5.2-codex", "GPT-5.2 Codex"),
-                    ("gpt-5.2", "GPT-5.2"),
-                    ("gpt-5.1-codex-max", "GPT-5.1 Codex Max"),
-                    ("gpt-5.1-codex", "GPT-5.1 Codex"),
-                    ("gpt-5.1", "GPT-5.1"),
-                    ("gpt-5.1-codex-mini", "GPT-5.1 Codex Mini"),
-                    ("gpt-5-mini", "GPT-5 Mini"),
-                    ("gpt-4.1", "GPT-4.1"),
-                    ("claude-opus-4.5", "Claude Opus 4.5"),
-                    ("claude-sonnet-4.5", "Claude Sonnet 4.5"),
-                    ("claude-sonnet-4", "Claude Sonnet 4"),
-                ]
-                .into_iter()
-                .map(|(id, name)| ModelInfo {
-                    id: id.to_string(),
-                    name: name.to_string(),
-                    provider_id: None,
-                    reasoning_options: vec![],
-                })
-                .collect(),
+                models: Vec::new(),
                 permissions: vec![PermissionPolicy::Auto, PermissionPolicy::Supervised],
                 ..Default::default()
             },

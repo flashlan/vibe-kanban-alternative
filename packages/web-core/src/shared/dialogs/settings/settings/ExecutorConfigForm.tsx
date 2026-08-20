@@ -5,6 +5,7 @@ import { RJSFValidationError } from '@rjsf/utils';
 import validator from '@rjsf/validator-ajv8';
 import { useTranslation } from 'react-i18next';
 import { BaseCodingAgent } from 'shared/types';
+import type { ModelListModel } from '@vibe/ui/components/ModelList';
 import { settingsRjsfTheme } from './rjsf/theme';
 import { SettingsSaveBar } from './SettingsComponents';
 import { useModelSelectorConfig } from '@/shared/hooks/useExecutorDiscovery';
@@ -41,9 +42,7 @@ export function ExecutorConfigForm({
 
   const { config: discoveredConfig, loadingModels: streamLoading } =
     useModelSelectorConfig(executor);
-  const [httpModels, setHttpModels] = useState<
-    Array<{ id: string; name: string; provider?: string }>
-  >([]);
+  const [httpModels, setHttpModels] = useState<ModelListModel[]>([]);
   const [httpLoading, setHttpLoading] = useState(false);
 
   useEffect(() => {
@@ -58,7 +57,8 @@ export function ExecutorConfigForm({
             res.map((m) => ({
               id: m.id,
               name: m.name || m.id,
-              provider: m.provider,
+              provider_id: m.provider ?? null,
+              reasoning_options: [],
             }))
           );
         }
@@ -72,54 +72,26 @@ export function ExecutorConfigForm({
     };
   }, [executor]);
 
-  const allDiscoveredModels = useMemo(() => {
+  // The WebSocket discovery stream (`discoveredConfig`) is the primary
+  // source — it carries `providers` for grouping. The HTTP poll
+  // (`httpModels`) is a fallback with no provider list, so it always
+  // renders as a flat (ungrouped) list in the picker.
+  const modelSelector = useMemo(() => {
     if (discoveredConfig?.models && discoveredConfig.models.length > 0) {
-      return discoveredConfig.models.map((m) => ({
-        id: m.id,
-        name: m.name || m.id,
-        provider: m.provider_id,
-      }));
+      return {
+        models: discoveredConfig.models,
+        providers: discoveredConfig.providers,
+      };
     }
-    return httpModels;
-  }, [discoveredConfig?.models, httpModels]);
+    return { models: httpModels, providers: [] };
+  }, [discoveredConfig, httpModels]);
 
   const loadingModels =
-    streamLoading && httpLoading && allDiscoveredModels.length === 0;
+    streamLoading && httpLoading && modelSelector.models.length === 0;
 
   const baseSchema = useMemo(() => {
     return schemas[executor];
   }, [executor]);
-
-  const dynamicSchema = useMemo(() => {
-    if (!baseSchema) return null;
-    if (allDiscoveredModels.length === 0) {
-      return baseSchema;
-    }
-
-    try {
-      const cloned = JSON.parse(JSON.stringify(baseSchema));
-      const modelIds = allDiscoveredModels.map((m) => m.id);
-      const modelNames = allDiscoveredModels.map((m) => m.name || m.id);
-
-      if (cloned.properties?.model) {
-        cloned.properties.model.enum = [null, ...modelIds];
-        cloned.properties.model.enumNames = [
-          'Default (omit / latest)',
-          ...modelNames,
-        ];
-      }
-      if (cloned.properties?.default_model) {
-        cloned.properties.default_model.enum = [null, ...modelIds];
-        cloned.properties.default_model.enumNames = [
-          'Default (omit / latest)',
-          ...modelNames,
-        ];
-      }
-      return cloned;
-    } catch {
-      return baseSchema;
-    }
-  }, [baseSchema, allDiscoveredModels]);
 
   // Custom handler for env field updates
   const handleEnvChange = useCallback(
@@ -141,16 +113,26 @@ export function ExecutorConfigForm({
       env: {
         'ui:field': 'KeyValueField',
       },
+      model: {
+        'ui:widget': 'ModelSelectWidget',
+      },
+      default_model: {
+        'ui:widget': 'ModelSelectWidget',
+      },
     }),
     []
   );
 
-  // Pass the env update handler via formContext
+  // Pass the env update handler and the discovered model list/providers via
+  // formContext — ModelSelectWidget (registered in rjsf/theme.ts) reads
+  // `modelSelector` from here to render the same provider-grouped, searchable
+  // picker used when creating a workspace, instead of a flat native select.
   const formContext = useMemo(
     () => ({
       onEnvChange: handleEnvChange,
+      modelSelector,
     }),
-    [handleEnvChange]
+    [handleEnvChange, modelSelector]
   );
 
   useEffect(() => {
@@ -176,7 +158,7 @@ export function ExecutorConfigForm({
     setValidationErrors(errors);
   };
 
-  if (!dynamicSchema) {
+  if (!baseSchema) {
     return (
       <div className="bg-error/10 border border-error/50 rounded-sm p-4 text-error">
         {t('settings.agents.errors.schemaNotFound', { executor })}
@@ -185,7 +167,6 @@ export function ExecutorConfigForm({
   }
 
   const hasValidationErrors = validationErrors.length > 0;
-  const currentModel = (formData as Record<string, unknown>)?.model;
 
   return (
     <div className="space-y-4">
@@ -196,74 +177,19 @@ export function ExecutorConfigForm({
             <span className="inline-block size-1.5 rounded-full bg-yellow-500 animate-ping" />
             Querying {executor} models...
           </span>
-        ) : allDiscoveredModels.length > 0 ? (
+        ) : modelSelector.models.length > 0 ? (
           <span className="text-green-500 font-medium font-mono">
-            ● {allDiscoveredModels.length} models discovered from {executor}
+            ● {modelSelector.models.length} models discovered from {executor}
           </span>
         ) : (
-          <span className="text-low font-mono">Using default CLI config</span>
+          <span className="text-low font-mono">
+            No live models — type a model id below
+          </span>
         )}
       </div>
 
-      {allDiscoveredModels.length > 0 ? (
-        <div className="bg-panel/40 border border-border/60 p-3 rounded-sm space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-high uppercase tracking-wide">
-              Discovered Models ({allDiscoveredModels.length})
-            </span>
-            <span className="text-[11px] text-low">
-              Click to select model for this profile
-            </span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                const updated = {
-                  ...(formData as Record<string, unknown>),
-                  model: null,
-                };
-                setFormData(updated);
-                onChange?.(updated);
-              }}
-              className={`px-2 py-1 rounded-sm text-xs border transition-colors ${
-                !currentModel
-                  ? 'bg-brand/20 border-brand text-brand font-medium'
-                  : 'bg-secondary/60 border-border text-low hover:text-high'
-              }`}
-            >
-              Default (Latest)
-            </button>
-            {allDiscoveredModels.map((m) => {
-              const isSelected = currentModel === m.id;
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => {
-                    const updated = {
-                      ...(formData as Record<string, unknown>),
-                      model: m.id,
-                    };
-                    setFormData(updated);
-                    onChange?.(updated);
-                  }}
-                  className={`px-2 py-1 rounded-sm text-xs border transition-colors ${
-                    isSelected
-                      ? 'bg-brand/20 border-brand text-brand font-medium'
-                      : 'bg-secondary/60 border-border text-low hover:text-high'
-                  }`}
-                >
-                  {m.name || m.id}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : null}
-
       <Form
-        schema={dynamicSchema}
+        schema={baseSchema}
         uiSchema={uiSchema}
         formData={formData}
         formContext={formContext}

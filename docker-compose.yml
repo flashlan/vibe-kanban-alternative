@@ -1,0 +1,28 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: mem0-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+  mem0:
+    build: ./mem0-vk
+    container_name: mem0-vk
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      - qdrant
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+    env_file:
+      - ./mem0-vk/.env
+    volumes:
+      - mem0-data:/app/data
+
+volumes:
+  qdrant-data:
+  mem0-data:

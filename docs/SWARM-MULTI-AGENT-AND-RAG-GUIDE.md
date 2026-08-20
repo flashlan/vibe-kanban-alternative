@@ -36,7 +36,7 @@ O conhecimento e contexto dos agentes são organizados em 4 camadas complementar
   * Provedor de Embeddings/RAG (Groq, OpenRouter, Llama local, OpenAI).
   * Graph Memory (grafo de conexões entre entidades, regras e arquivos).
 * **Como os agentes alimentam o RAG**:
-  * Ao emitir `VK-MEMORY: <fato duradouro>`, a informação é salva automaticamente no banco vetorial local para sessões futuras.
+  * De forma totalmente agentic, via tools MCP: `memory_search` (busca semântica por uma query específica do card, chamada ANTES de começar) e `memory_save` (grava um fato verificado e autocontido, chamado DEPOIS do trabalho verificado). Não há mais injeção automática de um bloco com todas as memórias no início do prompt — isso desperdiçava contexto e invalidava o prefixo do prompt-cache a cada nova memória salva.
 
 ### 2. Contexto Mestre do Projeto (Orchestrator Prompt / `AGENTS.md`)
 * **Onde editar na UI**: No topo do Quadro Kanban, clique no botão **`Orchestrator Prompt`**.
@@ -95,7 +95,7 @@ Qualquer cliente de IA pode se conectar ao servidor MCP para orquestrar o quadro
 * `create_issue(title, description, parent_issue_id, priority)`: Cria cards e sub-issues.
 * `update_issue(issue_id, status="In Progress" | "Done")`: Move cards entre colunas.
 * `get_issue(issue_id)` / `list_issues(project_id)`: Lê o conteúdo e checklists do card.
-* `memory_recall(query)` / `memory_save(fact)`: Consulta e salva fatos no RAG `mem0`.
+* `memory_search(query, limit?)` / `memory_save(fact)`: Consulta escopada (top-N por relevância, default 5) e salva fatos verificados no RAG `mem0`.
 * `start_workspace(prompt, executor)`: Inicia um workspace para um agente filho.
 
 ---

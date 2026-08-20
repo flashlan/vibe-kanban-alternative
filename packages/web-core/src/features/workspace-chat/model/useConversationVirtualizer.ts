@@ -154,6 +154,7 @@ export function useConversationVirtualizer({
 }: ConversationVirtualizerOptions): ConversationVirtualizerResult {
   const bottomLockedRef = useRef(false);
   const smoothScrollDeadlineRef = useRef(0);
+  const lastScrollBehaviorRef = useRef<ScrollToOptionsBehavior>('auto');
 
   const isBottomScrollCorrectionActive = useCallback(
     () => bottomLockedRef.current,
@@ -308,11 +309,17 @@ export function useConversationVirtualizer({
   const virtualItems = virtualizer.getVirtualItems();
   const totalSize = virtualizer.getTotalSize();
 
-  useLayoutEffect(() => {
-    syncIsAtBottom();
-
+  const correctBottomLock = useCallback(() => {
     if (!bottomLockedRef.current) return;
-    if (performance.now() < smoothScrollDeadlineRef.current) return;
+    // Only defer to an in-progress SMOOTH scroll animation (jumping the
+    // scrollTop mid-animation would visibly cancel/snap it). An 'auto'
+    // (instant) scrollToBottom has no animation to protect.
+    if (
+      lastScrollBehaviorRef.current === 'smooth' &&
+      performance.now() < smoothScrollDeadlineRef.current
+    ) {
+      return;
+    }
 
     const el = scrollContainerRef.current;
     if (!el) return;
@@ -321,13 +328,41 @@ export function useConversationVirtualizer({
     if (maxScroll > 0 && Math.abs(maxScroll - el.scrollTop) > 1) {
       el.scrollTop = maxScroll;
     }
+  }, [scrollContainerRef]);
+
+  useLayoutEffect(() => {
+    syncIsAtBottom();
+    correctBottomLock();
   }, [
     rows.length,
     totalRowCount,
     totalSize,
     syncIsAtBottom,
-    scrollContainerRef,
+    correctBottomLock,
   ]);
+
+  // Short conversations put every row in the unvirtualized tail (see
+  // ALWAYS_UNVIRTUALIZED_TAIL_ROWS in ConversationListContainer) — those
+  // rows are plain React children, not TanStack-measured, so `totalSize`
+  // stays 0 and the effect above never reruns once the DOM actually grows
+  // (e.g. markdown/code rendering finishing a beat after the commit that
+  // set bottomLockedRef). A MutationObserver catches that growth directly
+  // from the DOM regardless of which render caused it.
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+
+    const observer = new MutationObserver(() => {
+      correctBottomLock();
+    });
+    observer.observe(el, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    return () => observer.disconnect();
+  }, [scrollContainerRef, correctBottomLock]);
 
   // -------------------------------------------------------------------------
   // Imperative helpers
@@ -339,13 +374,17 @@ export function useConversationVirtualizer({
       if (!el) return;
 
       bottomLockedRef.current = true;
+      lastScrollBehaviorRef.current = behavior;
 
-      // Guard the follow-bottom scroll (and any immediate measurement
-      // correction that follows it) from being misread as a user-initiated
-      // upward scroll in the scroll handler, which would falsely release the
-      // bottom lock and leave the stream "stuck" mid-list. The deadline is set
-      // for BOTH behaviors — streaming uses 'auto', so it previously had no
-      // guard at all.
+      // Guard the follow-bottom scroll from being misread as a
+      // user-initiated upward scroll in the scroll handler, which would
+      // falsely release the bottom lock and leave the stream "stuck"
+      // mid-list. The deadline is set for BOTH behaviors — streaming uses
+      // 'auto', so it previously had no guard at all. (The size-driven
+      // correction effect above only honors this deadline for 'smooth', to
+      // avoid canceling an in-progress animation — an 'auto' jump has no
+      // animation to protect and must be free to correct immediately once
+      // rows finish measuring.)
       smoothScrollDeadlineRef.current = performance.now() + 500;
 
       if (behavior === 'smooth') {

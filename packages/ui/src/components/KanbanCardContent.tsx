@@ -322,9 +322,7 @@ export function KanbanCardContent<TTag extends KanbanTag = KanbanTag>({
           />
         ))}
         {relationships.length > 2 && (
-          <span className="text-sm text-low">
-            +{relationships.length - 2}
-          </span>
+          <span className="text-sm text-low">+{relationships.length - 2}</span>
         )}
       </div>
 

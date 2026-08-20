@@ -25,6 +25,13 @@ import { IconButton } from '@vibe/ui/components/IconButton';
 import { SettingsCard, SettingsTextarea } from './SettingsComponents';
 import { useSettingsDirty } from './SettingsDirtyContext';
 import { cn } from '@/shared/lib/utils';
+import { ModelSelectorPopover } from '@vibe/ui/components/ModelSelectorPopover';
+import { DropdownMenuTriggerButton } from '@vibe/ui/components/Dropdown';
+import { getResolvedTheme, useTheme } from '@/shared/hooks/useTheme';
+import {
+  getSelectedModel as getSelectedModelByProvider,
+  parseModelId,
+} from '@/shared/lib/modelSelector';
 
 const BUNDLED_IDS = new Set([
   'swarm-multi-agent',
@@ -169,7 +176,7 @@ function parseBaseCodingAgent(executor?: string): BaseCodingAgent | null {
 function StageModelInput({
   executor,
   model,
-  index,
+  index: _index,
   onChange,
 }: {
   executor?: string;
@@ -178,10 +185,19 @@ function StageModelInput({
   onChange: (newModel: string | undefined) => void;
 }) {
   const baseAgent = useMemo(() => parseBaseCodingAgent(executor), [executor]);
-  const { config, loadingModels: streamLoading } =
-    useModelSelectorConfig(baseAgent);
+  const {
+    config,
+    loadingModels: streamLoading,
+    error: streamError,
+  } = useModelSelectorConfig(baseAgent);
+  const { theme } = useTheme();
+  const resolvedTheme = getResolvedTheme(theme);
   const [httpModels, setHttpModels] = useState<string[]>([]);
   const [httpLoading, setHttpLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedProviderId, setExpandedProviderId] = useState('');
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!executor) {
@@ -206,16 +222,127 @@ function StageModelInput({
     };
   }, [executor]);
 
-  const availableModels = useMemo(() => {
-    if (config?.models && config.models.length > 0) {
-      return config.models.map((m) => m.id);
-    }
-    return httpModels;
-  }, [config?.models, httpModels]);
+  const effectiveConfig = useMemo(() => {
+    if (config && config.models.length > 0) return config;
+    if (httpModels.length === 0) return config;
+    // Build synthetic grouped config from flat http ids like "nvidia/nemotron-3.5-..."
+    const providerMap = new Map<string, string>();
+    const models = httpModels.map((rawId) => {
+      const slash = rawId.indexOf('/');
+      if (slash !== -1) {
+        const providerId = rawId.slice(0, slash);
+        const id = rawId.slice(slash + 1);
+        if (!providerMap.has(providerId))
+          providerMap.set(providerId, providerId);
+        return { id, name: id, provider_id: providerId, reasoning_options: [] };
+      }
+      return {
+        id: rawId,
+        name: rawId,
+        provider_id: null,
+        reasoning_options: [],
+      };
+    });
+    const providers = [...providerMap.keys()].map((id) => ({ id, name: id }));
+    return {
+      providers,
+      models,
+      default_model: config?.default_model ?? null,
+      agents: config?.agents ?? [],
+      permissions: config?.permissions ?? [],
+    } as unknown as typeof config;
+  }, [config, httpModels]);
 
-  const loadingModels =
-    streamLoading && httpLoading && availableModels.length === 0;
-  const isLive = Boolean(availableModels.length > 0);
+  const hasProviders = (effectiveConfig?.providers.length ?? 0) > 0;
+  const hasModels = (effectiveConfig?.models.length ?? 0) > 0;
+  const loadingModels = streamLoading && httpLoading && !hasModels;
+  const isLive = hasModels;
+
+  const { providerId: parsedProviderId, modelId: parsedModelId } = useMemo(
+    () => parseModelId(model, hasProviders),
+    [model, hasProviders]
+  );
+
+  const providerIdMap = useMemo(() => {
+    const ids = effectiveConfig?.providers.map((p) => p.id) ?? [];
+    return new Map(ids.map((id) => [id.toLowerCase(), id]));
+  }, [effectiveConfig?.providers]);
+
+  const resolveProviderId = (value?: string | null) =>
+    value ? (providerIdMap.get(value.toLowerCase()) ?? null) : null;
+
+  const selectedProviderId = resolveProviderId(parsedProviderId);
+  const selectedModelId = parsedModelId;
+
+  const selectedModel = useMemo(() => {
+    if (!effectiveConfig || !selectedModelId) return null;
+    return getSelectedModelByProvider(
+      effectiveConfig.models,
+      selectedProviderId,
+      selectedModelId
+    );
+  }, [effectiveConfig, selectedModelId, selectedProviderId]);
+
+  const modelLabel = useMemo(() => {
+    if (!model) return 'Default';
+    if (selectedModel) return selectedModel.name || selectedModel.id;
+    // Fallback to raw string when not in discovered list (custom)
+    return model;
+  }, [model, selectedModel]);
+
+  const handleModelSelect = (modelId: string | null, providerId?: string) => {
+    if (!modelId) {
+      onChange(undefined);
+      setIsOpen(false);
+      return;
+    }
+    const value = providerId ? `${providerId}/${modelId}` : modelId;
+    onChange(value);
+    setIsOpen(false);
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (open && effectiveConfig) {
+      const fallback =
+        selectedModel?.provider_id ??
+        selectedProviderId ??
+        effectiveConfig.providers[0]?.id ??
+        '';
+      setExpandedProviderId(fallback);
+    } else {
+      setSearchQuery('');
+    }
+  };
+
+  // Sync expanded provider when selection changes while open
+  useEffect(() => {
+    if (!isOpen || !effectiveConfig) return;
+    if (selectedModel?.provider_id) {
+      setExpandedProviderId(selectedModel.provider_id);
+    }
+  }, [isOpen, effectiveConfig, selectedModel?.provider_id]);
+
+  // Flat fallback when no grouped config available
+  if (!hasModels && !loadingModels) {
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-low">Model (Live CLI Discovery)</label>
+          <span className="text-[10px] text-low font-mono">Agent default</span>
+        </div>
+        <input
+          type="text"
+          value={model ?? ''}
+          onChange={(e) =>
+            onChange(e.target.value.trim() ? e.target.value.trim() : undefined)
+          }
+          className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high font-mono"
+          placeholder="Default (omit --model)"
+        />
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -228,33 +355,49 @@ function StageModelInput({
           </span>
         ) : isLive ? (
           <span className="text-[10px] text-green-500 font-mono">
-            ● {availableModels.length} live models
+            ● {effectiveConfig?.models.length ?? 0} live models
           </span>
         ) : (
           <span className="text-[10px] text-low font-mono">Agent default</span>
         )}
       </div>
-      <input
-        type="text"
-        list={`models-list-${index}`}
-        value={model ?? ''}
-        onChange={(e) =>
-          onChange(e.target.value.trim() ? e.target.value.trim() : undefined)
-        }
-        className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high font-mono"
-        placeholder={
-          availableModels[0]
-            ? `Default (${availableModels[0]}) or select below`
-            : 'Default (omit --model)'
-        }
-      />
-      {availableModels.length > 0 ? (
-        <datalist id={`models-list-${index}`}>
-          {availableModels.map((m) => (
-            <option key={m} value={m} />
-          ))}
-        </datalist>
-      ) : null}
+      {effectiveConfig && (
+        <ModelSelectorPopover
+          isOpen={isOpen}
+          onOpenChange={handleOpenChange}
+          trigger={
+            <DropdownMenuTriggerButton
+              size="sm"
+              label={modelLabel}
+              className="w-full justify-between text-xs font-mono bg-secondary border-border"
+            />
+          }
+          config={effectiveConfig}
+          error={streamError}
+          selectedProviderId={selectedProviderId}
+          selectedModelId={selectedModelId}
+          selectedReasoningId={null}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onModelSelect={(id, providerId) => handleModelSelect(id, providerId)}
+          onReasoningSelect={() => {}}
+          showDefaultOption
+          onSelectDefault={() => handleModelSelect(null)}
+          scrollRef={scrollRef}
+          expandedProviderId={expandedProviderId}
+          onExpandedProviderIdChange={setExpandedProviderId}
+          resolvedTheme={resolvedTheme}
+        />
+      )}
+      {/* Keep freeform custom value visible when not in discovered list */}
+      {model && !selectedModel && (
+        <p
+          className="mt-1 text-[10px] font-mono text-low truncate"
+          title={model}
+        >
+          Custom: {model}
+        </p>
+      )}
     </div>
   );
 }

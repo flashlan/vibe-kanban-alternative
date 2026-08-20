@@ -1,11 +1,16 @@
 import {
   bulkUpdateIssues,
   bulkUpdateProjects,
+  deleteIssue,
   type BulkUpdateIssueItem,
   type BulkUpdateProjectItem,
 } from '@/shared/lib/remoteApi';
 import { refreshShapeSource } from '@/shared/lib/electric/collections';
-import { PROJECT_ISSUES_SHAPE, PROJECTS_SHAPE } from 'shared/remote-types';
+import {
+  PROJECT_ISSUES_SHAPE,
+  PROJECT_WORKSPACES_SHAPE,
+  PROJECTS_SHAPE,
+} from 'shared/remote-types';
 
 export interface PersistIssuesOptions {
   onError?: (err: unknown) => void;
@@ -44,6 +49,42 @@ export function persistIssues(
         // Refresh failure is non-fatal — the next shape sync heals it.
         // Treating a refresh rejection as a bulk failure would mis-fire
         // `onError` and double-trigger the refresh.
+      }
+    })
+    .catch((err: unknown) => {
+      options?.onError?.(err);
+      refresh();
+    })
+    .finally(() => {
+      options?.onSettled?.();
+    });
+}
+
+/**
+ * Delete an issue via the raw REST endpoint (bypassing the optimistic
+ * Electric mutation collection) so `cleanupWorkspaces` can be passed
+ * through as a query param. Refreshes the project's issues shape (and, when
+ * cleanup ran, its workspaces shape too, since that also deletes workspace
+ * rows) on both success and failure, matching `persistIssues`'s contract.
+ */
+export function persistIssueDelete(
+  id: string,
+  projectId: string,
+  cleanupWorkspaces: boolean,
+  options?: PersistIssuesOptions
+): void {
+  const refresh = () => {
+    refreshShapeSource(PROJECT_ISSUES_SHAPE, { project_id: projectId });
+    if (cleanupWorkspaces) {
+      refreshShapeSource(PROJECT_WORKSPACES_SHAPE, { project_id: projectId });
+    }
+  };
+  deleteIssue(id, { cleanupWorkspaces })
+    .then(() => {
+      try {
+        refresh();
+      } catch {
+        // Refresh failure is non-fatal — the next shape sync heals it.
       }
     })
     .catch((err: unknown) => {

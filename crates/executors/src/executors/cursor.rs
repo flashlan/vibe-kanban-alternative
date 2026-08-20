@@ -31,7 +31,7 @@ use crate::{
             ConversationPatch, EntryIndexProvider, patch, shell_command_parsing::CommandCategory,
         },
     },
-    model_selector::{ModelInfo, ModelSelectorConfig, ReasoningOption},
+    model_selector::ModelSelectorConfig,
     profile::ExecutorConfig,
 };
 
@@ -106,33 +106,6 @@ fn resolve_cursor_model_name<'a>(base_model: &'a str, reasoning: Option<&'a str>
         ("sonnet-4.5", Some("thinking") | None) => "sonnet-4.5-thinking",
 
         _ => base_model,
-    }
-}
-
-fn cursor_reasoning_options(base_model: &str) -> Vec<ReasoningOption> {
-    match base_model {
-        "gpt-5.4" | "gpt-5.4-fast" => {
-            ReasoningOption::from_names(["medium", "high", "xhigh"].map(String::from))
-        }
-        "gpt-5.3-codex" | "gpt-5.3-codex-fast" | "gpt-5.2-codex" | "gpt-5.2-codex-fast" => {
-            ReasoningOption::from_names(["low", "medium", "high", "xhigh"].map(String::from))
-        }
-        "gpt-5.2" | "gpt-5.1-codex-max" | "gpt-5.1" => {
-            ReasoningOption::from_names(["medium", "high"].map(String::from))
-        }
-        "opus-4.6" | "sonnet-4.6" | "opus-4.5" | "sonnet-4.5" => vec![
-            ReasoningOption {
-                id: "standard".to_string(),
-                label: "Standard".to_string(),
-                is_default: false,
-            },
-            ReasoningOption {
-                id: "thinking".to_string(),
-                label: "Thinking".to_string(),
-                is_default: true,
-            },
-        ],
-        _ => vec![],
     }
 }
 
@@ -646,45 +619,16 @@ impl StandardCodingAgentExecutor for CursorAgent {
         _workdir: Option<&std::path::Path>,
         _repo_path: Option<&std::path::Path>,
     ) -> Result<futures::stream::BoxStream<'static, json_patch::Patch>, ExecutorError> {
-        let models: Vec<ModelInfo> = [
-            ("auto", "Auto"),
-            ("gpt-5.4", "GPT-5.4"),
-            ("gpt-5.4-fast", "GPT-5.4 Fast"),
-            ("gemini-3.1-pro", "Gemini 3.1 Pro"),
-            ("opus-4.6", "Claude 4.6 Opus"),
-            ("sonnet-4.6", "Claude 4.6 Sonnet"),
-            ("gpt-5.3-codex", "GPT-5.3 Codex"),
-            ("gpt-5.3-codex-fast", "GPT-5.3 Codex Fast"),
-            ("gpt-5.3-codex-spark-preview", "GPT-5.3 Codex Spark"),
-            ("kimi-k2.5", "Kimi K2.5"),
-            ("opus-4.5", "Claude 4.5 Opus"),
-            ("sonnet-4.5", "Claude 4.5 Sonnet"),
-            ("gemini-3-pro", "Gemini 3 Pro"),
-            ("gemini-3-flash", "Gemini 3 Flash"),
-            ("gpt-5.2-codex", "GPT-5.2 Codex"),
-            ("gpt-5.2-codex-fast", "GPT-5.2 Codex Fast"),
-            ("gpt-5.2", "GPT-5.2"),
-            ("gpt-5.1-codex-max", "GPT-5.1 Codex Max"),
-            ("gpt-5.1", "GPT-5.1"),
-            ("gpt-5.1-codex-mini", "GPT-5.1 Codex Mini"),
-            ("grok", "Grok"),
-            ("composer-1", "Composer 1"),
-            ("composer-1.5", "Composer 1.5"),
-            ("composer-2", "Composer 2"),
-            ("composer-2-fast", "Composer 2 Fast"),
-        ]
-        .into_iter()
-        .map(|(id, name)| ModelInfo {
-            id: id.to_string(),
-            name: name.to_string(),
-            provider_id: None,
-            reasoning_options: cursor_reasoning_options(id),
-        })
-        .collect();
-
+        // `cursor-agent` isn't available in this dev environment to verify a
+        // real query command, and Cursor's model roster (GPT/Gemini/Claude/
+        // Kimi/Grok/Composer ids) turns over fast enough that a hand-copied
+        // snapshot goes stale quickly — the list this replaced already had
+        // several retired ids. Leave blank until a real discovery command is
+        // wired up (or confirmed not to exist for this CLI); the model
+        // selector's free-text field still lets a user type their own id.
         let options = ExecutorDiscoveredOptions {
             model_selector: ModelSelectorConfig {
-                models,
+                models: Vec::new(),
                 ..Default::default()
             },
             ..Default::default()

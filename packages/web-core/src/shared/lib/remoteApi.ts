@@ -73,6 +73,27 @@ export async function bulkUpdateIssues(
   }
 }
 
+/**
+ * Delete an issue. `cleanupWorkspaces` also removes the on-disk worktree
+ * dirs/branches of the issue's linked workspaces — otherwise they're left
+ * as orphaned dirs (deleting an issue only cascades the issue<->workspace
+ * link row, not the workspace row or its files). Mirrors the project
+ * delete's `cleanup_workspaces` query param.
+ */
+export async function deleteIssue(
+  id: string,
+  options?: { cleanupWorkspaces?: boolean }
+): Promise<void> {
+  const query = options?.cleanupWorkspaces ? '?cleanup_workspaces=true' : '';
+  const response = await makeRequest(`/v1/issues/${id}${query}`, {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to delete issue');
+  }
+}
+
 export interface BulkUpdateProjectStatusItem {
   id: string;
   changes: Partial<UpdateProjectStatusRequest>;

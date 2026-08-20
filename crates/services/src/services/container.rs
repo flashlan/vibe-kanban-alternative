@@ -1414,25 +1414,6 @@ pub trait ContainerService {
             .await?
             .ok_or(SqlxError::RowNotFound)?;
 
-        // Recall mem0 memories and prepend to prompt. The mem0 `user_id` is
-        // the repo slug (first repo of the workspace) so memories persist
-        // across workspaces/sessions of the same project.
-        let user_id = repos
-            .first()
-            .map(|r| r.name.clone())
-            .unwrap_or_else(|| workspace.id.to_string());
-        let prompt = match super::mem0::recall_memories(&user_id).await {
-            Some(memories) => {
-                tracing::info!(
-                    workspace_id = %workspace.id,
-                    user_id = %user_id,
-                    "Recalled mem0 memories for workspace"
-                );
-                format!("{}\n\n{}", memories, prompt)
-            }
-            None => prompt,
-        };
-
         // Create a session for this workspace
         let session = Session::create(
             &self.db().pool,
@@ -1847,12 +1828,6 @@ pub trait ContainerService {
             && let Some(store) = self.get_msg_store_by_id(&execution_process.id).await
         {
             crate::services::pipeline_stage::spawn_pipeline_stage_tracker(
-                store.clone(),
-                workspace.id,
-                execution_process.id,
-                self.db().clone(),
-            );
-            crate::services::mem0::spawn_memory_tracker(
                 store.clone(),
                 workspace.id,
                 execution_process.id,

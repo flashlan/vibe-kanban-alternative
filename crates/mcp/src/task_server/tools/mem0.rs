@@ -12,16 +12,26 @@ fn mem0_url() -> String {
     std::env::var("MEM0_URL").unwrap_or_else(|_| "http://localhost:8000".to_string())
 }
 
+/// Default cap on returned hits when the caller doesn't specify `limit`.
+/// Keeps a vague query from flooding the agent's context with loosely
+/// related memories — see ADR-028.
+const DEFAULT_SEARCH_LIMIT: usize = 5;
+
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 struct McpMemorySearchRequest {
     #[schemars(
-        description = "What to remember / search for, e.g. 'how does the pipeline stage tracker work?'"
+        description = "What to remember / search for, e.g. 'how does the pipeline stage tracker work?'. Scope it to the specific files/modules/area you're about to touch — never a broad or generic query."
     )]
     query: String,
     #[schemars(
         description = "Repo slug (e.g. 'vibe-kanban-alternative') to scope the search to that project's shared memory"
     )]
     user_id: String,
+    #[schemars(
+        description = "Max number of memories to return, ranked by relevance. Defaults to 5 — raise it only if you genuinely need more context."
+    )]
+    #[serde(default)]
+    limit: Option<usize>,
 }
 
 #[derive(Debug, Serialize, schemars::JsonSchema)]
@@ -47,19 +57,6 @@ struct McpMemorySaveResult {
     stored: bool,
 }
 
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
-struct McpMemoryRecallRequest {
-    #[schemars(
-        description = "Repo slug (e.g. 'vibe-kanban-alternative') whose project memory to fetch"
-    )]
-    user_id: String,
-}
-
-#[derive(Debug, Serialize, schemars::JsonSchema)]
-struct McpMemoryRecallResult {
-    memories: Vec<String>,
-}
-
 #[derive(Debug, Deserialize)]
 struct Mem0SearchResponse {
     #[serde(default)]
@@ -68,7 +65,6 @@ struct Mem0SearchResponse {
 
 #[derive(Debug, Deserialize)]
 struct Mem0VectorHit {
-    #[allow(dead_code)]
     score: Option<f64>,
     payload: Option<Mem0Payload>,
 }
@@ -84,39 +80,34 @@ struct Mem0SaveResponse {
     stored: Option<Vec<String>>,
 }
 
-#[derive(Debug, Deserialize)]
-struct Mem0RecallResponse {
-    #[allow(dead_code)]
-    count: usize,
-    memories: Vec<Mem0Memory>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Mem0Memory {
-    #[allow(dead_code)]
-    id: String,
-    payload: Option<Mem0Payload>,
-}
-
 #[tool_router(router = mem0_tools_router, vis = "pub")]
 impl McpServer {
     /// Search the project's shared mem0 memory for facts relevant to a query.
     /// Returns ranked, deduplicated memory contents (best-effort: empty list
     /// when mem0 is unreachable).
     #[tool(
-        description = "Search the project's shared memory (mem0) for facts relevant to a query. Use this BEFORE analyzing code or starting work to recall decisions, conventions, and lessons the project already learned."
+        description = "Search the project's shared memory (mem0) for facts relevant to a query. Use this BEFORE analyzing code or starting work to recall decisions, conventions, and lessons the project already learned. Returns at most `limit` hits (default 5) — a small, cheap call. If the results don't cover what you need, call this again with a narrower or differently-worded query rather than raising `limit`; iterating with a sharper query beats fetching more of a vague one."
     )]
     async fn memory_search(
         &self,
-        Parameters(McpMemorySearchRequest { query, user_id }): Parameters<McpMemorySearchRequest>,
+        Parameters(McpMemorySearchRequest {
+            query,
+            user_id,
+            limit,
+        }): Parameters<McpMemorySearchRequest>,
     ) -> Result<CallToolResult, ErrorData> {
+        let limit = limit.unwrap_or(DEFAULT_SEARCH_LIMIT);
+
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
             .build()
             .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
 
         let url = format!("{}/api/search", mem0_url());
-        let body = serde_json::json!({ "query": query, "user_id": user_id });
+        // `limit` is sent as a best-effort hint for servers that honor it;
+        // the client-side sort+truncate below is what actually guarantees
+        // the cap regardless of server support.
+        let body = serde_json::json!({ "query": query, "user_id": user_id, "limit": limit });
 
         let resp = match client.post(&url).json(&body).send().await {
             Ok(r) if r.status().is_success() => r,
@@ -136,14 +127,23 @@ impl McpServer {
             }
         };
 
-        let mut memories: Vec<String> = parsed
-            .vector
+        // Rank by score (higher = more relevant; unscored hits sort last),
+        // dedupe by content keeping the best-ranked occurrence, then cap to
+        // `limit` — a vague query must not flood the agent's context.
+        let mut hits: Vec<Mem0VectorHit> = parsed.vector;
+        hits.sort_by(|a, b| {
+            b.score
+                .unwrap_or(f64::MIN)
+                .total_cmp(&a.score.unwrap_or(f64::MIN))
+        });
+
+        let mut seen = std::collections::HashSet::new();
+        let memories: Vec<String> = hits
             .into_iter()
             .filter_map(|hit| hit.payload?.content)
+            .filter(|content| seen.insert(content.clone()))
+            .take(limit)
             .collect();
-        // Dedupe while preserving order.
-        let mut seen = std::collections::HashSet::new();
-        memories.retain(|m| seen.insert(m.clone()));
 
         McpServer::success(&McpMemorySearchResult { memories })
     }
@@ -190,46 +190,5 @@ impl McpServer {
             success: parsed.ok.unwrap_or(true),
             stored,
         })
-    }
-
-    /// Fetch all memories currently stored for the project's shared memory
-    /// (mem0). Returns empty list when none exist or mem0 is unreachable.
-    #[tool(description = "Fetch all memories stored for the project's shared memory (mem0).")]
-    async fn memory_recall(
-        &self,
-        Parameters(McpMemoryRecallRequest { user_id }): Parameters<McpMemoryRecallRequest>,
-    ) -> Result<CallToolResult, ErrorData> {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
-
-        let url = format!("{}/api/memories/{}", mem0_url(), user_id);
-
-        let resp = match client.get(&url).send().await {
-            Ok(r) if r.status().is_success() => r,
-            Ok(r) => {
-                return McpServer::err(format!("mem0 recall returned status {}", r.status()), None);
-            }
-            Err(e) => return McpServer::err("mem0 recall failed".to_string(), Some(e.to_string())),
-        };
-
-        let parsed: Mem0RecallResponse = match resp.json().await {
-            Ok(parsed) => parsed,
-            Err(e) => {
-                return McpServer::err(
-                    "failed to parse mem0 recall response".to_string(),
-                    Some(e.to_string()),
-                );
-            }
-        };
-
-        let memories: Vec<String> = parsed
-            .memories
-            .into_iter()
-            .filter_map(|m| m.payload?.content)
-            .collect();
-
-        McpServer::success(&McpMemoryRecallResult { memories })
     }
 }

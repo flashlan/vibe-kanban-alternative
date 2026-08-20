@@ -41,6 +41,8 @@ import {
 } from './RadixTooltip';
 import { ErrorAlert } from './ErrorAlert';
 
+const KANBAN_DESCRIPTION_COLLAPSED_KEY = 'vk-kanban-description-collapsed';
+
 export type IssuePanelMode = 'create' | 'edit';
 type IssuePriority = IssuePropertyRowProps['priority'];
 type IssueStatus = IssuePropertyRowProps['statuses'][number];
@@ -211,8 +213,27 @@ export function KanbanIssuePanel({
   // Description edit state: in edit mode, show preview by default; in create mode, always editable
   const [isDescriptionEditing, setIsDescriptionEditing] =
     useState(isCreateMode);
-  const [isDescriptionCollapsed, setIsDescriptionCollapsed] = useState(false);
+  const [isDescriptionCollapsed, setIsDescriptionCollapsed] = useState(() => {
+    try {
+      return (
+        localStorage.getItem(KANBAN_DESCRIPTION_COLLAPSED_KEY) === 'true'
+      );
+    } catch {
+      return false;
+    }
+  });
   const descriptionContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        KANBAN_DESCRIPTION_COLLAPSED_KEY,
+        String(isDescriptionCollapsed)
+      );
+    } catch {
+      // localStorage may be unavailable
+    }
+  }, [isDescriptionCollapsed]);
 
   // Reset description editing state when switching between create/edit mode or when issue changes
   useEffect(() => {
@@ -369,7 +390,9 @@ export function KanbanIssuePanel({
             <div className="mt-base px-base">
               <button
                 type="button"
-                onClick={() => setIsDescriptionCollapsed(!isDescriptionCollapsed)}
+                onClick={() =>
+                  setIsDescriptionCollapsed(!isDescriptionCollapsed)
+                }
                 className="flex items-center gap-half text-sm font-medium text-high hover:text-normal transition-colors mb-half"
               >
                 {isDescriptionCollapsed ? (
@@ -384,122 +407,124 @@ export function KanbanIssuePanel({
 
           {/* Description WYSIWYG Editor with image dropzone */}
           {!isDescriptionCollapsed && (
-          <div
-            ref={descriptionContainerRef}
-            {...(isDescriptionEditing ? dropzoneProps?.getRootProps() : {})}
-            className={cn(
-              'relative mt-base',
-              !isDescriptionEditing && !isCreateMode && 'cursor-text'
-            )}
-            onClick={() => {
-              if (!isDescriptionEditing && !isCreateMode && !isSubmitting) {
-                const selection = window.getSelection();
-                if (selection && selection.toString().length > 0) return;
-                setIsDescriptionEditing(true);
-              }
-            }}
-            onBlur={(e) => {
-              if (
-                descriptionContainerRef.current &&
-                !descriptionContainerRef.current.contains(
-                  e.relatedTarget as Node
-                )
-              ) {
-                handleDescriptionBlur();
-              }
-            }}
-          >
-            {isDescriptionEditing && (
-              <input
-                {...(dropzoneProps?.getInputProps() as React.InputHTMLAttributes<HTMLInputElement>)}
-                data-dropzone-input
-              />
-            )}
-            {renderDescriptionEditor({
-              placeholder: isDescriptionEditing
-                ? t('kanban.issueDescriptionPlaceholder')
-                : formData.description
-                  ? ''
-                  : t('kanban.issueDescriptionPlaceholder'),
-              value: formData.description ?? '',
-              onChange: (value) => onFormChange('description', value || null),
-              onCmdEnter: onCmdEnterSubmit,
-              onPasteFiles: isDescriptionEditing ? onPasteFiles : undefined,
-              disabled: !isDescriptionEditing || isSubmitting,
-              autoFocus: false,
-              className: cn(
-                'px-base',
-                isDescriptionEditing ? 'min-h-[100px]' : 'min-h-[2rem] max-h-[200px] overflow-y-auto',
-                !isDescriptionEditing && !formData.description && 'text-low'
-              ),
-              localAttachments,
-              showStaticToolbar: !isCreateMode || isDescriptionEditing,
-              hideActions: true,
-              saveStatus: descriptionSaveStatus,
-              onRequestEdit: !isCreateMode
-                ? () => setIsDescriptionEditing(true)
-                : undefined,
-              staticToolbarActions: (
-                <>
-                  {isDescriptionEditing && onBrowseAttachment && (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            type="button"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              if (!isSubmitting && !isUploading) {
-                                onBrowseAttachment();
-                              }
-                            }}
-                            disabled={isSubmitting || isUploading}
-                            className={cn(
-                              'p-half rounded-sm transition-colors',
-                              'text-low hover:text-normal hover:bg-panel/50',
-                              'disabled:opacity-50 disabled:cursor-not-allowed'
-                            )}
-                            title={t('kanban.attachFile')}
-                            aria-label={t('kanban.attachFile')}
-                          >
-                            <PaperclipIcon className="size-icon-sm" />
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {t('kanban.attachFileHint')}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  )}
-                </>
-              ),
-            })}
-            {attachmentError && (
-              <div className="px-base">
-                <ErrorAlert
-                  message={attachmentError}
-                  className="mt-half mb-half"
-                  onDismiss={onDismissAttachmentError}
-                  dismissLabel={t('buttons.close')}
+            <div
+              ref={descriptionContainerRef}
+              {...(isDescriptionEditing ? dropzoneProps?.getRootProps() : {})}
+              className={cn(
+                'relative mt-base',
+                !isDescriptionEditing && !isCreateMode && 'cursor-text'
+              )}
+              onClick={() => {
+                if (!isDescriptionEditing && !isCreateMode && !isSubmitting) {
+                  const selection = window.getSelection();
+                  if (selection && selection.toString().length > 0) return;
+                  setIsDescriptionEditing(true);
+                }
+              }}
+              onBlur={(e) => {
+                if (
+                  descriptionContainerRef.current &&
+                  !descriptionContainerRef.current.contains(
+                    e.relatedTarget as Node
+                  )
+                ) {
+                  handleDescriptionBlur();
+                }
+              }}
+            >
+              {isDescriptionEditing && (
+                <input
+                  {...(dropzoneProps?.getInputProps() as React.InputHTMLAttributes<HTMLInputElement>)}
+                  data-dropzone-input
                 />
-              </div>
-            )}
-            {dropzoneProps?.isDragActive && (
-              <div className="absolute inset-0 z-50 bg-primary/80 backdrop-blur-sm border-2 border-dashed border-brand rounded flex items-center justify-center pointer-events-none animate-in fade-in-0 duration-150">
-                <div className="text-center">
-                  <div className="mx-auto mb-2 w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center">
-                    <ImageIcon className="h-5 w-5 text-brand" />
-                  </div>
-                  <p className="text-sm font-medium text-high">
-                    {t('kanban.dropFilesHere')}
-                  </p>
-                  <p className="text-xs text-low mt-0.5">
-                    {t('kanban.fileDropHint')}
-                  </p>
+              )}
+              {renderDescriptionEditor({
+                placeholder: isDescriptionEditing
+                  ? t('kanban.issueDescriptionPlaceholder')
+                  : formData.description
+                    ? ''
+                    : t('kanban.issueDescriptionPlaceholder'),
+                value: formData.description ?? '',
+                onChange: (value) => onFormChange('description', value || null),
+                onCmdEnter: onCmdEnterSubmit,
+                onPasteFiles: isDescriptionEditing ? onPasteFiles : undefined,
+                disabled: !isDescriptionEditing || isSubmitting,
+                autoFocus: false,
+                className: cn(
+                  'px-base',
+                  isDescriptionEditing
+                    ? 'min-h-[100px]'
+                    : 'min-h-[2rem] max-h-[200px] overflow-y-auto',
+                  !isDescriptionEditing && !formData.description && 'text-low'
+                ),
+                localAttachments,
+                showStaticToolbar: !isCreateMode || isDescriptionEditing,
+                hideActions: true,
+                saveStatus: descriptionSaveStatus,
+                onRequestEdit: !isCreateMode
+                  ? () => setIsDescriptionEditing(true)
+                  : undefined,
+                staticToolbarActions: (
+                  <>
+                    {isDescriptionEditing && onBrowseAttachment && (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                if (!isSubmitting && !isUploading) {
+                                  onBrowseAttachment();
+                                }
+                              }}
+                              disabled={isSubmitting || isUploading}
+                              className={cn(
+                                'p-half rounded-sm transition-colors',
+                                'text-low hover:text-normal hover:bg-panel/50',
+                                'disabled:opacity-50 disabled:cursor-not-allowed'
+                              )}
+                              title={t('kanban.attachFile')}
+                              aria-label={t('kanban.attachFile')}
+                            >
+                              <PaperclipIcon className="size-icon-sm" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {t('kanban.attachFileHint')}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                  </>
+                ),
+              })}
+              {attachmentError && (
+                <div className="px-base">
+                  <ErrorAlert
+                    message={attachmentError}
+                    className="mt-half mb-half"
+                    onDismiss={onDismissAttachmentError}
+                    dismissLabel={t('buttons.close')}
+                  />
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+              {dropzoneProps?.isDragActive && (
+                <div className="absolute inset-0 z-50 bg-primary/80 backdrop-blur-sm border-2 border-dashed border-brand rounded flex items-center justify-center pointer-events-none animate-in fade-in-0 duration-150">
+                  <div className="text-center">
+                    <div className="mx-auto mb-2 w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center">
+                      <ImageIcon className="h-5 w-5 text-brand" />
+                    </div>
+                    <p className="text-sm font-medium text-high">
+                      {t('kanban.dropFilesHere')}
+                    </p>
+                    <p className="text-xs text-low mt-0.5">
+                      {t('kanban.fileDropHint')}
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
 

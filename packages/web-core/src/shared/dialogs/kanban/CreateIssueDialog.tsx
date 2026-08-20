@@ -73,7 +73,7 @@ export interface CreateIssueDialogProps {
 }
 
 export type CreateIssueDialogResult =
-  | { action: 'created'; issueId: string }
+  | { action: 'created'; issueId: string; workspaceId?: string }
   | { action: 'canceled' };
 
 const NONE_PRIORITY_VALUE = '__none__';
@@ -200,19 +200,38 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
       setIsSubmitting(false);
     }, [modal.visible, defaultStatusId, cancelAutoSave]);
 
-    const handleClose = useCallback(() => {
-      flushAutoSave();
-      if (savedIssueId) {
-        modal.resolve({ action: 'created', issueId: savedIssueId });
-      } else {
-        modal.resolve({ action: 'canceled' });
-      }
-      modal.hide();
-    }, [flushAutoSave, modal, savedIssueId]);
+    const handleClose = useCallback(
+      (createdWorkspaceId?: string) => {
+        flushAutoSave();
+        if (savedIssueId) {
+          modal.resolve({
+            action: 'created',
+            issueId: savedIssueId,
+            workspaceId: createdWorkspaceId,
+          });
+        } else {
+          modal.resolve({ action: 'canceled' });
+        }
+        modal.hide();
+      },
+      [flushAutoSave, modal, savedIssueId]
+    );
 
     const handleCancel = useCallback(() => {
       handleClose();
     }, [handleClose]);
+
+    // Passed to the embedded Workspaces section: when its inline composer
+    // creates a workspace it calls this with the new workspace's id so the
+    // resolved result carries it — otherwise ProjectKanban's post-close
+    // navigation (goToProjectIssue) races the composer's own navigation and
+    // wins, bouncing the user back to the plain issue view.
+    const handleWorkspaceNavigateAway = useCallback(
+      (createdWorkspaceId?: string) => {
+        handleClose(createdWorkspaceId);
+      },
+      [handleClose]
+    );
 
     const canSubmit = title.trim().length > 0 && !isSubmitting;
     const hasStatuses = statuses.length > 0;
@@ -441,6 +460,7 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
             <CreateIssueLinkedSections
               projectId={projectId}
               issueId={savedIssueId}
+              onNavigateAway={handleWorkspaceNavigateAway}
             />
 
             {error ? <p className="text-sm text-destructive">{error}</p> : null}

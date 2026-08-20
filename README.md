@@ -160,17 +160,16 @@ At its core it's a **kanban board that plans and tracks agent work**, plus a **w
 **Cross-session memory for every coding agent.** `vibe-kanban-alternative` ships with a first-class mem0 integration so the agents that drive your workspaces share a durable, semantic memory of the repositories they work in.
 
 ### Core Capabilities:
-- ⚬ **Automatic Recall on Launch**: Workspaces query stored memory for the current repository slug and prepend it to the agent prompt. Hard-won architectural conventions and debugging discoveries are never forgotten.
+- ⚬ **Agentic Recall, Not Auto-Injection**: Nothing is prepended to the prompt automatically. The pipeline's "Project memory" stage instructs the agent to call `memory_search` with a query scoped to the card's files/modules/area before starting — a targeted lookup, not a full dump.
 - ⚬ **Shared Repository Knowledge**: Memory is keyed per repository. You can start a task on Claude Code and switch to OpenCode or Antigravity mid-project without losing context.
 - ⚬ **Verified Fact Save-Back**: The memory pipeline stage instructs the agent to persist only self-contained, verified facts (architectural decisions, patterns, root causes) via `memory_save`. Ephemeral chatter is filtered out.
-- ⚬ **MCP Tools Integration**: Agents have access to `memory_search`, `memory_recall`, and `memory_save` as first-class Model Context Protocol (MCP) tools.
+- ⚬ **MCP Tools Integration**: Agents have access to `memory_search` and `memory_save` as first-class Model Context Protocol (MCP) tools.
 - ⚬ **Graph-Based Memory (GraphML)**: Entity and relation extraction creates an interconnected graph (mem0 + Qdrant + NetworkX), persisted on disk (`/data/graphs/*.graphml`) so knowledge structures survive container reboots.
 
 ### ⚡ Prompt Cache-Hit Design
 To minimize token costs on providers with prompt caching (Anthropic, OpenRouter, DeepSeek):
-1. **Static Prefix Placement**: The memory block is injected into the static task prefix before dynamic user instructions.
-2. **Deterministic Ordering**: Memory entries are sorted deterministically, ensuring byte-identical prompt prefixes across sessions for continuous cache hits.
-3. **No Mid-Session Perturbation**: `memory_search` and `memory_save` execute as MCP tool calls rather than system prompt mutations, keeping the token cache warm.
+1. **No Automatic Prefix Injection**: There is no memory block prepended to the prompt — the injected block used to change on every new memory, invalidating the cached prefix on every workspace start. See [ADR-028](docs/ADR/ADR-028-mem0-agentic-recall.md).
+2. **Tool Calls, Not Prompt Mutations**: `memory_search` and `memory_save` execute as MCP tool calls scoped to the current card, keeping the static system/task prefix identical (and cache-hit) across workspace starts.
 
 ### mem0 Setup
 

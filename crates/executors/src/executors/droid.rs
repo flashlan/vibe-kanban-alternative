@@ -17,7 +17,7 @@ use crate::{
         StandardCodingAgentExecutor,
     },
     logs::utils::{EntryIndexProvider, patch},
-    model_selector::{ModelInfo, ModelSelectorConfig},
+    model_selector::ModelSelectorConfig,
     profile::ExecutorConfig,
 };
 
@@ -235,37 +235,16 @@ impl StandardCodingAgentExecutor for Droid {
         _workdir: Option<&std::path::Path>,
         _repo_path: Option<&std::path::Path>,
     ) -> Result<futures::stream::BoxStream<'static, json_patch::Patch>, ExecutorError> {
+        // `droid` isn't available in this dev environment to verify a real
+        // query command, and this multi-vendor roster (Claude/GPT/Gemini/
+        // GLM/Kimi/MiniMax ids) turns over fast enough that a hand-copied
+        // snapshot goes stale quickly. Leave blank until a real discovery
+        // command is wired up (or confirmed not to exist for this CLI); the
+        // model selector's free-text field still lets a user type their own
+        // id.
         let options = ExecutorDiscoveredOptions {
             model_selector: ModelSelectorConfig {
-                models: [
-                    ("claude-opus-4-6", "Claude Opus 4.6"),
-                    ("claude-opus-4-6-fast", "Claude Opus 4.6 Fast Mode"),
-                    ("gemini-3.1-pro-preview", "Gemini 3.1 Pro"),
-                    ("glm-5", "GLM-5"),
-                    ("gpt-5.3-codex", "GPT 5.3 Codex"),
-                    ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
-                    ("kimi-k2.5", "Kimi K2.5"),
-                    ("minimax-m2.5", "MiniMax M2.5"),
-                    ("glm-4.7", "GLM-4.7"),
-                    ("claude-opus-4-5-20251101", "Claude Opus 4.5"),
-                    ("claude-sonnet-4-5-20250929", "Claude Sonnet 4.5"),
-                    ("claude-haiku-4-5-20251001", "Claude Haiku 4.5"),
-                    ("gpt-5.2-codex", "GPT 5.2 Codex"),
-                    ("gpt-5.2", "GPT 5.2"),
-                    ("gemini-3-pro-preview", "Gemini 3 Pro"),
-                    ("gemini-3-flash-preview", "Gemini 3 Flash"),
-                    ("gpt-5.1-codex", "GPT 5.1 Codex"),
-                    ("gpt-5.1-codex-max", "GPT 5.1 Codex Max"),
-                    ("gpt-5.1", "GPT 5.1"),
-                ]
-                .into_iter()
-                .map(|(id, name)| ModelInfo {
-                    id: id.to_string(),
-                    name: name.to_string(),
-                    provider_id: None,
-                    reasoning_options: vec![],
-                })
-                .collect(),
+                models: Vec::new(),
                 ..Default::default()
             },
             ..Default::default()

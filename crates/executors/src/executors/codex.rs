@@ -311,71 +311,14 @@ impl StandardCodingAgentExecutor for Codex {
 
     async fn discover_options(
         &self,
-        _workdir: Option<&std::path::Path>,
-        _repo_path: Option<&std::path::Path>,
+        workdir: Option<&std::path::Path>,
+        repo_path: Option<&std::path::Path>,
     ) -> Result<futures::stream::BoxStream<'static, json_patch::Patch>, ExecutorError> {
-        let xhigh_reasoning_options = ReasoningOption::from_names(
-            [
-                ReasoningEffort::Low,
-                ReasoningEffort::Medium,
-                ReasoningEffort::High,
-                ReasoningEffort::Xhigh,
-            ]
-            .map(|e| e.as_ref().to_string()),
-        );
+        let models = self.discover_models_live(workdir, repo_path).await;
 
         let options = ExecutorDiscoveredOptions {
             model_selector: ModelSelectorConfig {
-                models: vec![
-                    ModelInfo {
-                        id: "gpt-5.5".to_string(),
-                        name: "GPT-5.5".to_string(),
-                        provider_id: None,
-                        reasoning_options: xhigh_reasoning_options.clone(),
-                    },
-                    ModelInfo {
-                        id: "gpt-5.5-fast".to_string(),
-                        name: "GPT-5.5 Fast".to_string(),
-                        provider_id: None,
-                        reasoning_options: xhigh_reasoning_options.clone(),
-                    },
-                    ModelInfo {
-                        id: "gpt-5.4".to_string(),
-                        name: "GPT-5.4".to_string(),
-                        provider_id: None,
-                        reasoning_options: xhigh_reasoning_options.clone(),
-                    },
-                    ModelInfo {
-                        id: "gpt-5.4-fast".to_string(),
-                        name: "GPT-5.4 Fast".to_string(),
-                        provider_id: None,
-                        reasoning_options: xhigh_reasoning_options.clone(),
-                    },
-                    ModelInfo {
-                        id: "gpt-5.4-mini".to_string(),
-                        name: "GPT-5.4 Mini".to_string(),
-                        provider_id: None,
-                        reasoning_options: xhigh_reasoning_options.clone(),
-                    },
-                    ModelInfo {
-                        id: "gpt-5.3-codex".to_string(),
-                        name: "GPT-5.3 Codex".to_string(),
-                        provider_id: None,
-                        reasoning_options: xhigh_reasoning_options.clone(),
-                    },
-                    ModelInfo {
-                        id: "gpt-5.3-codex-spark".to_string(),
-                        name: "GPT-5.3 Codex Spark".to_string(),
-                        provider_id: None,
-                        reasoning_options: xhigh_reasoning_options.clone(),
-                    },
-                    ModelInfo {
-                        id: "gpt-5.2".to_string(),
-                        name: "GPT-5.2".to_string(),
-                        provider_id: None,
-                        reasoning_options: xhigh_reasoning_options,
-                    },
-                ],
+                models,
                 permissions: vec![
                     PermissionPolicy::Auto,
                     PermissionPolicy::Supervised,
@@ -456,6 +399,101 @@ impl Codex {
         }
 
         apply_overrides(builder, &self.cmd)
+    }
+
+    /// Live-query the real `codex app-server` `model/list` RPC for the
+    /// currently available model list, replacing what used to be a
+    /// hand-copied snapshot (it had already drifted — retired ids like
+    /// `gpt-5.3-codex-spark` stayed listed). This spawns a throwaway
+    /// app-server process (the same one real sessions use), calls
+    /// `AppServerClient::list_models`, then tears the process down — it's a
+    /// one-shot query, not a session, so nothing is left running after it.
+    ///
+    /// Returns empty when Codex isn't installed/configured, the spawn
+    /// fails, or the RPC call times out — never a stale guess.
+    async fn discover_models_live(
+        &self,
+        workdir: Option<&Path>,
+        repo_path: Option<&Path>,
+    ) -> Vec<ModelInfo> {
+        if matches!(self.get_availability_info(), AvailabilityInfo::NotFound) {
+            return Vec::new();
+        }
+
+        let Ok(command_parts) = self.build_command_builder().and_then(|b| b.build_initial()) else {
+            return Vec::new();
+        };
+
+        let current_dir = workdir.or(repo_path).unwrap_or_else(|| Path::new("."));
+        let env = ExecutionEnv::new(crate::env::RepoContext::default(), false, String::new());
+
+        let (tx, rx) = tokio::sync::oneshot::channel();
+
+        let spawned = self
+            .spawn_app_server(
+                current_dir,
+                command_parts,
+                &env,
+                move |client, _| async move {
+                    let _ = tx.send(client.list_models().await);
+                    Ok(())
+                },
+            )
+            .await;
+
+        let Ok(mut spawned) = spawned else {
+            return Vec::new();
+        };
+
+        // Generous timeout: the pinned `npx -y @openai/codex@...` version
+        // may need a fresh download on first use.
+        //
+        // Known environment issue (seen 2026-08-20 on an Apple Silicon Mac):
+        // macOS Gatekeeper/XProtect (syspolicyd) may identify and delete the
+        // downloaded `codex` binary as malware immediately after npx
+        // extracts it (`Attempting to move malware to trash: (team:
+        // 2DC432GLL2), (id: codex)`), so every spawn attempt fails with
+        // ENOENT — this is a system-level security action, not an app bug,
+        // and re-downloading does not help (it gets flagged again). Not
+        // addressed here; do not attempt to bypass Gatekeeper to work
+        // around it.
+        let response = tokio::time::timeout(std::time::Duration::from_secs(45), rx).await;
+
+        if let Some(cancel) = spawned.cancel.take() {
+            cancel.cancel();
+        }
+        let _ = spawned.child.kill().await;
+
+        let Ok(Ok(Ok(response))) = response else {
+            return Vec::new();
+        };
+
+        response
+            .data
+            .into_iter()
+            .filter(|m| !m.hidden)
+            .map(|m| {
+                let default_effort = m.default_reasoning_effort.to_string();
+                ModelInfo {
+                    id: m.id,
+                    name: m.display_name,
+                    provider_id: None,
+                    reasoning_options: m
+                        .supported_reasoning_efforts
+                        .into_iter()
+                        .map(|opt| {
+                            let id = opt.reasoning_effort.to_string();
+                            let is_default = id == default_effort;
+                            ReasoningOption {
+                                id,
+                                label: opt.description,
+                                is_default,
+                            }
+                        })
+                        .collect(),
+                }
+            })
+            .collect()
     }
 
     fn build_thread_start_params(&self, cwd: &Path) -> ThreadStartParams {

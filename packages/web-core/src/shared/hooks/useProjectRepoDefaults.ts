@@ -22,8 +22,11 @@ export async function getProjectRepoDefaults(
     }
     return null;
   } catch (error) {
-    // 404 means no defaults saved yet — not an error
-    if (error instanceof ApiError && error.status === 404) {
+    // No defaults saved yet is the expected, common case for a project that
+    // hasn't had a workspace created — not an error. The scratch endpoint
+    // returns 400 (`crates/server/src/routes/scratch.rs`), not 404, for a
+    // missing row.
+    if (error instanceof ApiError && error.status === 400) {
       return null;
     }
     console.error('[useProjectRepoDefaults] Failed to read defaults:', error);

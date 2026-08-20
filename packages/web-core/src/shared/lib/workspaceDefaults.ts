@@ -28,10 +28,18 @@ export async function getWorkspaceDefaults(
         availableRepoIds
       );
       if (scratchDefaults.length > 0) {
+        const reposById = new Map(allRepos.map((r) => [r.id, r]));
         return {
           preferredRepos: scratchDefaults.map((r) => ({
             repo_id: r.repo_id,
-            target_branch: r.target_branch,
+            // The project-repo default only ever carries a repo choice
+            // (never a branch — see ProjectRepoSection), so fall back to
+            // the repo's own configured default branch rather than
+            // leaving it unselected.
+            target_branch:
+              r.target_branch ||
+              reposById.get(r.repo_id)?.default_target_branch ||
+              null,
           })),
         };
       }
@@ -61,7 +69,7 @@ export async function getWorkspaceDefaults(
         return {
           preferredRepos: repos.map((r) => ({
             repo_id: r.id,
-            target_branch: r.target_branch,
+            target_branch: r.target_branch || r.default_target_branch || null,
           })),
         };
       } catch (err) {
@@ -95,7 +103,7 @@ export async function getWorkspaceDefaults(
     return {
       preferredRepos: repos.map((r) => ({
         repo_id: r.id,
-        target_branch: r.target_branch,
+        target_branch: r.target_branch || r.default_target_branch || null,
       })),
     };
   } catch (err) {

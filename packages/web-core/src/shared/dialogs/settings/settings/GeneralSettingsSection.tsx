@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cloneDeep, isEqual, merge } from 'lodash';
-import {
-  FolderSimpleIcon,
-  SpeakerHighIcon,
-  SpinnerIcon,
-} from '@phosphor-icons/react';
-import { FolderPickerDialog } from '@/shared/dialogs/shared/FolderPickerDialog';
+import { SpeakerHighIcon, SpinnerIcon } from '@phosphor-icons/react';
 import {
   type BaseCodingAgent,
   DEFAULT_COMMIT_REMINDER_PROMPT,
@@ -82,9 +77,6 @@ export function GeneralSettingsSection() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [branchPrefixError, setBranchPrefixError] = useState<string | null>(
-    null
-  );
   const [allowedOriginsCsv, setAllowedOriginsCsv] = useState('');
   const [allowedOriginsError, setAllowedOriginsError] = useState<string | null>(
     null
@@ -104,40 +96,6 @@ export function GeneralSettingsSection() {
     ? getSortedExecutorVariantKeys(selectedAgentProfile)
     : [];
   const hasVariants = variantOptions.length > 0;
-
-  const validateBranchPrefix = useCallback(
-    (prefix: string): string | null => {
-      if (!prefix) return null;
-      if (prefix.includes('/'))
-        return t('settings.general.git.branchPrefix.errors.slash');
-      if (prefix.startsWith('.'))
-        return t('settings.general.git.branchPrefix.errors.startsWithDot');
-      if (prefix.endsWith('.') || prefix.endsWith('.lock'))
-        return t('settings.general.git.branchPrefix.errors.endsWithDot');
-      if (prefix.includes('..') || prefix.includes('@{'))
-        return t('settings.general.git.branchPrefix.errors.invalidSequence');
-      if (/[ \t~^:?*[\\]/.test(prefix))
-        return t('settings.general.git.branchPrefix.errors.invalidChars');
-      for (let i = 0; i < prefix.length; i++) {
-        const code = prefix.charCodeAt(i);
-        if (code < 0x20 || code === 0x7f)
-          return t('settings.general.git.branchPrefix.errors.controlChars');
-      }
-      return null;
-    },
-    [t]
-  );
-
-  const handleBrowseWorkspaceDir = async () => {
-    const result = await FolderPickerDialog.show({
-      value: draft?.workspace_dir ?? '',
-      title: t('settings.general.git.workspaceDir.dialogTitle'),
-      description: t('settings.general.git.workspaceDir.dialogDescription'),
-    });
-    if (result) {
-      updateDraft({ workspace_dir: result });
-    }
-  };
 
   useEffect(() => {
     if (!config) return;
@@ -586,131 +544,6 @@ export function GeneralSettingsSection() {
         </SettingsField>
       </SettingsCard>
 
-      {/* Git */}
-      <SettingsCard
-        title={t('settings.general.git.title')}
-        description={t('settings.general.git.description')}
-      >
-        <SettingsField
-          label={t('settings.general.git.branchPrefix.label')}
-          error={branchPrefixError}
-          description={
-            <>
-              {t('settings.general.git.branchPrefix.helper')}{' '}
-              {draft?.git_branch_prefix ? (
-                <>
-                  {t('settings.general.git.branchPrefix.preview')}{' '}
-                  <code className="text-xs bg-secondary px-1 py-0.5 rounded">
-                    {t('settings.general.git.branchPrefix.previewWithPrefix', {
-                      prefix: draft.git_branch_prefix,
-                    })}
-                  </code>
-                </>
-              ) : (
-                <>
-                  {t('settings.general.git.branchPrefix.preview')}{' '}
-                  <code className="text-xs bg-secondary px-1 py-0.5 rounded">
-                    {t('settings.general.git.branchPrefix.previewNoPrefix')}
-                  </code>
-                </>
-              )}
-            </>
-          }
-        >
-          <SettingsInput
-            value={draft?.git_branch_prefix ?? ''}
-            onChange={(value) => {
-              const trimmed = value.trim();
-              updateDraft({ git_branch_prefix: trimmed });
-              setBranchPrefixError(validateBranchPrefix(trimmed));
-            }}
-            placeholder={t('settings.general.git.branchPrefix.placeholder')}
-            error={!!branchPrefixError}
-          />
-        </SettingsField>
-
-        <SettingsField
-          label={t('settings.general.git.workspaceDir.label')}
-          description={t('settings.general.git.workspaceDir.helper')}
-        >
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <SettingsInput
-                value={draft?.workspace_dir ?? ''}
-                onChange={(value) =>
-                  updateDraft({ workspace_dir: value || null })
-                }
-                placeholder={t('settings.general.git.workspaceDir.placeholder')}
-              />
-            </div>
-            <PrimaryButton
-              variant="tertiary"
-              onClick={handleBrowseWorkspaceDir}
-            >
-              <FolderSimpleIcon className="size-icon-sm" weight="bold" />
-              {t('settings.general.git.workspaceDir.browse')}
-            </PrimaryButton>
-          </div>
-        </SettingsField>
-      </SettingsCard>
-
-      {/* Gitea */}
-      <SettingsCard
-        title={t('settings.gitea.title')}
-        description={t('settings.gitea.description')}
-      >
-        <SettingsField
-          label={t('settings.gitea.baseUrl.label')}
-          description={t('settings.gitea.baseUrl.helper')}
-        >
-          <SettingsInput
-            value={draft?.gitea?.base_url ?? ''}
-            onChange={(value) =>
-              updateDraft({
-                gitea: {
-                  ...draft!.gitea,
-                  base_url: value.trim() || null,
-                },
-              })
-            }
-            placeholder={t('settings.gitea.baseUrl.placeholder')}
-          />
-        </SettingsField>
-
-        <SettingsField
-          label={t('settings.gitea.defaultBranch.label')}
-          description={t('settings.gitea.defaultBranch.helper')}
-        >
-          <SettingsInput
-            value={draft?.gitea?.default_branch ?? ''}
-            onChange={(value) =>
-              updateDraft({
-                gitea: {
-                  ...draft!.gitea,
-                  default_branch: value.trim() || null,
-                },
-              })
-            }
-            placeholder={t('settings.gitea.defaultBranch.placeholder')}
-          />
-        </SettingsField>
-
-        <div className="border-t border-primary pt-base mt-base">
-          <p className="text-sm font-medium text-normal">
-            {t('settings.gitea.token.title')}
-          </p>
-          <p className="text-sm text-low">
-            {t('settings.gitea.token.description')}
-          </p>
-          <p className="text-sm text-low mt-half">
-            {t('settings.gitea.token.hint')}
-          </p>
-          <pre className="overflow-x-auto rounded-sm border border-border/50 bg-secondary/30 p-3 text-xs text-normal">
-            {t('settings.gitea.token.example')}
-          </pre>
-        </div>
-      </SettingsCard>
-
       {/* Network */}
       <SettingsCard
         title={t('settings.general.network.title')}
@@ -969,7 +802,7 @@ export function GeneralSettingsSection() {
       <SettingsSaveBar
         show={hasUnsavedChanges}
         saving={saving}
-        saveDisabled={!!branchPrefixError || !!allowedOriginsError}
+        saveDisabled={!!allowedOriginsError}
         onSave={handleSave}
         onDiscard={handleDiscard}
       />

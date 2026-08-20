@@ -68,10 +68,12 @@ import { getIdeName } from '@/shared/lib/ideName';
 import { EditorSelectionDialog } from '@/shared/dialogs/command-bar/EditorSelectionDialog';
 import { StartReviewDialog } from '@/shared/dialogs/command-bar/StartReviewDialog';
 import { SettingsDialog } from '@/shared/dialogs/settings/SettingsDialog';
+import { ProjectSettingsDialog } from '@/shared/dialogs/project-settings/ProjectSettingsDialog';
 import { CreateWorkspaceFromPrDialog } from '@/shared/dialogs/command-bar/CreateWorkspaceFromPrDialog';
 import { SpawnOrchestratorDialog } from '@/shared/dialogs/orchestrator/SpawnOrchestratorDialog';
 import { buildWorkspaceCreateInitialState } from '@/shared/lib/workspaceCreateState';
 import { setCreateModeSeedState } from '@/features/create-mode/model/createModeSeedStore';
+import { persistIssueDelete } from '@/shared/lib/persistIssues';
 
 // Mirrored sidebar icon for right sidebar toggle
 const RightSidebarIcon: Icon = forwardRef<SVGSVGElement, IconProps>(
@@ -434,12 +436,16 @@ export const Actions = {
     icon: GearIcon,
     requiresTarget: ActionTargetType.NONE,
     isVisible: (ctx) => ctx.layoutMode === 'kanban',
-    execute: async () => {
-      // ADR-018 — the `remote-projects` settings section is gone (deleted
-      // along with `OrganizationsSettingsSection`). Projects have no
-      // dedicated settings surface anymore; open the global settings
-      // dialog as a fallback.
-      await SettingsDialog.show();
+    execute: async (ctx) => {
+      // Project-scoped settings (currently: primary repository — see
+      // ProjectSettingsDialog). Falls back to the global Settings dialog
+      // when no active project is known (defensive; shouldn't happen given
+      // isVisible requires kanban layout).
+      if (ctx.kanbanProjectId) {
+        await ProjectSettingsDialog.show({ projectId: ctx.kanbanProjectId });
+      } else {
+        await SettingsDialog.show();
+      }
     },
   } satisfies GlobalActionDefinition,
 
@@ -1353,7 +1359,7 @@ export const Actions = {
     requiresTarget: ActionTargetType.ISSUE,
     isVisible: (ctx) =>
       ctx.layoutMode === 'kanban' && ctx.hasSelectedKanbanIssue,
-    execute: async (ctx, _projectId, issueIds) => {
+    execute: async (ctx, projectId, issueIds) => {
       const count = issueIds.length;
       const result = await ConfirmDialog.show({
         title: count === 1 ? 'Delete Issue' : `Delete ${count} Issues`,
@@ -1365,9 +1371,37 @@ export const Actions = {
         cancelText: 'Cancel',
         variant: 'destructive',
       });
-      if (result === 'confirmed' && ctx.projectMutations?.removeIssue) {
-        for (const issueId of issueIds) {
-          ctx.projectMutations.removeIssue(issueId);
+      if (result !== 'confirmed') return;
+
+      // Deleting an issue only removes the issue<->workspace link row —
+      // the linked workspace's DB row and its on-disk worktree survive as
+      // an orphan unless we explicitly opt in to cleanup (same as project
+      // deletion's "delete workspaces on disk too?" flow).
+      const issueIdSet = new Set(issueIds);
+      const hasLinkedWorkspaces = ctx.remoteWorkspaces.some(
+        (ws) => ws.issue_id && issueIdSet.has(ws.issue_id)
+      );
+
+      let cleanupOnDisk = false;
+      if (hasLinkedWorkspaces) {
+        const cleanupResult = await ConfirmDialog.show({
+          title: 'Delete workspaces on disk too?',
+          message:
+            count === 1
+              ? 'This issue has a linked workspace. Remove its workspace folder and git branch from disk too? The app database rows are deleted either way; this only affects the files on disk.'
+              : 'These issues have linked workspaces. Remove their workspace folders and git branches from disk too? The app database rows are deleted either way; this only affects the files on disk.',
+          confirmText: 'Delete on disk',
+          cancelText: 'Keep on disk',
+          variant: 'destructive',
+        });
+        cleanupOnDisk = cleanupResult === 'confirmed';
+      }
+
+      for (const issueId of issueIds) {
+        if (cleanupOnDisk) {
+          persistIssueDelete(issueId, projectId, true);
+        } else {
+          ctx.projectMutations?.removeIssue(issueId);
         }
       }
     },

@@ -376,6 +376,12 @@ fn default_discovered_options() -> crate::executor_discovery::ExecutorDiscovered
         id == DEFAULT_MODEL_ID || id.contains("opus") || id.contains("sonnet")
     };
 
+    // Unlike OpenCode/Antigravity/Qwen, the Claude CLI has no structured
+    // model-list API (`claude --help` only gives "e.g." examples in the
+    // `--model` flag description, not an exhaustive/parseable list) — this
+    // list is the CLI's own stable alias vocabulary and has to be
+    // hand-maintained. Verify against a current `claude --help` when
+    // updating; it's what caught this list missing the `fable` alias.
     ExecutorDiscoveredOptions {
         model_selector: ModelSelectorConfig {
             providers: vec![],
@@ -385,6 +391,7 @@ fn default_discovered_options() -> crate::executor_discovery::ExecutorDiscovered
                 ("opus[1m]", "Opus (1M context)"),
                 ("sonnet", "Sonnet"),
                 ("haiku", "Haiku"),
+                ("fable", "Fable"),
             ]
             .into_iter()
             .map(|(id, name)| ModelInfo {

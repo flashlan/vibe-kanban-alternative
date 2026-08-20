@@ -22,6 +22,16 @@ import {
 } from 'shared/remote-types';
 import { getRandomPresetColor, PRESET_COLORS } from '@/shared/lib/colors';
 import { ColorPicker } from '@/shared/components/ui-new/containers/ColorPickerContainer';
+import { repoApi } from '@/shared/lib/api';
+import { saveProjectRepoDefaults } from '@/shared/hooks/useProjectRepoDefaults';
+import type { Repo } from 'shared/types';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@vibe/ui/components/DropdownMenu';
+import { FolderGit, ChevronsUpDown } from 'lucide-react';
 
 export type CreateProjectDialogProps = {
   /** ADR-015: when set, the new project is created as a child board of the
@@ -42,6 +52,10 @@ const CreateProjectDialogImpl = create<CreateProjectDialogProps>(
     const [color, setColor] = useState<string>(() => getRandomPresetColor());
     const [error, setError] = useState<string | null>(null);
     const [isCreating, setIsCreating] = useState(false);
+    const [repos, setRepos] = useState<Repo[]>([]);
+    const [selectedRepoId, setSelectedRepoId] = useState<string>('');
+    const [reposLoading, setReposLoading] = useState(true);
+    const [repoDropdownOpen, setRepoDropdownOpen] = useState(false);
 
     // ADR-018 — projects are tenant-less; subscribe PROJECTS_SHAPE with
     // empty params (single global cache key).
@@ -58,7 +72,36 @@ const CreateProjectDialogImpl = create<CreateProjectDialogProps>(
         setColor(getRandomPresetColor());
         setError(null);
         setIsCreating(false);
+        setSelectedRepoId('');
+        setRepoDropdownOpen(true);
       }
+    }, [modal.visible]);
+
+    // Fetch available repos
+    useEffect(() => {
+      if (!modal.visible) return;
+      let cancelled = false;
+      setReposLoading(true);
+      repoApi
+        .list()
+        .then((data) => {
+          if (!cancelled) {
+            setRepos(data);
+            if (data.length === 1) {
+              setSelectedRepoId(data[0].id);
+            }
+            setReposLoading(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setRepos([]);
+            setReposLoading(false);
+          }
+        });
+      return () => {
+        cancelled = true;
+      };
     }, [modal.visible]);
 
     useEffect(() => {
@@ -96,10 +139,20 @@ const CreateProjectDialogImpl = create<CreateProjectDialogProps>(
         });
 
         const persistedProject = await persisted;
+        const finalProject = persistedProject ?? project;
+
+        // Save repo defaults if a repo was selected
+        if (selectedRepoId && finalProject?.id) {
+          saveProjectRepoDefaults(finalProject.id, [
+            { repo_id: selectedRepoId, target_branch: '' },
+          ]).catch((err) =>
+            console.warn('Failed to save project repo defaults:', err)
+          );
+        }
 
         modal.resolve({
           action: 'created',
-          project: persistedProject ?? project,
+          project: finalProject,
         } as CreateProjectResult);
         modal.hide();
       } catch (err) {
@@ -193,6 +246,68 @@ const CreateProjectDialogImpl = create<CreateProjectDialogProps>(
                 </ColorPicker>
               </div>
             </div>
+
+            {repos.length > 0 && (
+              <div className="space-y-2">
+                <Label>
+                  {t('createProjectDialog.repoLabel', 'Repository (optional)')}
+                </Label>
+                <DropdownMenu
+                  open={repoDropdownOpen}
+                  onOpenChange={setRepoDropdownOpen}
+                >
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex items-center justify-between w-full px-3 py-2 rounded-sm border border-border bg-secondary text-sm text-normal disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={isCreating || reposLoading}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <FolderGit className="h-4 w-4 flex-shrink-0" />
+                        <span className="truncate">
+                          {selectedRepoId
+                            ? repos.find((r) => r.id === selectedRepoId)
+                                ?.display_name ||
+                              repos.find((r) => r.id === selectedRepoId)?.name
+                            : t(
+                                'createProjectDialog.repoPlaceholder',
+                                'Select a repository'
+                              )}
+                        </span>
+                      </div>
+                      <ChevronsUpDown className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)]">
+                    <DropdownMenuItem onSelect={() => setSelectedRepoId('')}>
+                      {t('createProjectDialog.repoNone', 'No repository')}
+                    </DropdownMenuItem>
+                    {repos.map((repo) => (
+                      <DropdownMenuItem
+                        key={repo.id}
+                        onSelect={() => setSelectedRepoId(repo.id)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <FolderGit className="h-3.5 w-3.5" />
+                          <span className="truncate">
+                            {repo.display_name || repo.name}
+                          </span>
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
+
+            {repos.length === 0 && !reposLoading && (
+              <p className="text-xs text-low">
+                {t(
+                  'createProjectDialog.noRepos',
+                  'No repositories registered. Add one in Settings > Repositories.'
+                )}
+              </p>
+            )}
 
             {error && (
               <Alert variant="destructive">

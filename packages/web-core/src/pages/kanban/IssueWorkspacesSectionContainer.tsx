@@ -1,13 +1,14 @@
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import { useParams } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { LinkIcon, PlusIcon } from '@phosphor-icons/react';
+import { LinkIcon, PlusIcon, XIcon } from '@phosphor-icons/react';
 import { useProjectContext } from '@/shared/hooks/useProjectContext';
 import { useWorkspacesContext } from '@/shared/hooks/useWorkspacesContext';
 import { useWorkspaceContext } from '@/shared/hooks/useWorkspaceContext';
 import { useAppNavigation } from '@/shared/hooks/useAppNavigation';
-import { useProjectWorkspaceCreateDraft } from '@/shared/hooks/useProjectWorkspaceCreateDraft';
+import { CreateModeProvider } from '@/features/create-mode/model/CreateModeProvider';
+import { CreateChatBoxContainer } from '@/shared/components/CreateChatBoxContainer';
 import { workspacesApi } from '@/shared/lib/api';
 import { getWorkspaceDefaults } from '@/shared/lib/workspaceDefaults';
 import {
@@ -23,11 +24,20 @@ import { refreshShapeSource } from '@/shared/lib/electric/collections';
 import type { WorkspaceWithStats } from '@vibe/ui/components/IssueWorkspaceCard';
 import { IssueWorkspacesSection } from '@vibe/ui/components/IssueWorkspacesSection';
 import type { SectionAction } from '@vibe/ui/components/CollapsibleSectionHeader';
+import type { CreateModeInitialState } from '@/shared/types/createMode';
 
 interface IssueWorkspacesSectionContainerProps {
   issueId: string;
   /** Overrides the route projectId (for contexts without route params, e.g. the Create Issue modal). */
   projectId?: string;
+  /** Called right after the inline composer creates a workspace, just
+   *  before navigating to its session view — lets the enclosing modal (e.g.
+   *  the Create Issue dialog) close itself first so it doesn't stay open on
+   *  top of the destination. The new workspace's id is passed through so the
+   *  caller can fold it into its own resolution instead of separately
+   *  navigating to a plain issue view and racing this component's own
+   *  navigation below. */
+  onNavigateAway?: (createdWorkspaceId?: string) => void;
 }
 
 /**
@@ -37,14 +47,72 @@ interface IssueWorkspacesSectionContainerProps {
 export function IssueWorkspacesSectionContainer({
   issueId,
   projectId: projectIdProp,
+  onNavigateAway,
 }: IssueWorkspacesSectionContainerProps) {
   const { t } = useTranslation('common');
   const { projectId: routeProjectId } = useParams({ strict: false });
   const projectId = projectIdProp ?? routeProjectId;
   const queryClient = useQueryClient();
   const appNavigation = useAppNavigation();
-  const { openWorkspaceCreateFromState } = useProjectWorkspaceCreateDraft();
   const { workspaces } = useWorkspacesContext();
+
+  // Inline "create workspace right here" state: the full composer
+  // (CreateModeProvider + CreateChatBoxContainer — the exact same one used
+  // everywhere else a workspace gets created) mounted directly in this
+  // section instead of navigating to a separate screen. `composeDraftId` is
+  // regenerated each time the composer is (re)opened so a fresh, unrelated
+  // scratch draft is used.
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeDraftId, setComposeDraftId] = useState<string | null>(null);
+  const [composeInitialState, setComposeInitialState] =
+    useState<CreateModeInitialState | null>(null);
+  const composeScrollRef = useRef<HTMLDivElement>(null);
+
+  // The composer isn't internally scrollable (it just grows with content —
+  // a long pre-filled prompt pushes the model/Create row below the fold of
+  // our bounded-height wrapper), and it loads its content (prompt, model
+  // discovery) asynchronously, so its final height isn't known on mount.
+  // Keep pinning to the bottom as it grows so the model/Create row lands
+  // already visible instead of requiring a manual scroll first — once the
+  // user scrolls up themselves, stop fighting them.
+  useEffect(() => {
+    if (!composeOpen) return;
+    const node = composeScrollRef.current;
+    if (!node) return;
+
+    let pinnedToBottom = true;
+    const scrollToBottom = () => {
+      node.scrollTop = node.scrollHeight;
+    };
+    scrollToBottom();
+
+    const handleScroll = () => {
+      const distanceFromBottom =
+        node.scrollHeight - node.scrollTop - node.clientHeight;
+      pinnedToBottom = distanceFromBottom < 16;
+    };
+    node.addEventListener('scroll', handleScroll);
+
+    // `node` itself has a fixed height (it's the scroll viewport), so
+    // observing its own box never fires as content grows inside it — and
+    // the growing content isn't necessarily a stable direct child (React
+    // swaps whole subtrees, e.g. a loading placeholder for the real form).
+    // A subtree MutationObserver catches that regardless of which node it
+    // happens to.
+    const mutationObserver = new MutationObserver(() => {
+      if (pinnedToBottom) scrollToBottom();
+    });
+    mutationObserver.observe(node, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+
+    return () => {
+      node.removeEventListener('scroll', handleScroll);
+      mutationObserver.disconnect();
+    };
+  }, [composeOpen, composeDraftId]);
 
   const {
     pullRequests,
@@ -122,7 +190,13 @@ export function IssueWorkspacesSectionContainer({
     );
   }, [issues, getWorkspacesForIssue]);
 
-  // Handle clicking '+' to create and link a new workspace directly
+  // Handle clicking '+' (or the draft card's own "Create"): mounts the full
+  // compose UI (CreateModeProvider + CreateChatBoxContainer) right here,
+  // seeded with the issue's title/description as the prompt and the
+  // resolved repo/branch defaults (falling back to each repo's configured
+  // default branch). No navigation, no separate screen — works the same
+  // whether this section is inside the Create Issue modal or the normal
+  // issue side panel.
   const handleAddWorkspace = useCallback(async () => {
     if (!projectId) {
       return;
@@ -143,36 +217,54 @@ export function IssueWorkspacesSectionContainer({
       localWorkspaceIds,
       projectId
     );
-    const createState = buildWorkspaceCreateInitialState({
-      prompt: initialPrompt,
-      defaults,
-      linkedIssue: buildLinkedIssueCreateState(issue, projectId),
-    });
 
-    const draftId = await openWorkspaceCreateFromState(createState, {
-      issueId,
-    });
-    if (!draftId) {
-      await ConfirmDialog.show({
-        title: t('common:error'),
-        message: t(
-          'workspaces.createDraftError',
-          'Failed to prepare workspace draft. Please try again.'
-        ),
-        confirmText: t('common:ok'),
-        showCancelButton: false,
-      });
-    }
+    setComposeInitialState(
+      buildWorkspaceCreateInitialState({
+        prompt: initialPrompt,
+        defaults,
+        linkedIssue: buildLinkedIssueCreateState(issue, projectId),
+      })
+    );
+    setComposeDraftId(crypto.randomUUID());
+    setComposeOpen(true);
   }, [
     projectId,
-    openWorkspaceCreateFromState,
     getIssue,
     issueId,
     activeWorkspaces,
     archivedWorkspaces,
     workspaces,
-    t,
   ]);
+
+  const handleComposeCancel = useCallback(() => {
+    setComposeOpen(false);
+  }, []);
+
+  // The embedded composer created (and started) the workspace itself — jump
+  // straight to its session view (the whole point of creating it) instead
+  // of leaving the user back on the board to go find and open it
+  // themselves. Close the enclosing modal first (if any) so it doesn't
+  // stay stacked on top of the destination.
+  const handleComposeWorkspaceCreated = useCallback(
+    (workspaceId: string) => {
+      setComposeOpen(false);
+      if (onNavigateAway) {
+        // The enclosing modal (e.g. Create Issue) owns final navigation once
+        // it resolves with this workspace's id — calling it here too would
+        // just push a second, redundant history entry to the same route.
+        onNavigateAway(workspaceId);
+        return;
+      }
+      if (projectId) {
+        appNavigation.goToProjectIssueWorkspace(
+          projectId,
+          issueId,
+          workspaceId
+        );
+      }
+    },
+    [projectId, issueId, appNavigation, onNavigateAway]
+  );
 
   // Handle clicking link action to link an existing workspace
   const handleLinkWorkspace = useCallback(async () => {
@@ -344,6 +436,32 @@ export function IssueWorkspacesSectionContainer({
     [handleAddWorkspace, handleLinkWorkspace]
   );
 
+  const composeContent =
+    composeOpen && composeDraftId ? (
+      <div className="relative flex max-h-[340px] min-h-[260px] flex-col rounded-sm border border-dashed border-border bg-primary overflow-hidden">
+        <button
+          type="button"
+          onClick={handleComposeCancel}
+          aria-label={t('buttons.cancel')}
+          className="absolute right-2 top-2 z-10 p-1 rounded-sm text-low hover:text-high hover:bg-panel transition-colors"
+        >
+          <XIcon className="size-icon-sm" weight="bold" />
+        </button>
+        <div ref={composeScrollRef} className="flex-1 min-h-0 overflow-y-auto">
+          <CreateModeProvider
+            key={composeDraftId}
+            draftId={composeDraftId}
+            initialState={composeInitialState}
+          >
+            <CreateChatBoxContainer
+              compact
+              onWorkspaceCreated={handleComposeWorkspaceCreated}
+            />
+          </CreateModeProvider>
+        </div>
+      </div>
+    ) : undefined;
+
   return (
     <IssueWorkspacesSection
       workspaces={workspacesWithStats}
@@ -355,6 +473,7 @@ export function IssueWorkspacesSectionContainer({
       onUnlinkWorkspace={handleUnlinkWorkspace}
       onDeleteWorkspace={handleDeleteWorkspace}
       shouldAnimateCreateButton={shouldAnimateCreateButton}
+      quickCreateContent={composeContent}
     />
   );
 }

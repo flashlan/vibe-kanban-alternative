@@ -1,5 +1,9 @@
 import type { ReactNode } from 'react';
-import { CaretDownIcon, CaretRightIcon, ChatDotsIcon } from '@phosphor-icons/react';
+import {
+  CaretDownIcon,
+  CaretRightIcon,
+  ChatDotsIcon,
+} from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
 
 export interface ChatThinkingMessageRenderProps {

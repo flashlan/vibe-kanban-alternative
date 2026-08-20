@@ -145,7 +145,18 @@ function ProjectMutationsRegistration({ children }: { children: ReactNode }) {
       });
 
       if (res.action === 'created') {
-        appNavigation.goToProjectIssue(projectId, res.issueId);
+        // If the dialog's embedded Workspaces composer already created and
+        // navigated to a workspace, keep that destination — don't bounce
+        // back to the plain issue view.
+        if (res.workspaceId) {
+          appNavigation.goToProjectIssueWorkspace(
+            projectId,
+            res.issueId,
+            res.workspaceId
+          );
+        } else {
+          appNavigation.goToProjectIssue(projectId, res.issueId);
+        }
         return res.issueId;
       }
       return null;

@@ -8,7 +8,6 @@ import WYSIWYGEditor from '@/shared/components/WYSIWYGEditor';
 import { useCreateWorkspace } from '@/shared/hooks/useCreateWorkspace';
 import { useCreateAttachments } from '@/shared/hooks/useCreateAttachments';
 import { useExecutorConfig } from '@/shared/hooks/useExecutorConfig';
-import { saveProjectRepoDefaults } from '@/shared/hooks/useProjectRepoDefaults';
 import { getSortedExecutorVariantKeys } from '@/shared/lib/executor';
 import {
   toPrettyCase,
@@ -20,6 +19,7 @@ import { addPromptToHistory } from '@vibe/ui/lib/promptHistory';
 import { SettingsDialog } from '@/shared/dialogs/settings/SettingsDialog';
 import { CreateModeRepoPickerBar } from './CreateModeRepoPickerBar';
 import { ModelSelectorContainer } from '@/shared/components/ModelSelectorContainer';
+import { cn } from '@/shared/lib/utils';
 
 function getRepoDisplayName(repo: Repo) {
   return repo.display_name || repo.name;
@@ -35,10 +35,13 @@ function truncateBranchLabel(branch: string) {
 
 interface CreateChatBoxContainerProps {
   onWorkspaceCreated: (workspaceId: string) => void;
+  /** Compact layout for inline side-panel composers (avoids 3 nested scrollbars). */
+  compact?: boolean;
 }
 
 export function CreateChatBoxContainer({
   onWorkspaceCreated,
+  compact = false,
 }: CreateChatBoxContainerProps) {
   const { t } = useTranslation('common');
   const { profiles, config } = useUserSystem();
@@ -51,7 +54,6 @@ export function CreateChatBoxContainer({
     hasInitialValue,
     hasResolvedInitialRepoDefaults,
     linkedIssue,
-    projectId,
     clearLinkedIssue,
     preferredExecutorConfig,
     executorConfig: draftConfig,
@@ -261,13 +263,6 @@ export function CreateChatBoxContainer({
       onWorkspaceCreated(result.workspace.id);
     }
 
-    const defaultsProjectId = projectId ?? linkedIssue?.remoteProjectId ?? null;
-    if (defaultsProjectId) {
-      saveProjectRepoDefaults(defaultsProjectId, data.repos).catch((err) =>
-        console.warn('Failed to save project repo defaults:', err)
-      );
-    }
-
     clearAttachments();
     await clearDraft();
   }, [
@@ -282,7 +277,6 @@ export function CreateChatBoxContainer({
     clearAttachments,
     clearDraft,
     linkedIssue,
-    projectId,
   ]);
 
   // Determine error to display
@@ -304,12 +298,34 @@ export function CreateChatBoxContainer({
   }
 
   return (
-    <div className="relative flex flex-1 flex-col bg-primary h-full">
-      <div className="flex flex-1 items-center justify-center px-base">
-        <div className="flex w-chat max-w-full flex-col gap-base">
+    <div
+      className={cn(
+        'relative flex flex-1 flex-col bg-primary',
+        compact ? 'min-h-0 py-2' : 'h-full'
+      )}
+    >
+      <div
+        className={cn(
+          'flex flex-1 flex-col gap-base',
+          compact
+            ? 'px-2 py-1 min-h-0'
+            : 'w-chat max-w-full items-center justify-center px-base'
+        )}
+      >
+        <div
+          className={cn(
+            'flex flex-col gap-base',
+            !compact && 'w-chat max-w-full'
+          )}
+        >
           {showRepoPickerStep && (
             <>
-              <h2 className="mb-double text-center text-xl font-medium tracking-tight text-high">
+              <h2
+                className={cn(
+                  'text-center font-medium tracking-tight text-high',
+                  compact ? 'mb-base text-base' : 'mb-double text-xl'
+                )}
+              >
                 {t('createMode.headings.repoStep')}
               </h2>
               <CreateModeRepoPickerBar
@@ -320,11 +336,20 @@ export function CreateChatBoxContainer({
 
           {showChatStep && (
             <>
-              <h2 className="mb-double text-center text-xl font-medium tracking-tight text-high">
+              <h2
+                className={cn(
+                  'text-center font-medium tracking-tight text-high',
+                  compact ? 'mb-base text-sm' : 'mb-double text-xl'
+                )}
+              >
                 {t('createMode.headings.chatStep')}
               </h2>
 
-              <div className="flex justify-center @container">
+              <div
+                className={cn(
+                  compact ? 'flex flex-col' : 'flex justify-center @container'
+                )}
+              >
                 <CreateChatBox
                   editor={{
                     value: message,
@@ -347,7 +372,12 @@ export function CreateChatBoxContainer({
                       onChange={onChange}
                       onCmdEnter={onCmdEnter}
                       disabled={disabled}
-                      className="min-h-double max-h-[50vh] overflow-y-auto"
+                      className={cn(
+                        'overflow-y-auto',
+                        compact
+                          ? 'min-h-[80px] max-h-[160px]'
+                          : 'min-h-double max-h-[50vh]'
+                      )}
                       repoIds={repoIds}
                       repoId={repoId}
                       executor={executor}

@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { isEqual } from 'lodash';
-import { GitBranchIcon, PlusIcon, SpinnerIcon } from '@phosphor-icons/react';
+import { cloneDeep, isEqual } from 'lodash';
+import {
+  FolderSimpleIcon,
+  GitBranchIcon,
+  PlusIcon,
+  SpinnerIcon,
+} from '@phosphor-icons/react';
 import { Loader2 } from 'lucide-react';
 import { create, useModal } from '@ebay/nice-modal-react';
 import { useMachineRepoBranches } from '@/shared/hooks/useRepoBranches';
@@ -14,6 +19,7 @@ import { defineModal } from '@/shared/lib/modals';
 import type { DeleteRepoConflict, Repo, UpdateRepo } from 'shared/types';
 import { SearchableDropdownContainer } from '@/shared/components/ui-new/containers/SearchableDropdownContainer';
 import { FolderPickerDialog } from '@/shared/dialogs/shared/FolderPickerDialog';
+import { useUserSystem } from '@/shared/hooks/useUserSystem';
 import { Button } from '@vibe/ui/components/Button';
 import {
   Dialog,
@@ -40,6 +46,7 @@ import {
   SettingsSaveBar,
 } from './SettingsComponents';
 import { useSettingsMachineClient } from './SettingsHostContext';
+import { useSettingsDirty } from './SettingsDirtyContext';
 
 interface RepoScriptsFormState {
   display_name: string;
@@ -184,6 +191,105 @@ export function ReposSettingsSection({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  // Global config state (Git/Gitea settings)
+  const { config, updateAndSaveConfig } = useUserSystem();
+  const { setDirty: setContextDirty } = useSettingsDirty();
+  const [configDraft, setConfigDraft] = useState(() =>
+    config ? cloneDeep(config) : null
+  );
+  const [configDirty, setConfigDirty] = useState(false);
+  const [configSaving, setConfigSaving] = useState(false);
+  const [configSuccess, setConfigSuccess] = useState(false);
+  const [branchPrefixError, setBranchPrefixError] = useState<string | null>(
+    null
+  );
+
+  const configHasUnsavedChanges = useMemo(() => {
+    if (!configDraft || !config) return false;
+    return !isEqual(configDraft, config);
+  }, [configDraft, config]);
+
+  useEffect(() => {
+    if (!config) return;
+    if (!configDirty) {
+      setConfigDraft(cloneDeep(config));
+    }
+  }, [config, configDirty]);
+
+  useEffect(() => {
+    setContextDirty('repos', configHasUnsavedChanges);
+    return () => setContextDirty('repos', false);
+  }, [configHasUnsavedChanges, setContextDirty]);
+
+  const validateBranchPrefix = useCallback(
+    (prefix: string): string | null => {
+      if (!prefix) return null;
+      if (prefix.includes('/'))
+        return t('settings.general.git.branchPrefix.errors.slash');
+      if (prefix.startsWith('.'))
+        return t('settings.general.git.branchPrefix.errors.startsWithDot');
+      if (prefix.endsWith('.') || prefix.endsWith('.lock'))
+        return t('settings.general.git.branchPrefix.errors.endsWithDot');
+      if (prefix.includes('..') || prefix.includes('@{'))
+        return t('settings.general.git.branchPrefix.errors.invalidSequence');
+      if (/[ \t~^:?*[\\]/.test(prefix))
+        return t('settings.general.git.branchPrefix.errors.invalidChars');
+      for (let i = 0; i < prefix.length; i++) {
+        const code = prefix.charCodeAt(i);
+        if (code < 0x20 || code === 0x7f)
+          return t('settings.general.git.branchPrefix.errors.controlChars');
+      }
+      return null;
+    },
+    [t]
+  );
+
+  const updateConfigDraft = useCallback(
+    (patch: Partial<typeof config>) => {
+      setConfigDraft((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev, ...patch };
+        if (!isEqual(next, config)) {
+          setConfigDirty(true);
+        }
+        return next;
+      });
+    },
+    [config]
+  );
+
+  const handleBrowseWorkspaceDir = async () => {
+    const result = await FolderPickerDialog.show({
+      value: configDraft?.workspace_dir ?? '',
+      title: t('settings.general.git.workspaceDir.dialogTitle'),
+      description: t('settings.general.git.workspaceDir.dialogDescription'),
+    });
+    if (result) {
+      updateConfigDraft({ workspace_dir: result });
+    }
+  };
+
+  const handleConfigSave = async () => {
+    if (!configDraft) return;
+    setConfigSaving(true);
+    try {
+      await updateAndSaveConfig(configDraft);
+      setConfigDirty(false);
+      setConfigSuccess(true);
+      setTimeout(() => setConfigSuccess(false), 3000);
+    } catch {
+      setError(t('settings.general.save.error'));
+    } finally {
+      setConfigSaving(false);
+    }
+  };
+
+  const handleConfigDiscard = () => {
+    if (!config) return;
+    setConfigDraft(cloneDeep(config));
+    setConfigDirty(false);
+  };
 
   // Get OS-appropriate script placeholders
   const placeholders = useScriptPlaceholders();
@@ -434,6 +540,12 @@ export function ReposSettingsSection({
       {success && (
         <div className="bg-success/10 border border-success/50 rounded-sm p-4 text-success font-medium">
           {t('settings.repos.save.success')}
+        </div>
+      )}
+
+      {configSuccess && (
+        <div className="bg-success/10 border border-success/50 rounded-sm p-4 text-success font-medium">
+          {t('settings.general.save.success')}
         </div>
       )}
 
@@ -716,6 +828,140 @@ export function ReposSettingsSection({
           />
         </>
       )}
+
+      {/* Git (global config) */}
+      <SettingsCard
+        title={t('settings.general.git.title')}
+        description={t('settings.general.git.description')}
+      >
+        <SettingsField
+          label={t('settings.general.git.branchPrefix.label')}
+          error={branchPrefixError}
+          description={
+            <>
+              {t('settings.general.git.branchPrefix.helper')}{' '}
+              {configDraft?.git_branch_prefix ? (
+                <>
+                  {t('settings.general.git.branchPrefix.preview')}{' '}
+                  <code className="text-xs bg-secondary px-1 py-0.5 rounded">
+                    {t('settings.general.git.branchPrefix.previewWithPrefix', {
+                      prefix: configDraft.git_branch_prefix,
+                    })}
+                  </code>
+                </>
+              ) : (
+                <>
+                  {t('settings.general.git.branchPrefix.preview')}{' '}
+                  <code className="text-xs bg-secondary px-1 py-0.5 rounded">
+                    {t('settings.general.git.branchPrefix.previewNoPrefix')}
+                  </code>
+                </>
+              )}
+            </>
+          }
+        >
+          <SettingsInput
+            value={configDraft?.git_branch_prefix ?? ''}
+            onChange={(value) => {
+              const trimmed = value.trim();
+              updateConfigDraft({ git_branch_prefix: trimmed });
+              setBranchPrefixError(validateBranchPrefix(trimmed));
+            }}
+            placeholder={t('settings.general.git.branchPrefix.placeholder')}
+            error={!!branchPrefixError}
+          />
+        </SettingsField>
+
+        <SettingsField
+          label={t('settings.general.git.workspaceDir.label')}
+          description={t('settings.general.git.workspaceDir.helper')}
+        >
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <SettingsInput
+                value={configDraft?.workspace_dir ?? ''}
+                onChange={(value) =>
+                  updateConfigDraft({ workspace_dir: value || null })
+                }
+                placeholder={t('settings.general.git.workspaceDir.placeholder')}
+              />
+            </div>
+            <PrimaryButton
+              variant="tertiary"
+              onClick={handleBrowseWorkspaceDir}
+            >
+              <FolderSimpleIcon className="size-icon-sm" weight="bold" />
+              {t('settings.general.git.workspaceDir.browse')}
+            </PrimaryButton>
+          </div>
+        </SettingsField>
+      </SettingsCard>
+
+      {/* Gitea (global config) */}
+      <SettingsCard
+        title={t('settings.gitea.title')}
+        description={t('settings.gitea.description')}
+      >
+        <SettingsField
+          label={t('settings.gitea.baseUrl.label')}
+          description={t('settings.gitea.baseUrl.helper')}
+        >
+          <SettingsInput
+            value={configDraft?.gitea?.base_url ?? ''}
+            onChange={(value) =>
+              updateConfigDraft({
+                gitea: {
+                  ...configDraft!.gitea,
+                  base_url: value.trim() || null,
+                },
+              })
+            }
+            placeholder={t('settings.gitea.baseUrl.placeholder')}
+          />
+        </SettingsField>
+
+        <SettingsField
+          label={t('settings.gitea.defaultBranch.label')}
+          description={t('settings.gitea.defaultBranch.helper')}
+        >
+          <SettingsInput
+            value={configDraft?.gitea?.default_branch ?? ''}
+            onChange={(value) =>
+              updateConfigDraft({
+                gitea: {
+                  ...configDraft!.gitea,
+                  default_branch: value.trim() || null,
+                },
+              })
+            }
+            placeholder={t('settings.gitea.defaultBranch.placeholder')}
+          />
+        </SettingsField>
+
+        <div className="border-t border-primary pt-base mt-base">
+          <p className="text-sm font-medium text-normal">
+            {t('settings.gitea.token.title')}
+          </p>
+          <p className="text-sm text-low">
+            {t('settings.gitea.token.description')}
+          </p>
+          <p className="text-sm text-low mt-half">
+            {t('settings.gitea.token.hint')}
+          </p>
+          <pre className="overflow-x-auto rounded-sm border border-border/50 bg-secondary/30 p-3 text-xs text-normal">
+            {t('settings.gitea.token.example')}
+          </pre>
+        </div>
+      </SettingsCard>
+
+      {/* Config save bar for Git/Gitea */}
+      <SettingsSaveBar
+        show={configHasUnsavedChanges}
+        saving={configSaving}
+        saveDisabled={!!branchPrefixError}
+        onSave={handleConfigSave}
+        onDiscard={handleConfigDiscard}
+      />
     </>
   );
 }

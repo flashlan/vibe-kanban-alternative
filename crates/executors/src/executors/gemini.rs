@@ -18,7 +18,7 @@ use crate::{
         StandardCodingAgentExecutor,
     },
     logs::utils::patch,
-    model_selector::{ModelInfo, ModelSelectorConfig, PermissionPolicy},
+    model_selector::{ModelSelectorConfig, PermissionPolicy},
     profile::ExecutorConfig,
 };
 
@@ -201,29 +201,15 @@ impl StandardCodingAgentExecutor for Gemini {
         _workdir: Option<&std::path::Path>,
         _repo_path: Option<&std::path::Path>,
     ) -> Result<futures::stream::BoxStream<'static, json_patch::Patch>, ExecutorError> {
+        // `gemini` isn't available in this dev environment to verify a real
+        // query command, and this list already drifted (preview ids get
+        // retired/renamed frequently). Leave blank until a real discovery
+        // command is wired up (or confirmed not to exist for this CLI); the
+        // model selector's free-text field still lets a user type their own
+        // id.
         let options = ExecutorDiscoveredOptions {
             model_selector: ModelSelectorConfig {
-                models: vec![
-                    ModelInfo {
-                        id: "gemini-3.1-pro-preview".to_string(),
-                        name: "Gemini 3.1 Pro Preview".to_string(),
-                        provider_id: None,
-                        reasoning_options: vec![],
-                    },
-                    ModelInfo {
-                        id: "gemini-3-pro-preview".to_string(),
-                        name: "Gemini 3 Pro".to_string(),
-                        provider_id: None,
-                        reasoning_options: vec![],
-                    },
-                    ModelInfo {
-                        id: "gemini-3-flash-preview".to_string(),
-                        name: "Gemini 3 Flash".to_string(),
-                        provider_id: None,
-                        reasoning_options: vec![],
-                    },
-                ],
-                default_model: Some("gemini-3-pro-preview".to_string()),
+                models: Vec::new(),
                 permissions: vec![PermissionPolicy::Auto, PermissionPolicy::Supervised],
                 ..Default::default()
             },

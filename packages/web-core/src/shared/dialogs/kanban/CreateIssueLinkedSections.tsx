@@ -8,6 +8,13 @@ import { CollapsibleSectionHeader } from '@vibe/ui/components/CollapsibleSection
 interface CreateIssueLinkedSectionsProps {
   projectId: string;
   issueId: string | null;
+  /** Called right before navigating away (e.g. once the Workspaces
+   *  section's inline composer creates a workspace and jumps to its
+   *  session view) so the enclosing modal can close itself first —
+   *  otherwise it stays open on top of the destination. When a workspace
+   *  was just created, its id is passed so the caller can fold it into
+   *  its own resolution instead of racing the composer's navigation. */
+  onNavigateAway?: (createdWorkspaceId?: string) => void;
 }
 
 function Placeholder({
@@ -42,6 +49,7 @@ function Placeholder({
 export function CreateIssueLinkedSections({
   projectId,
   issueId,
+  onNavigateAway,
 }: CreateIssueLinkedSectionsProps) {
   const { t } = useTranslation('common');
 
@@ -82,6 +90,7 @@ export function CreateIssueLinkedSections({
         <IssueWorkspacesSectionContainer
           projectId={projectId}
           issueId={issueId}
+          onNavigateAway={onNavigateAway}
         />
         <IssueRelationshipsSectionContainer
           projectId={projectId}

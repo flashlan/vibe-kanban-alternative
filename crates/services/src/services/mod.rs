@@ -9,7 +9,6 @@ pub mod file_ranker;
 pub mod file_search;
 pub mod filesystem;
 pub mod filesystem_watcher;
-pub mod mem0;
 pub mod notification;
 pub mod opencode_agents;
 pub mod orchestrator_compactor;

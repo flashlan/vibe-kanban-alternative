@@ -2039,12 +2039,6 @@ impl LocalContainerService {
                     exec_id,
                     self.db.clone(),
                 );
-                services::services::mem0::spawn_memory_tracker(
-                    store.clone(),
-                    ctx.workspace.id,
-                    exec_id,
-                    self.db.clone(),
-                );
                 services::services::review_request::spawn_review_request_tracker(
                     store,
                     exec_id,

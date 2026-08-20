@@ -440,7 +440,11 @@ export function useCreateModeState({
       type: 'SET_REPOS_IF_EMPTY',
       repos: preferredRepos.map((repo) => ({
         repo,
-        targetBranch: repo.target_branch || null,
+        // Fall back to the repo's own configured default branch (Settings >
+        // Repositories) when no workspace/project-scoped branch preference
+        // exists — otherwise the branch field is left unselected and blocks
+        // Create with an easy-to-miss validation error.
+        targetBranch: repo.target_branch || repo.default_target_branch || null,
       })),
     });
   }, [
@@ -492,7 +496,17 @@ export function useCreateModeState({
         const selectedRepos = scratchDefaults.flatMap((d) => {
           const repo = reposById.get(d.repo_id);
           if (!repo) return [];
-          return [{ repo, targetBranch: d.target_branch || null }];
+          // Same fallback as the workspace-defaults path above: the project
+          // scratch default only ever carries a repo (never a branch — see
+          // ProjectRepoSection), so fall back to the repo's own configured
+          // default branch instead of leaving it unselected.
+          return [
+            {
+              repo,
+              targetBranch:
+                d.target_branch || repo.default_target_branch || null,
+            },
+          ];
         });
 
         if (selectedRepos.length > 0) {

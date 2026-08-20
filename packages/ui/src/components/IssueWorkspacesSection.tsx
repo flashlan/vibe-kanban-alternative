@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   IssueWorkspaceCard,
@@ -19,6 +20,9 @@ export interface IssueWorkspacesSectionProps {
   onUnlinkWorkspace?: (localWorkspaceId: string) => void;
   onDeleteWorkspace?: (localWorkspaceId: string) => void;
   shouldAnimateCreateButton?: boolean;
+  /** When set, renders this in place of the plain draft card — e.g. the
+   *  full create-workspace composer embedded inline. */
+  quickCreateContent?: ReactNode;
 }
 
 /**
@@ -35,6 +39,7 @@ export function IssueWorkspacesSection({
   onUnlinkWorkspace,
   onDeleteWorkspace,
   shouldAnimateCreateButton = false,
+  quickCreateContent,
 }: IssueWorkspacesSectionProps) {
   const { t } = useTranslation('common');
 
@@ -49,10 +54,14 @@ export function IssueWorkspacesSection({
         {isLoading ? (
           <p className="text-low py-half">{t('workspaces.loading')}</p>
         ) : workspaces.length === 0 ? (
-          <IssueWorkspaceCreateCard
-            onClick={onCreateWorkspace}
-            shouldAnimateCreateButton={shouldAnimateCreateButton}
-          />
+          quickCreateContent ? (
+            quickCreateContent
+          ) : (
+            <IssueWorkspaceCreateCard
+              onClick={onCreateWorkspace}
+              shouldAnimateCreateButton={shouldAnimateCreateButton}
+            />
+          )
         ) : (
           workspaces.map((workspace) => {
             const { localWorkspaceId } = workspace;

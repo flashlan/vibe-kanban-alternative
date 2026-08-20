@@ -597,10 +597,24 @@ async fn update_issue(
     Ok(mutated(to_api_issue(issue)))
 }
 
+#[derive(Debug, Deserialize)]
+struct DeleteIssueQuery {
+    /// Also delete the on-disk worktrees/workspace dirs of the issue's
+    /// linked workspaces (and their branches) — see
+    /// `local_kanban::delete_issue_workspaces`. Off by default: an MCP
+    /// caller must opt in, since there's no interactive confirmation here.
+    #[serde(default)]
+    cleanup_workspaces: Option<bool>,
+}
+
 async fn delete_issue(
     State(deployment): State<DeploymentImpl>,
     Path(id): Path<Uuid>,
+    Query(q): Query<DeleteIssueQuery>,
 ) -> Result<ResponseJson<ApiResponse<()>>, ApiError> {
+    if q.cleanup_workspaces.unwrap_or(false) {
+        super::local_kanban::delete_issue_workspaces(&deployment, id).await?;
+    }
     DbIssue::delete(&deployment.db().pool, id).await?;
     Ok(ok(()))
 }

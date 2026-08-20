@@ -74,21 +74,15 @@ impl PtyService {
             let shell_name = shell.file_name().and_then(|n| n.to_str()).unwrap_or("");
 
             if shell_name == "powershell.exe" || shell_name == "pwsh.exe" {
+                cmd.arg("-l");
                 // PowerShell: use -NoLogo for cleaner startup
                 cmd.arg("-NoLogo");
             } else if shell_name == "cmd.exe" {
-                // cmd.exe: no special args needed
+                // cmd.exe: no special args needed (no login-mode flag)
             } else {
-                // Unix shells
+                cmd.arg("-l");
+                // Unix shells — login mode loads .zshrc/.bashrc/.profile
                 cmd.env("VIBE_KANBAN_TERMINAL", "1");
-
-                if shell_name == "bash" {
-                    cmd.env("PROMPT_COMMAND", r#"PS1='$ '; unset PROMPT_COMMAND"#);
-                } else if shell_name == "zsh" {
-                    // PROMPT is set after spawning
-                } else {
-                    cmd.env("PS1", "$ ");
-                }
             }
 
             cmd.env("TERM", "xterm-256color");
@@ -103,13 +97,6 @@ impl PtyService {
                 .master
                 .take_writer()
                 .map_err(|e| PtyError::CreateFailed(e.to_string()))?;
-
-            if shell_name == "zsh" {
-                let _ = writer.write_all(b" PROMPT='$ '; RPROMPT=''\n");
-                let _ = writer.flush();
-                let _ = writer.write_all(b"\x0c");
-                let _ = writer.flush();
-            }
 
             let mut reader = pty_pair
                 .master

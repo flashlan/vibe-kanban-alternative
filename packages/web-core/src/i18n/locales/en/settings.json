@@ -21,12 +21,10 @@
         "pipelineDesc": "Per-card pipeline stages",
         "recurrent": "Routines",
         "recurrentDesc": "Scheduled recurring agent runs",
-        "projects": "Projects",
-        "projectsDesc": "Project repositories and configuration",
         "repos": "Repositories",
         "reposDesc": "Repository scripts and configuration",
-        "agents": "Agents",
-        "agentsDesc": "Coding agent configurations",
+        "agents": "Coding Agent CLI",
+        "agentsDesc": "Coding agent CLI configurations",
         "mcp": "MCP Servers",
         "mcpDesc": "Model Context Protocol servers",
         "telegram": "Telegram",
@@ -415,28 +413,28 @@
       }
     },
     "agents": {
-      "title": "Coding Agent Configurations",
-      "description": "Customize the behavior of coding agents with different configurations.",
-      "loading": "Loading agent configurations...",
-      "selectAgent": "Select agent",
+      "title": "Coding Agent CLI Configurations",
+      "description": "Customize the behavior of each coding agent CLI with different configurations.",
+      "loading": "Loading coding agent CLI configurations...",
+      "selectAgent": "Select CLI",
       "save": {
-        "button": "Save Agent Configurations",
+        "button": "Save Coding Agent CLI Configurations",
         "success": "✓ Executor configurations saved successfully!",
         "unsavedChanges": "• You have unsaved changes"
       },
       "availability": {
         "checking": "Checking...",
         "checkingAvailability": "Checking availability...",
-        "available": "Agent available",
-        "notFoundSimple": "Agent not found",
+        "available": "CLI available",
+        "notFoundSimple": "CLI not found",
         "loginDetected": "Recent Usage Detected",
-        "loginDetectedTooltip": "Recent authentication credentials found for this agent",
+        "loginDetectedTooltip": "Recent authentication credentials found for this CLI",
         "installationFound": "Previous Usage Detected",
-        "installationFoundTooltip": "Agent configuration found. You may need to log in to use it."
+        "installationFoundTooltip": "CLI configuration found. You may need to log in to use it."
       },
       "editor": {
         "formLabel": "Edit JSON",
-        "agentLabel": "Agent",
+        "agentLabel": "CLI",
         "agentPlaceholder": "Select executor type",
         "configLabel": "Configuration",
         "configPlaceholder": "Select configuration",
@@ -446,14 +444,14 @@
         "deleteText": "Delete",
         "makeDefault": "Make Default",
         "isDefault": "Default",
-        "jsonLabel": "Agent Configuration (JSON)",
+        "jsonLabel": "CLI Configuration (JSON)",
         "jsonPlaceholder": "Loading profiles...",
         "jsonLoading": "Loading...",
         "pathLabel": "Configuration file location:"
       },
       "errors": {
         "deleteFailed": "Failed to delete configuration. Please try again.",
-        "saveFailed": "Failed to save agent configurations. Please try again.",
+        "saveFailed": "Failed to save coding agent CLI configurations. Please try again.",
         "saveConfigFailed": "Failed to save configuration. Please try again.",
         "schemaNotFound": "Schema not found for executor type: {{executor}}"
       },
@@ -476,9 +474,9 @@
       "loading": "Loading MCP configuration...",
       "applying": "Applying configuration...",
       "labels": {
-        "agent": "Agent",
+        "agent": "CLI",
         "agentPlaceholder": "Select executor",
-        "agentHelper": "Choose which agent to configure MCP servers for.",
+        "agentHelper": "Choose which coding agent CLI to configure MCP servers for.",
         "serverConfig": "Server Configuration (JSON)",
         "popularServers": "Popular servers",
         "serverHelper": "Click a card to insert that MCP Server into the JSON above.",

@@ -222,7 +222,12 @@ export function KeyboardCommandsPlugin({
         }
 
         if (event.key === 'ArrowUp') {
-          if (event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) {
+          if (
+            event.shiftKey ||
+            event.altKey ||
+            event.metaKey ||
+            event.ctrlKey
+          ) {
             return false;
           }
 
@@ -289,7 +294,12 @@ export function KeyboardCommandsPlugin({
         }
 
         if (event.key === 'ArrowDown') {
-          if (event.shiftKey || event.altKey || event.metaKey || event.ctrlKey) {
+          if (
+            event.shiftKey ||
+            event.altKey ||
+            event.metaKey ||
+            event.ctrlKey
+          ) {
             return false;
           }
 

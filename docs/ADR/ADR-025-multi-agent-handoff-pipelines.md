@@ -51,13 +51,13 @@ prompt = "Review the branch diff against base, check for security and logic regr
 ### 2. Workspace as the Single Source of Truth
 All agents assigned to a card operate inside the **same linked Git worktree** (`.vibe-kanban/worktrees/<card-id>`). Handoff context is anchored in durable, structured files:
 - `SPEC.md` & `IMPLEMENTATION_PLAN.md` at the workspace root.
-- Persistent project memory via `mem0` (`VK-MEMORY:` facts and `memory_search` recall).
+- Persistent project memory via `mem0`, recalled and written agentically through the `memory_search` / `memory_save` MCP tools (see [ADR-028](ADR-028-mem0-agentic-recall.md)).
 - Git branch history (staged and committed diffs).
 
 ### 3. Clean Context Bridging & Handoff Watchdog
 When an agent finishes its designated stage (signaled by `VK-PIPELINE-STAGE: <next>` or task completion):
 - The backend cleanly terminates the current agent's process.
-- The next stage's agent is spawned with a fresh context window, receiving the target stage prompt, the path to `IMPLEMENTATION_PLAN.md`, and the `mem0` recall block.
+- The next stage's agent is spawned with a fresh context window, receiving the target stage prompt and the path to `IMPLEMENTATION_PLAN.md`; it recalls `mem0` memory itself via `memory_search` when needed (see [ADR-028](ADR-028-mem0-agentic-recall.md)).
 - Raw transcript history from earlier stages is omitted from the incoming agent's prompt, preventing context rot while guaranteeing that all architectural decisions and plans are preserved.
 
 ### 4. UI Timeline & Stepper

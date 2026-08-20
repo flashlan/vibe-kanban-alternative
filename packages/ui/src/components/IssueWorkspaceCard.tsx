@@ -153,13 +153,23 @@ export function IssueWorkspaceCard({
         <div className="flex items-center gap-half min-w-0">
           {isRunning && <RunningDots />}
           {!isRunning && isFailed && (
-            <TriangleIcon className="size-icon-xs text-error shrink-0" weight="fill" />
+            <TriangleIcon
+              className="size-icon-xs text-error shrink-0"
+              weight="fill"
+            />
           )}
           {hasUnseenActivity && !isRunning && !isFailed && (
-            <CircleIcon className="size-icon-xs text-brand shrink-0" weight="fill" />
+            <CircleIcon
+              className="size-icon-xs text-brand shrink-0"
+              weight="fill"
+            />
           )}
-          <span className="text-sm text-high truncate">{workspace.name ?? workspace.id}</span>
-          <span className="text-xs text-low whitespace-nowrap shrink-0">{timeAgo}</span>
+          <span className="text-sm text-high truncate">
+            {workspace.name ?? workspace.id}
+          </span>
+          <span className="text-xs text-low whitespace-nowrap shrink-0">
+            {timeAgo}
+          </span>
         </div>
       </IssueWorkspaceCardContainer>
     );
