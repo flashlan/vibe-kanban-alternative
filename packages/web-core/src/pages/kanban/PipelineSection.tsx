@@ -458,11 +458,31 @@ export interface PipelineProgressProps {
  * list parsed from the description (M). Rendered in the issue panel's edit
  * mode; purely presentational, never mutates anything.
  */
+const PIPELINE_PROGRESS_COLLAPSED_KEY = 'vk-kanban-pipeline-progress-collapsed';
+
 export function PipelineProgress({
   stages,
   currentStage,
 }: PipelineProgressProps) {
   const { t } = useTranslation('common');
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem(PIPELINE_PROGRESS_COLLAPSED_KEY) === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        PIPELINE_PROGRESS_COLLAPSED_KEY,
+        String(isCollapsed)
+      );
+    } catch {
+      // localStorage may be unavailable
+    }
+  }, [isCollapsed]);
 
   if (stages.length === 0) return null;
 
@@ -478,57 +498,70 @@ export function PipelineProgress({
 
   return (
     <div className="p-base border-t space-y-half">
-      <p className="text-xs font-medium text-high">
-        {t('cardPipeline.progressTitle')}
-        {': '}
-        {currentStage !== null
-          ? t('cardPipeline.progressHeader', {
-              n: currentStage,
-              total,
-              label: currentLabel,
-            })
-          : t('cardPipeline.progressNotStarted', { total })}
-      </p>
-      <ol className="flex flex-col gap-half">
-        {stages.map((stage) => {
-          const state: 'done' | 'current' | 'pending' =
-            clamped === null
-              ? 'pending'
-              : stage.index < clamped
-                ? 'done'
-                : stage.index === clamped
-                  ? 'current'
-                  : 'pending';
-          return (
-            <li
-              key={stage.index}
-              className={cn(
-                'flex items-center gap-half text-sm',
-                state === 'done' && 'text-low',
-                state === 'current' && 'text-high font-medium',
-                state === 'pending' && 'text-low'
-              )}
-            >
-              {state === 'done' ? (
-                <CheckCircleIcon
-                  className="size-icon-sm shrink-0 text-success"
-                  weight="fill"
-                />
-              ) : state === 'current' ? (
-                <ArrowRightIcon
-                  className="size-icon-sm shrink-0 text-brand"
-                  weight="bold"
-                />
-              ) : (
-                <CircleIcon className="size-icon-sm shrink-0" />
-              )}
-              <span className={cn(state === 'done' && 'line-through')}>
-                {stage.index}. {stage.label}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
+      <button
+        type="button"
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className="flex items-center gap-half text-xs font-medium text-high hover:text-normal transition-colors"
+      >
+        {isCollapsed ? (
+          <CaretRightIcon className="size-icon-sm" weight="bold" />
+        ) : (
+          <CaretDownIcon className="size-icon-sm" weight="bold" />
+        )}
+        <span>
+          {t('cardPipeline.progressTitle')}
+          {': '}
+          {currentStage !== null
+            ? t('cardPipeline.progressHeader', {
+                n: currentStage,
+                total,
+                label: currentLabel,
+              })
+            : t('cardPipeline.progressNotStarted', { total })}
+        </span>
+      </button>
+      {!isCollapsed && (
+        <ol className="flex flex-col gap-half">
+          {stages.map((stage) => {
+            const state: 'done' | 'current' | 'pending' =
+              clamped === null
+                ? 'pending'
+                : stage.index < clamped
+                  ? 'done'
+                  : stage.index === clamped
+                    ? 'current'
+                    : 'pending';
+            return (
+              <li
+                key={stage.index}
+                className={cn(
+                  'flex items-center gap-half text-sm',
+                  state === 'done' && 'text-low',
+                  state === 'current' && 'text-high font-medium',
+                  state === 'pending' && 'text-low'
+                )}
+              >
+                {state === 'done' ? (
+                  <CheckCircleIcon
+                    className="size-icon-sm shrink-0 text-success"
+                    weight="fill"
+                  />
+                ) : state === 'current' ? (
+                  <ArrowRightIcon
+                    className="size-icon-sm shrink-0 text-brand"
+                    weight="bold"
+                  />
+                ) : (
+                  <CircleIcon className="size-icon-sm shrink-0" />
+                )}
+                <span className={cn(state === 'done' && 'line-through')}>
+                  {stage.index}. {stage.label}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
     </div>
   );
 }
