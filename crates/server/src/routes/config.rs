@@ -542,18 +542,26 @@ async fn get_agent_models(
 
     let base_agent = match BaseCodingAgent::from_str(&query.executor.to_uppercase()) {
         Ok(a) => a,
-        Err(_) => match query.executor.to_lowercase().as_str() {
-            "antigravity" | "gemini" => BaseCodingAgent::Antigravity,
-            "claude" | "claude_code" | "claude-code" => BaseCodingAgent::ClaudeCode,
-            "codex" => BaseCodingAgent::Codex,
-            "opencode" => BaseCodingAgent::Opencode,
-            "qwen" | "qwen_code" | "qwen-code" => BaseCodingAgent::QwenCode,
-            "droid" => BaseCodingAgent::Droid,
-            "cursor" | "cursor_agent" | "cursor-agent" => BaseCodingAgent::CursorAgent,
-            "copilot" => BaseCodingAgent::Copilot,
-            "amp" => BaseCodingAgent::Amp,
-            _ => return ResponseJson(ApiResponse::success(Vec::new())),
-        },
+        Err(_) => {
+            match query
+                .executor
+                .to_lowercase()
+                .replace(['-', '_'], "")
+                .as_str()
+            {
+                "antigravity" => BaseCodingAgent::Antigravity,
+                "gemini" => BaseCodingAgent::Gemini,
+                "claude" | "claudecode" => BaseCodingAgent::ClaudeCode,
+                "codex" => BaseCodingAgent::Codex,
+                "opencode" => BaseCodingAgent::Opencode,
+                "qwen" | "qwencode" => BaseCodingAgent::QwenCode,
+                "droid" => BaseCodingAgent::Droid,
+                "cursor" | "cursoragent" => BaseCodingAgent::CursorAgent,
+                "copilot" => BaseCodingAgent::Copilot,
+                "amp" => BaseCodingAgent::Amp,
+                _ => return ResponseJson(ApiResponse::success(Vec::new())),
+            }
+        }
     };
 
     let profile_id = ExecutorProfileId::new(base_agent);
@@ -567,28 +575,63 @@ async fn get_agent_models(
         use futures_util::StreamExt;
         while let Some(patch) = stream.next().await {
             for op in patch.0 {
-                if let json_patch::PatchOperation::Add(add_op) = op {
-                    if add_op.path.starts_with("/model_selector/models") {
+                let value_opt = match &op {
+                    json_patch::PatchOperation::Add(op) => Some((&op.path, &op.value)),
+                    json_patch::PatchOperation::Replace(op) => Some((&op.path, &op.value)),
+                    _ => None,
+                };
+                if let Some((path, val)) = value_opt {
+                    if path == "/options" {
+                        if let Ok(opts) = serde_json::from_value::<
+                            executors::executor_discovery::ExecutorDiscoveredOptions,
+                        >(val.clone())
+                        {
+                            for m in opts.model_selector.models {
+                                if !models_out
+                                    .iter()
+                                    .any(|existing: &DiscoveredModelEntry| existing.id == m.id)
+                                {
+                                    models_out.push(DiscoveredModelEntry {
+                                        id: m.id,
+                                        name: m.name,
+                                        provider: m.provider_id,
+                                    });
+                                }
+                            }
+                        }
+                    } else if path.starts_with("/options/model_selector/models")
+                        || path.starts_with("/model_selector/models")
+                    {
                         if let Ok(model_list) = serde_json::from_value::<
                             Vec<executors::model_selector::ModelInfo>,
-                        >(add_op.value.clone())
+                        >(val.clone())
                         {
                             for m in model_list {
-                                models_out.push(DiscoveredModelEntry {
-                                    id: m.id,
-                                    name: m.name,
-                                    provider: m.provider_id,
-                                });
+                                if !models_out
+                                    .iter()
+                                    .any(|existing: &DiscoveredModelEntry| existing.id == m.id)
+                                {
+                                    models_out.push(DiscoveredModelEntry {
+                                        id: m.id,
+                                        name: m.name,
+                                        provider: m.provider_id,
+                                    });
+                                }
                             }
                         } else if let Ok(model) = serde_json::from_value::<
                             executors::model_selector::ModelInfo,
-                        >(add_op.value)
+                        >(val.clone())
                         {
-                            models_out.push(DiscoveredModelEntry {
-                                id: model.id,
-                                name: model.name,
-                                provider: model.provider_id,
-                            });
+                            if !models_out
+                                .iter()
+                                .any(|existing: &DiscoveredModelEntry| existing.id == model.id)
+                            {
+                                models_out.push(DiscoveredModelEntry {
+                                    id: model.id,
+                                    name: model.name,
+                                    provider: model.provider_id,
+                                });
+                            }
                         }
                     }
                 }

@@ -8,6 +8,7 @@ import { BaseCodingAgent } from 'shared/types';
 import { settingsRjsfTheme } from './rjsf/theme';
 import { SettingsSaveBar } from './SettingsComponents';
 import { useModelSelectorConfig } from '@/shared/hooks/useExecutorDiscovery';
+import { configApi } from '@/shared/lib/api';
 
 interface ExecutorConfigFormProps {
   executor: BaseCodingAgent;
@@ -38,8 +39,52 @@ export function ExecutorConfigForm({
     RJSFValidationError[]
   >([]);
 
-  const { config: discoveredConfig, loadingModels } =
+  const { config: discoveredConfig, loadingModels: streamLoading } =
     useModelSelectorConfig(executor);
+  const [httpModels, setHttpModels] = useState<
+    Array<{ id: string; name: string; provider?: string }>
+  >([]);
+  const [httpLoading, setHttpLoading] = useState(false);
+
+  useEffect(() => {
+    if (!executor) return;
+    let cancelled = false;
+    setHttpLoading(true);
+    configApi
+      .getAgentModels(executor)
+      .then((res) => {
+        if (!cancelled && res && res.length > 0) {
+          setHttpModels(
+            res.map((m) => ({
+              id: m.id,
+              name: m.name || m.id,
+              provider: m.provider,
+            }))
+          );
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setHttpLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [executor]);
+
+  const allDiscoveredModels = useMemo(() => {
+    if (discoveredConfig?.models && discoveredConfig.models.length > 0) {
+      return discoveredConfig.models.map((m) => ({
+        id: m.id,
+        name: m.name || m.id,
+        provider: m.provider_id,
+      }));
+    }
+    return httpModels;
+  }, [discoveredConfig?.models, httpModels]);
+
+  const loadingModels =
+    streamLoading && httpLoading && allDiscoveredModels.length === 0;
 
   const baseSchema = useMemo(() => {
     return schemas[executor];
@@ -47,15 +92,14 @@ export function ExecutorConfigForm({
 
   const dynamicSchema = useMemo(() => {
     if (!baseSchema) return null;
-    if (!discoveredConfig?.models || discoveredConfig.models.length === 0) {
+    if (allDiscoveredModels.length === 0) {
       return baseSchema;
     }
 
     try {
       const cloned = JSON.parse(JSON.stringify(baseSchema));
-      const modelList = discoveredConfig.models;
-      const modelIds = modelList.map((m) => m.id);
-      const modelNames = modelList.map((m) => m.name || m.id);
+      const modelIds = allDiscoveredModels.map((m) => m.id);
+      const modelNames = allDiscoveredModels.map((m) => m.name || m.id);
 
       if (cloned.properties?.model) {
         cloned.properties.model.enum = [null, ...modelIds];
@@ -75,7 +119,7 @@ export function ExecutorConfigForm({
     } catch {
       return baseSchema;
     }
-  }, [baseSchema, discoveredConfig?.models]);
+  }, [baseSchema, allDiscoveredModels]);
 
   // Custom handler for env field updates
   const handleEnvChange = useCallback(
@@ -152,20 +196,20 @@ export function ExecutorConfigForm({
             <span className="inline-block size-1.5 rounded-full bg-yellow-500 animate-ping" />
             Querying {executor} models...
           </span>
-        ) : discoveredConfig?.models?.length ? (
+        ) : allDiscoveredModels.length > 0 ? (
           <span className="text-green-500 font-medium font-mono">
-            ● {discoveredConfig.models.length} models discovered from {executor}
+            ● {allDiscoveredModels.length} models discovered from {executor}
           </span>
         ) : (
           <span className="text-low font-mono">Using default CLI config</span>
         )}
       </div>
 
-      {discoveredConfig?.models && discoveredConfig.models.length > 0 ? (
+      {allDiscoveredModels.length > 0 ? (
         <div className="bg-panel/40 border border-border/60 p-3 rounded-sm space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-high uppercase tracking-wide">
-              Discovered Models ({discoveredConfig.models.length})
+              Discovered Models ({allDiscoveredModels.length})
             </span>
             <span className="text-[11px] text-low">
               Click to select model for this profile
@@ -190,7 +234,7 @@ export function ExecutorConfigForm({
             >
               Default (Latest)
             </button>
-            {discoveredConfig.models.map((m) => {
+            {allDiscoveredModels.map((m) => {
               const isSelected = currentModel === m.id;
               return (
                 <button

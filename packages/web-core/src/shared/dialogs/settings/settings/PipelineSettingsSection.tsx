@@ -18,7 +18,7 @@ import {
   type PipelineFileStatus,
   type PipelineValidation,
 } from 'shared/types';
-import { pipelinesApi } from '@/shared/lib/api';
+import { configApi, pipelinesApi } from '@/shared/lib/api';
 import { useModelSelectorConfig } from '@/shared/hooks/useExecutorDiscovery';
 import { PrimaryButton } from '@vibe/ui/components/PrimaryButton';
 import { IconButton } from '@vibe/ui/components/IconButton';
@@ -178,12 +178,43 @@ function StageModelInput({
   onChange: (newModel: string | undefined) => void;
 }) {
   const baseAgent = useMemo(() => parseBaseCodingAgent(executor), [executor]);
-  const { config, loadingModels } = useModelSelectorConfig(baseAgent);
+  const { config, loadingModels: streamLoading } =
+    useModelSelectorConfig(baseAgent);
+  const [httpModels, setHttpModels] = useState<string[]>([]);
+  const [httpLoading, setHttpLoading] = useState(false);
+
+  useEffect(() => {
+    if (!executor) {
+      setHttpModels([]);
+      return;
+    }
+    let cancelled = false;
+    setHttpLoading(true);
+    configApi
+      .getAgentModels(executor)
+      .then((res) => {
+        if (!cancelled && res && res.length > 0) {
+          setHttpModels(res.map((m) => m.id));
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setHttpLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [executor]);
 
   const availableModels = useMemo(() => {
-    return (config?.models ?? []).map((m) => m.id);
-  }, [config?.models]);
+    if (config?.models && config.models.length > 0) {
+      return config.models.map((m) => m.id);
+    }
+    return httpModels;
+  }, [config?.models, httpModels]);
 
+  const loadingModels =
+    streamLoading && httpLoading && availableModels.length === 0;
   const isLive = Boolean(availableModels.length > 0);
 
   return (
@@ -191,7 +222,7 @@ function StageModelInput({
       <div className="flex items-center justify-between mb-1">
         <label className="block text-low">Model (Live CLI Discovery)</label>
         {loadingModels ? (
-          <span className="text-[10px] text-yellow-500 animate-pulse font-mono flex items-center gap-1">
+          <span className="text-yellow-500 animate-pulse font-mono flex items-center gap-1">
             <span className="inline-block size-1.5 rounded-full bg-yellow-500 animate-ping" />
             Querying CLI...
           </span>
