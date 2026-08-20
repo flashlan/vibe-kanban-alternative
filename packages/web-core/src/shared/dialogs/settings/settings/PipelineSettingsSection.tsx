@@ -469,515 +469,584 @@ export function PipelineSettingsSection() {
 
                   {isOpen && (
                     <div className="space-y-3 pt-2 border-t border-border/50">
-                      {/* Editor Mode Selector */}
-                      <div className="flex items-center justify-between">
-                        <div className="inline-flex rounded-sm border border-border bg-panel p-0.5 text-xs">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setEditorModeById((prev) => ({
-                                ...prev,
-                                [s.id]: 'visual',
-                              }))
-                            }
-                            className={cn(
-                              'flex items-center gap-1 px-2 py-1 rounded-sm font-medium transition-colors',
-                              editorMode === 'visual'
-                                ? 'bg-brand/15 text-brand shadow-xs'
-                                : 'text-low hover:text-high'
-                            )}
-                          >
-                            <SlidersHorizontalIcon className="size-3.5" />
-                            Visual Form
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setEditorModeById((prev) => ({
-                                ...prev,
-                                [s.id]: 'raw',
-                              }))
-                            }
-                            className={cn(
-                              'flex items-center gap-1 px-2 py-1 rounded-sm font-medium transition-colors',
-                              editorMode === 'raw'
-                                ? 'bg-brand/15 text-brand shadow-xs'
-                                : 'text-low hover:text-high'
-                            )}
-                          >
-                            <CodeIcon className="size-3.5" />
-                            Raw TOML
-                          </button>
+                      {draftById[s.id] === undefined ? (
+                        <div className="flex items-center gap-2 py-4 text-xs text-low">
+                          <SpinnerIcon className="size-4 animate-spin text-brand" />
+                          <span>Loading pipeline definition...</span>
                         </div>
-                      </div>
-
-                      {editorMode === 'visual' && parsedData ? (
-                        <div className="space-y-4">
-                          {/* Pipeline Meta */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 rounded-sm border border-border bg-panel/60">
-                            <div>
-                              <label className="block text-xs font-medium text-low mb-1">
-                                Pipeline Name
-                              </label>
-                              <input
-                                type="text"
-                                value={parsedData.name}
-                                onChange={(e) =>
-                                  updateVisualPipeline(s.id, (prev) => ({
-                                    ...prev,
-                                    name: e.target.value,
-                                  }))
-                                }
-                                className="w-full text-sm rounded-sm border border-border bg-secondary px-2.5 py-1.5 text-high focus:outline-hidden focus:ring-1 focus:ring-brand"
-                                placeholder="e.g. Swarm Multi-Agent"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-xs font-medium text-low mb-1">
-                                Description
-                              </label>
-                              <input
-                                type="text"
-                                value={parsedData.description ?? ''}
-                                onChange={(e) =>
-                                  updateVisualPipeline(s.id, (prev) => ({
-                                    ...prev,
-                                    description: e.target.value,
-                                  }))
-                                }
-                                className="w-full text-sm rounded-sm border border-border bg-secondary px-2.5 py-1.5 text-high focus:outline-hidden focus:ring-1 focus:ring-brand"
-                                placeholder="Describe what this pipeline does"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Stages List */}
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-semibold text-high uppercase tracking-wider">
-                                Stages (
-                                {parsedData.stage ? parsedData.stage.length : 0}
-                                )
-                              </span>
+                      ) : (
+                        <>
+                          {/* Prominent Editor Mode Selector */}
+                          <div className="flex items-center justify-between bg-secondary/40 p-2 rounded-sm border border-border">
+                            <span className="text-xs font-semibold text-high uppercase tracking-wide">
+                              Editor Mode
+                            </span>
+                            <div className="inline-flex rounded-sm border border-border bg-panel p-0.5 text-xs shadow-xs">
                               <button
                                 type="button"
                                 onClick={() =>
-                                  updateVisualPipeline(s.id, (prev) => ({
+                                  setEditorModeById((prev) => ({
                                     ...prev,
-                                    stage: [
-                                      ...(prev.stage ?? []),
-                                      {
-                                        id: `stage-${(prev.stage?.length ?? 0) + 1}`,
-                                        label: `New Stage ${(prev.stage?.length ?? 0) + 1}`,
-                                        default_enabled: true,
-                                        heavy: false,
-                                        executor: '',
-                                        model: '',
-                                        prompt:
-                                          'Write your instructions here...',
-                                      },
-                                    ],
+                                    [s.id]: 'visual',
                                   }))
                                 }
-                                className="flex items-center gap-1 text-xs text-brand font-medium hover:underline"
+                                className={cn(
+                                  'flex items-center gap-1.5 px-3 py-1 rounded-sm font-medium transition-all cursor-pointer',
+                                  editorMode === 'visual'
+                                    ? 'bg-brand text-white shadow-xs font-semibold'
+                                    : 'text-low hover:text-high hover:bg-secondary'
+                                )}
                               >
-                                <PlusIcon className="size-3.5" />
-                                Add Custom Stage
+                                <SlidersHorizontalIcon
+                                  className="size-3.5"
+                                  weight="bold"
+                                />
+                                Visual Form
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditorModeById((prev) => ({
+                                    ...prev,
+                                    [s.id]: 'raw',
+                                  }))
+                                }
+                                className={cn(
+                                  'flex items-center gap-1.5 px-3 py-1 rounded-sm font-medium transition-all cursor-pointer',
+                                  editorMode === 'raw'
+                                    ? 'bg-brand text-white shadow-xs font-semibold'
+                                    : 'text-low hover:text-high hover:bg-secondary'
+                                )}
+                              >
+                                <CodeIcon className="size-3.5" weight="bold" />
+                                Raw TOML
                               </button>
                             </div>
+                          </div>
 
-                            {parsedData.stage?.map((st, idx) => (
-                              <div
-                                key={st.id || idx}
-                                className="rounded-sm border border-border p-3 space-y-3 bg-panel/70 relative"
-                              >
-                                <div className="flex items-center justify-between gap-2 border-b border-border/50 pb-2">
-                                  <div className="flex items-center gap-2">
-                                    <span className="flex items-center justify-center size-5 rounded-full bg-brand/15 text-brand text-xs font-semibold">
-                                      {idx + 1}
-                                    </span>
-                                    <span className="text-sm font-medium text-high">
-                                      {st.label || st.id || `Stage ${idx + 1}`}
-                                    </span>
-                                  </div>
-
-                                  <div className="flex items-center gap-1">
-                                    <IconButton
-                                      icon={ArrowUpIcon}
-                                      aria-label="Move Up"
-                                      title="Move Up"
-                                      disabled={idx === 0}
-                                      onClick={() =>
-                                        updateVisualPipeline(s.id, (prev) => {
-                                          const nextStages = [
-                                            ...(prev.stage ?? []),
-                                          ];
-                                          const temp = nextStages[idx - 1];
-                                          nextStages[idx - 1] = nextStages[idx];
-                                          nextStages[idx] = temp;
-                                          return {
-                                            ...prev,
-                                            stage: nextStages,
-                                          };
-                                        })
-                                      }
-                                      className="size-6 text-low hover:text-high disabled:opacity-30"
-                                    />
-                                    <IconButton
-                                      icon={ArrowDownIcon}
-                                      aria-label="Move Down"
-                                      title="Move Down"
-                                      disabled={
-                                        idx ===
-                                        (parsedData.stage?.length ?? 0) - 1
-                                      }
-                                      onClick={() =>
-                                        updateVisualPipeline(s.id, (prev) => {
-                                          const nextStages = [
-                                            ...(prev.stage ?? []),
-                                          ];
-                                          const temp = nextStages[idx + 1];
-                                          nextStages[idx + 1] = nextStages[idx];
-                                          nextStages[idx] = temp;
-                                          return {
-                                            ...prev,
-                                            stage: nextStages,
-                                          };
-                                        })
-                                      }
-                                      className="size-6 text-low hover:text-high disabled:opacity-30"
-                                    />
-                                    <IconButton
-                                      icon={TrashIcon}
-                                      aria-label="Delete Stage"
-                                      title="Delete Stage"
-                                      onClick={() =>
-                                        updateVisualPipeline(s.id, (prev) => ({
-                                          ...prev,
-                                          stage: (prev.stage ?? []).filter(
-                                            (_, i) => i !== idx
-                                          ),
-                                        }))
-                                      }
-                                      className="size-6 text-error hover:bg-error/10"
-                                    />
-                                  </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-                                  <div>
-                                    <label className="flex items-center gap-1 text-low mb-1">
-                                      {isBundled ||
-                                      CORE_STAGE_IDS.has(st.id) ? (
-                                        <>
-                                          <LockIcon className="size-3 text-brand" />
-                                          <span>Stage ID (Protected)</span>
-                                        </>
-                                      ) : (
-                                        <span>Stage ID (Slug)</span>
-                                      )}
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={st.id}
-                                      disabled={
-                                        isBundled || CORE_STAGE_IDS.has(st.id)
-                                      }
-                                      readOnly={
-                                        isBundled || CORE_STAGE_IDS.has(st.id)
-                                      }
-                                      onChange={(e) => {
-                                        const cleanSlug = e.target.value
-                                          .toLowerCase()
-                                          .replace(/[^a-z0-9_-]/g, '-');
-                                        updateVisualPipeline(s.id, (prev) => {
-                                          const nextStages = [
-                                            ...(prev.stage ?? []),
-                                          ];
-                                          nextStages[idx] = {
-                                            ...nextStages[idx],
-                                            id: cleanSlug,
-                                          };
-                                          return {
-                                            ...prev,
-                                            stage: nextStages,
-                                          };
-                                        });
-                                      }}
-                                      className={cn(
-                                        'w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high',
-                                        (isBundled ||
-                                          CORE_STAGE_IDS.has(st.id)) &&
-                                          'cursor-not-allowed opacity-60 bg-panel font-mono text-[11px]'
-                                      )}
-                                      title={
-                                        isBundled || CORE_STAGE_IDS.has(st.id)
-                                          ? 'Stage ID is protected to ensure system and card compatibility.'
-                                          : 'Unique stage identifier slug'
-                                      }
-                                      placeholder="e.g. plan, code-review"
-                                    />
-                                  </div>
-
-                                  <div>
-                                    <label className="block text-low mb-1">
-                                      Label
-                                    </label>
-                                    <input
-                                      type="text"
-                                      value={st.label}
-                                      onChange={(e) =>
-                                        updateVisualPipeline(s.id, (prev) => {
-                                          const nextStages = [
-                                            ...(prev.stage ?? []),
-                                          ];
-                                          nextStages[idx] = {
-                                            ...nextStages[idx],
-                                            label: e.target.value,
-                                          };
-                                          return {
-                                            ...prev,
-                                            stage: nextStages,
-                                          };
-                                        })
-                                      }
-                                      className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high"
-                                      placeholder="e.g. 1. Architecture & Plan"
-                                    />
-                                  </div>
-
-                                  <div>
-                                    <label className="block text-low mb-1">
-                                      Agent Executor
-                                    </label>
-                                    <select
-                                      value={st.executor ?? ''}
-                                      onChange={(e) =>
-                                        updateVisualPipeline(s.id, (prev) => {
-                                          const nextStages = [
-                                            ...(prev.stage ?? []),
-                                          ];
-                                          nextStages[idx] = {
-                                            ...nextStages[idx],
-                                            executor:
-                                              e.target.value || undefined,
-                                          };
-                                          return {
-                                            ...prev,
-                                            stage: nextStages,
-                                          };
-                                        })
-                                      }
-                                      className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high"
-                                    >
-                                      {KNOWN_EXECUTORS.map((ex) => (
-                                        <option key={ex.value} value={ex.value}>
-                                          {ex.label}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-                                  <div>
-                                    <label className="block text-low mb-1">
-                                      Model (Optional)
-                                    </label>
-                                    <input
-                                      type="text"
-                                      list={`models-list-${idx}`}
-                                      value={st.model ?? ''}
-                                      onChange={(e) =>
-                                        updateVisualPipeline(s.id, (prev) => {
-                                          const nextStages = [
-                                            ...(prev.stage ?? []),
-                                          ];
-                                          nextStages[idx] = {
-                                            ...nextStages[idx],
-                                            model: e.target.value || undefined,
-                                          };
-                                          return {
-                                            ...prev,
-                                            stage: nextStages,
-                                          };
-                                        })
-                                      }
-                                      className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high"
-                                      placeholder="e.g. gemini-2.5-pro, claude-3-7-sonnet"
-                                    />
-                                    <datalist id={`models-list-${idx}`}>
-                                      {KNOWN_MODELS.map((m) => (
-                                        <option key={m} value={m} />
-                                      ))}
-                                    </datalist>
-                                  </div>
-
-                                  <div>
-                                    <label className="block text-low mb-1">
-                                      Reasoning Effort
-                                    </label>
-                                    <select
-                                      value={st.reasoning_effort ?? ''}
-                                      onChange={(e) =>
-                                        updateVisualPipeline(s.id, (prev) => {
-                                          const nextStages = [
-                                            ...(prev.stage ?? []),
-                                          ];
-                                          nextStages[idx] = {
-                                            ...nextStages[idx],
-                                            reasoning_effort:
-                                              e.target.value || undefined,
-                                          };
-                                          return {
-                                            ...prev,
-                                            stage: nextStages,
-                                          };
-                                        })
-                                      }
-                                      className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high"
-                                    >
-                                      <option value="">
-                                        Default / Inherit
-                                      </option>
-                                      <option value="high">
-                                        High (Deep Thinking)
-                                      </option>
-                                      <option value="medium">Medium</option>
-                                      <option value="low">Low (Fast)</option>
-                                    </select>
-                                  </div>
-
-                                  <div className="flex items-center gap-4 pt-4">
-                                    <label className="flex items-center gap-1.5 cursor-pointer text-xs text-normal">
-                                      <input
-                                        type="checkbox"
-                                        checked={st.default_enabled !== false}
-                                        onChange={(e) =>
-                                          updateVisualPipeline(s.id, (prev) => {
-                                            const nextStages = [
-                                              ...(prev.stage ?? []),
-                                            ];
-                                            nextStages[idx] = {
-                                              ...nextStages[idx],
-                                              default_enabled: e.target.checked,
-                                            };
-                                            return {
-                                              ...prev,
-                                              stage: nextStages,
-                                            };
-                                          })
-                                        }
-                                      />
-                                      Default Enabled
-                                    </label>
-
-                                    <label className="flex items-center gap-1.5 cursor-pointer text-xs text-normal">
-                                      <input
-                                        type="checkbox"
-                                        checked={Boolean(st.heavy)}
-                                        onChange={(e) =>
-                                          updateVisualPipeline(s.id, (prev) => {
-                                            const nextStages = [
-                                              ...(prev.stage ?? []),
-                                            ];
-                                            nextStages[idx] = {
-                                              ...nextStages[idx],
-                                              heavy: e.target.checked,
-                                            };
-                                            return {
-                                              ...prev,
-                                              stage: nextStages,
-                                            };
-                                          })
-                                        }
-                                      />
-                                      Heavy Stage
-                                    </label>
-                                  </div>
-                                </div>
-
+                          {editorMode === 'visual' && parsedData ? (
+                            <div className="space-y-4">
+                              {/* Pipeline Meta */}
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 p-3 rounded-sm border border-border bg-panel/60">
                                 <div>
-                                  <label className="block text-xs text-low mb-1">
-                                    Stage Prompt Fragment
+                                  <label className="block text-xs font-medium text-low mb-1">
+                                    Pipeline Name
                                   </label>
-                                  <textarea
-                                    value={st.prompt ?? ''}
-                                    rows={3}
+                                  <input
+                                    type="text"
+                                    value={parsedData.name}
                                     onChange={(e) =>
-                                      updateVisualPipeline(s.id, (prev) => {
-                                        const nextStages = [
-                                          ...(prev.stage ?? []),
-                                        ];
-                                        nextStages[idx] = {
-                                          ...nextStages[idx],
-                                          prompt: e.target.value,
-                                        };
-                                        return {
-                                          ...prev,
-                                          stage: nextStages,
-                                        };
-                                      })
+                                      updateVisualPipeline(s.id, (prev) => ({
+                                        ...prev,
+                                        name: e.target.value,
+                                      }))
                                     }
-                                    className="w-full rounded-sm border border-border bg-secondary p-2 text-xs font-mono text-high focus:outline-hidden focus:ring-1 focus:ring-brand"
-                                    placeholder="Write instructions given to the agent for this specific stage..."
+                                    className="w-full text-sm rounded-sm border border-border bg-secondary px-2.5 py-1.5 text-high focus:outline-hidden focus:ring-1 focus:ring-brand"
+                                    placeholder="e.g. Swarm Multi-Agent"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-xs font-medium text-low mb-1">
+                                    Description
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={parsedData.description ?? ''}
+                                    onChange={(e) =>
+                                      updateVisualPipeline(s.id, (prev) => ({
+                                        ...prev,
+                                        description: e.target.value,
+                                      }))
+                                    }
+                                    className="w-full text-sm rounded-sm border border-border bg-secondary px-2.5 py-1.5 text-high focus:outline-hidden focus:ring-1 focus:ring-brand"
+                                    placeholder="Describe what this pipeline does"
                                   />
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-2">
-                          <SettingsTextarea
-                            value={draft}
-                            rows={14}
-                            onChange={(value) =>
-                              setDraftById((prev) => ({
-                                ...prev,
-                                [s.id]: value,
-                              }))
-                            }
-                            placeholder={t('settings.pipeline.rawPlaceholder')}
-                          />
-                        </div>
-                      )}
 
-                      {draftInvalid && draftValidation?.error && (
-                        <div className="text-sm text-error bg-error/10 border border-error/50 rounded-sm p-2">
-                          <span className="font-medium">
-                            {t('settings.pipeline.parseError')}:
-                          </span>{' '}
-                          {draftValidation.error.message}
-                          {draftValidation.error.line != null && (
-                            <span className="text-low">
-                              {' '}
-                              (
-                              {t('settings.pipeline.errorAt', {
-                                line: draftValidation.error.line,
-                                column: draftValidation.error.column ?? 1,
-                              })}
-                              )
-                            </span>
+                              {/* Stages List */}
+                              <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-semibold text-high uppercase tracking-wider">
+                                    Stages (
+                                    {parsedData.stage
+                                      ? parsedData.stage.length
+                                      : 0}
+                                    )
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      updateVisualPipeline(s.id, (prev) => ({
+                                        ...prev,
+                                        stage: [
+                                          ...(prev.stage ?? []),
+                                          {
+                                            id: `stage-${(prev.stage?.length ?? 0) + 1}`,
+                                            label: `New Stage ${(prev.stage?.length ?? 0) + 1}`,
+                                            default_enabled: true,
+                                            heavy: false,
+                                            executor: '',
+                                            model: '',
+                                            prompt:
+                                              'Write your instructions here...',
+                                          },
+                                        ],
+                                      }))
+                                    }
+                                    className="flex items-center gap-1 text-xs text-brand font-medium hover:underline"
+                                  >
+                                    <PlusIcon className="size-3.5" />
+                                    Add Custom Stage
+                                  </button>
+                                </div>
+
+                                {parsedData.stage?.map((st, idx) => (
+                                  <div
+                                    key={st.id || idx}
+                                    className="rounded-sm border border-border p-3 space-y-3 bg-panel/70 relative"
+                                  >
+                                    <div className="flex items-center justify-between gap-2 border-b border-border/50 pb-2">
+                                      <div className="flex items-center gap-2">
+                                        <span className="flex items-center justify-center size-5 rounded-full bg-brand/15 text-brand text-xs font-semibold">
+                                          {idx + 1}
+                                        </span>
+                                        <span className="text-sm font-medium text-high">
+                                          {st.label ||
+                                            st.id ||
+                                            `Stage ${idx + 1}`}
+                                        </span>
+                                      </div>
+
+                                      <div className="flex items-center gap-1">
+                                        <IconButton
+                                          icon={ArrowUpIcon}
+                                          aria-label="Move Up"
+                                          title="Move Up"
+                                          disabled={idx === 0}
+                                          onClick={() =>
+                                            updateVisualPipeline(
+                                              s.id,
+                                              (prev) => {
+                                                const nextStages = [
+                                                  ...(prev.stage ?? []),
+                                                ];
+                                                const temp =
+                                                  nextStages[idx - 1];
+                                                nextStages[idx - 1] =
+                                                  nextStages[idx];
+                                                nextStages[idx] = temp;
+                                                return {
+                                                  ...prev,
+                                                  stage: nextStages,
+                                                };
+                                              }
+                                            )
+                                          }
+                                          className="size-6 text-low hover:text-high disabled:opacity-30"
+                                        />
+                                        <IconButton
+                                          icon={ArrowDownIcon}
+                                          aria-label="Move Down"
+                                          title="Move Down"
+                                          disabled={
+                                            idx ===
+                                            (parsedData.stage?.length ?? 0) - 1
+                                          }
+                                          onClick={() =>
+                                            updateVisualPipeline(
+                                              s.id,
+                                              (prev) => {
+                                                const nextStages = [
+                                                  ...(prev.stage ?? []),
+                                                ];
+                                                const temp =
+                                                  nextStages[idx + 1];
+                                                nextStages[idx + 1] =
+                                                  nextStages[idx];
+                                                nextStages[idx] = temp;
+                                                return {
+                                                  ...prev,
+                                                  stage: nextStages,
+                                                };
+                                              }
+                                            )
+                                          }
+                                          className="size-6 text-low hover:text-high disabled:opacity-30"
+                                        />
+                                        <IconButton
+                                          icon={TrashIcon}
+                                          aria-label="Delete Stage"
+                                          title="Delete Stage"
+                                          onClick={() =>
+                                            updateVisualPipeline(
+                                              s.id,
+                                              (prev) => ({
+                                                ...prev,
+                                                stage: (
+                                                  prev.stage ?? []
+                                                ).filter((_, i) => i !== idx),
+                                              })
+                                            )
+                                          }
+                                          className="size-6 text-error hover:bg-error/10"
+                                        />
+                                      </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                                      <div>
+                                        <label className="flex items-center gap-1 text-low mb-1">
+                                          {isBundled ||
+                                          CORE_STAGE_IDS.has(st.id) ? (
+                                            <>
+                                              <LockIcon className="size-3 text-brand" />
+                                              <span>Stage ID (Protected)</span>
+                                            </>
+                                          ) : (
+                                            <span>Stage ID (Slug)</span>
+                                          )}
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={st.id}
+                                          disabled={
+                                            isBundled ||
+                                            CORE_STAGE_IDS.has(st.id)
+                                          }
+                                          readOnly={
+                                            isBundled ||
+                                            CORE_STAGE_IDS.has(st.id)
+                                          }
+                                          onChange={(e) => {
+                                            const cleanSlug = e.target.value
+                                              .toLowerCase()
+                                              .replace(/[^a-z0-9_-]/g, '-');
+                                            updateVisualPipeline(
+                                              s.id,
+                                              (prev) => {
+                                                const nextStages = [
+                                                  ...(prev.stage ?? []),
+                                                ];
+                                                nextStages[idx] = {
+                                                  ...nextStages[idx],
+                                                  id: cleanSlug,
+                                                };
+                                                return {
+                                                  ...prev,
+                                                  stage: nextStages,
+                                                };
+                                              }
+                                            );
+                                          }}
+                                          className={cn(
+                                            'w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high',
+                                            (isBundled ||
+                                              CORE_STAGE_IDS.has(st.id)) &&
+                                              'cursor-not-allowed opacity-60 bg-panel font-mono text-[11px]'
+                                          )}
+                                          title={
+                                            isBundled ||
+                                            CORE_STAGE_IDS.has(st.id)
+                                              ? 'Stage ID is protected to ensure system and card compatibility.'
+                                              : 'Unique stage identifier slug'
+                                          }
+                                          placeholder="e.g. plan, code-review"
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label className="block text-low mb-1">
+                                          Label
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={st.label}
+                                          onChange={(e) =>
+                                            updateVisualPipeline(
+                                              s.id,
+                                              (prev) => {
+                                                const nextStages = [
+                                                  ...(prev.stage ?? []),
+                                                ];
+                                                nextStages[idx] = {
+                                                  ...nextStages[idx],
+                                                  label: e.target.value,
+                                                };
+                                                return {
+                                                  ...prev,
+                                                  stage: nextStages,
+                                                };
+                                              }
+                                            )
+                                          }
+                                          className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high"
+                                          placeholder="e.g. 1. Architecture & Plan"
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label className="block text-low mb-1">
+                                          Agent Executor
+                                        </label>
+                                        <select
+                                          value={st.executor ?? ''}
+                                          onChange={(e) =>
+                                            updateVisualPipeline(
+                                              s.id,
+                                              (prev) => {
+                                                const nextStages = [
+                                                  ...(prev.stage ?? []),
+                                                ];
+                                                nextStages[idx] = {
+                                                  ...nextStages[idx],
+                                                  executor:
+                                                    e.target.value || undefined,
+                                                };
+                                                return {
+                                                  ...prev,
+                                                  stage: nextStages,
+                                                };
+                                              }
+                                            )
+                                          }
+                                          className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high"
+                                        >
+                                          {KNOWN_EXECUTORS.map((ex) => (
+                                            <option
+                                              key={ex.value}
+                                              value={ex.value}
+                                            >
+                                              {ex.label}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+                                      <div>
+                                        <label className="block text-low mb-1">
+                                          Model (Optional)
+                                        </label>
+                                        <input
+                                          type="text"
+                                          list={`models-list-${idx}`}
+                                          value={st.model ?? ''}
+                                          onChange={(e) =>
+                                            updateVisualPipeline(
+                                              s.id,
+                                              (prev) => {
+                                                const nextStages = [
+                                                  ...(prev.stage ?? []),
+                                                ];
+                                                nextStages[idx] = {
+                                                  ...nextStages[idx],
+                                                  model:
+                                                    e.target.value || undefined,
+                                                };
+                                                return {
+                                                  ...prev,
+                                                  stage: nextStages,
+                                                };
+                                              }
+                                            )
+                                          }
+                                          className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high"
+                                          placeholder="e.g. gemini-2.5-pro, claude-3-7-sonnet"
+                                        />
+                                        <datalist id={`models-list-${idx}`}>
+                                          {KNOWN_MODELS.map((m) => (
+                                            <option key={m} value={m} />
+                                          ))}
+                                        </datalist>
+                                      </div>
+
+                                      <div>
+                                        <label className="block text-low mb-1">
+                                          Reasoning Effort
+                                        </label>
+                                        <select
+                                          value={st.reasoning_effort ?? ''}
+                                          onChange={(e) =>
+                                            updateVisualPipeline(
+                                              s.id,
+                                              (prev) => {
+                                                const nextStages = [
+                                                  ...(prev.stage ?? []),
+                                                ];
+                                                nextStages[idx] = {
+                                                  ...nextStages[idx],
+                                                  reasoning_effort:
+                                                    e.target.value || undefined,
+                                                };
+                                                return {
+                                                  ...prev,
+                                                  stage: nextStages,
+                                                };
+                                              }
+                                            )
+                                          }
+                                          className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high"
+                                        >
+                                          <option value="">
+                                            Default / Inherit
+                                          </option>
+                                          <option value="high">
+                                            High (Deep Thinking)
+                                          </option>
+                                          <option value="medium">Medium</option>
+                                          <option value="low">
+                                            Low (Fast)
+                                          </option>
+                                        </select>
+                                      </div>
+
+                                      <div className="flex items-center gap-4 pt-4">
+                                        <label className="flex items-center gap-1.5 cursor-pointer text-xs text-normal">
+                                          <input
+                                            type="checkbox"
+                                            checked={
+                                              st.default_enabled !== false
+                                            }
+                                            onChange={(e) =>
+                                              updateVisualPipeline(
+                                                s.id,
+                                                (prev) => {
+                                                  const nextStages = [
+                                                    ...(prev.stage ?? []),
+                                                  ];
+                                                  nextStages[idx] = {
+                                                    ...nextStages[idx],
+                                                    default_enabled:
+                                                      e.target.checked,
+                                                  };
+                                                  return {
+                                                    ...prev,
+                                                    stage: nextStages,
+                                                  };
+                                                }
+                                              )
+                                            }
+                                          />
+                                          Default Enabled
+                                        </label>
+
+                                        <label className="flex items-center gap-1.5 cursor-pointer text-xs text-normal">
+                                          <input
+                                            type="checkbox"
+                                            checked={Boolean(st.heavy)}
+                                            onChange={(e) =>
+                                              updateVisualPipeline(
+                                                s.id,
+                                                (prev) => {
+                                                  const nextStages = [
+                                                    ...(prev.stage ?? []),
+                                                  ];
+                                                  nextStages[idx] = {
+                                                    ...nextStages[idx],
+                                                    heavy: e.target.checked,
+                                                  };
+                                                  return {
+                                                    ...prev,
+                                                    stage: nextStages,
+                                                  };
+                                                }
+                                              )
+                                            }
+                                          />
+                                          Heavy Stage
+                                        </label>
+                                      </div>
+                                    </div>
+
+                                    <div>
+                                      <label className="block text-xs text-low mb-1">
+                                        Stage Prompt Fragment
+                                      </label>
+                                      <textarea
+                                        value={st.prompt ?? ''}
+                                        rows={3}
+                                        onChange={(e) =>
+                                          updateVisualPipeline(s.id, (prev) => {
+                                            const nextStages = [
+                                              ...(prev.stage ?? []),
+                                            ];
+                                            nextStages[idx] = {
+                                              ...nextStages[idx],
+                                              prompt: e.target.value,
+                                            };
+                                            return {
+                                              ...prev,
+                                              stage: nextStages,
+                                            };
+                                          })
+                                        }
+                                        className="w-full rounded-sm border border-border bg-secondary p-2 text-xs font-mono text-high focus:outline-hidden focus:ring-1 focus:ring-brand"
+                                        placeholder="Write instructions given to the agent for this specific stage..."
+                                      />
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <SettingsTextarea
+                                value={draft}
+                                rows={14}
+                                onChange={(value) =>
+                                  setDraftById((prev) => ({
+                                    ...prev,
+                                    [s.id]: value,
+                                  }))
+                                }
+                                placeholder={t(
+                                  'settings.pipeline.rawPlaceholder'
+                                )}
+                              />
+                            </div>
                           )}
-                        </div>
-                      )}
 
-                      <div className="flex items-center gap-2 pt-2">
-                        <PrimaryButton
-                          value={t('settings.pipeline.saveButton')}
-                          disabled={!isDirty || busyId === s.id || draftInvalid}
-                          onClick={() => handleSave(s.id)}
-                        />
-                        {BUNDLED_IDS.has(s.id) && (
-                          <PrimaryButton
-                            variant="tertiary"
-                            value={t('settings.pipeline.reset')}
-                            disabled={busyId === s.id}
-                            onClick={() => handleResetOne(s.id)}
-                          />
-                        )}
-                      </div>
+                          {draftInvalid && draftValidation?.error && (
+                            <div className="text-sm text-error bg-error/10 border border-error/50 rounded-sm p-2">
+                              <span className="font-medium">
+                                {t('settings.pipeline.parseError')}:
+                              </span>{' '}
+                              {draftValidation.error.message}
+                              {draftValidation.error.line != null && (
+                                <span className="text-low">
+                                  {' '}
+                                  (
+                                  {t('settings.pipeline.errorAt', {
+                                    line: draftValidation.error.line,
+                                    column: draftValidation.error.column ?? 1,
+                                  })}
+                                  )
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2 pt-2">
+                            <PrimaryButton
+                              value={t('settings.pipeline.saveButton')}
+                              disabled={
+                                !isDirty || busyId === s.id || draftInvalid
+                              }
+                              onClick={() => handleSave(s.id)}
+                            />
+                            {BUNDLED_IDS.has(s.id) && (
+                              <PrimaryButton
+                                variant="tertiary"
+                                value={t('settings.pipeline.reset')}
+                                disabled={busyId === s.id}
+                                onClick={() => handleResetOne(s.id)}
+                              />
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
