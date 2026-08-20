@@ -18,7 +18,7 @@ import {
   type PipelineFileStatus,
   type PipelineValidation,
 } from 'shared/types';
-import { configApi, pipelinesApi } from '@/shared/lib/api';
+import { pipelinesApi } from '@/shared/lib/api';
 import { useModelSelectorConfig } from '@/shared/hooks/useExecutorDiscovery';
 import { PrimaryButton } from '@vibe/ui/components/PrimaryButton';
 import { IconButton } from '@vibe/ui/components/IconButton';
@@ -53,78 +53,17 @@ const VALIDATE_DEBOUNCE_MS = 400;
 
 const KNOWN_EXECUTORS = [
   { value: '', label: 'Default / Project Lead' },
-  { value: 'antigravity', label: '🤖 Antigravity (Gemini 2.5 Pro / Flash)' },
-  { value: 'claude', label: '🤖 Claude Code (Sonnet / Haiku / Opus)' },
-  { value: 'codex', label: '🤖 Codex (GPT-4o / o3-mini / o1)' },
-  { value: 'opencode', label: '🤖 OpenCode (DeepSeek R1 / GLM / Qwen)' },
-  { value: 'qwen_code', label: '🤖 Qwen Code (Qwen 2.5 Coder / Max)' },
-  { value: 'droid', label: '🤖 Droid (Factory Droid / Claude / GPT)' },
-  { value: 'gemini', label: '🤖 Gemini (Google AI Studio)' },
+  { value: 'antigravity', label: '🤖 Antigravity' },
+  { value: 'claude', label: '🤖 Claude Code' },
+  { value: 'codex', label: '🤖 Codex' },
+  { value: 'opencode', label: '🤖 OpenCode' },
+  { value: 'qwen_code', label: '🤖 Qwen Code' },
+  { value: 'droid', label: '🤖 Droid' },
+  { value: 'gemini', label: '🤖 Gemini' },
   { value: 'cursor', label: '🤖 Cursor Agent' },
   { value: 'copilot', label: '🤖 GitHub Copilot' },
   { value: 'amp', label: '🤖 Amp' },
   { value: 'local-executor', label: '⚡ Local Host Command' },
-];
-
-const MODELS_BY_EXECUTOR: Record<string, string[]> = {
-  antigravity: [
-    'gemini-2.5-pro',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-2.0-pro-exp-02-05',
-    'gemini-1.5-pro',
-    'gemini-1.5-flash',
-  ],
-  claude: [
-    'claude-3-7-sonnet',
-    'claude-3-5-sonnet',
-    'claude-3-5-haiku',
-    'claude-3-opus',
-  ],
-  codex: ['o3-mini', 'gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini', 'codex-v1'],
-  opencode: [
-    'deepseek-reasoner',
-    'deepseek-chat',
-    'glm-4-plus',
-    'glm-4-air',
-    'qwen-max',
-    'qwen-plus',
-    'claude-3-5-sonnet',
-    'gpt-4o',
-  ],
-  qwen_code: [
-    'qwen2.5-coder-32b',
-    'qwen2.5-coder-7b',
-    'qwen-max',
-    'qwen-plus',
-    'qwen-turbo',
-  ],
-  droid: ['claude-3-7-sonnet', 'claude-3-5-sonnet', 'gpt-4o', 'droid-agent'],
-  gemini: [
-    'gemini-2.5-pro',
-    'gemini-2.5-flash',
-    'gemini-2.0-flash',
-    'gemini-1.5-pro',
-  ],
-  cursor: ['claude-3-7-sonnet', 'cursor-small', 'gpt-4o'],
-  copilot: ['claude-3.5-sonnet', 'gpt-4o', 'o3-mini'],
-  amp: ['claude-3-5-sonnet', 'gpt-4o', 'amp-default'],
-  'local-executor': ['system-shell'],
-};
-
-const DEFAULT_ALL_MODELS = [
-  'gemini-2.5-pro',
-  'gemini-2.5-flash',
-  'claude-3-7-sonnet',
-  'claude-3-5-sonnet',
-  'claude-3-5-haiku',
-  'gpt-4o',
-  'o3-mini',
-  'deepseek-reasoner',
-  'deepseek-chat',
-  'qwen2.5-coder-32b',
-  'qwen-max',
-  'codex-v1',
 ];
 
 interface StageData {
@@ -242,21 +181,15 @@ function StageModelInput({
   const { config, loadingModels } = useModelSelectorConfig(baseAgent);
 
   const availableModels = useMemo(() => {
-    if (config?.models && config.models.length > 0) {
-      return config.models.map((m) => m.id);
-    }
-    if (executor && MODELS_BY_EXECUTOR[executor]) {
-      return MODELS_BY_EXECUTOR[executor];
-    }
-    return DEFAULT_ALL_MODELS;
-  }, [config?.models, executor]);
+    return (config?.models ?? []).map((m) => m.id);
+  }, [config?.models]);
 
-  const isLive = Boolean(config?.models && config.models.length > 0);
+  const isLive = Boolean(availableModels.length > 0);
 
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="block text-low">Model (Live CLI / Custom)</label>
+        <label className="block text-low">Model (Live CLI Discovery)</label>
         {loadingModels ? (
           <span className="text-[10px] text-yellow-500 animate-pulse font-mono flex items-center gap-1">
             <span className="inline-block size-1.5 rounded-full bg-yellow-500 animate-ping" />
@@ -264,27 +197,33 @@ function StageModelInput({
           </span>
         ) : isLive ? (
           <span className="text-[10px] text-green-500 font-mono">
-            ● Live CLI ({availableModels.length})
+            ● {availableModels.length} live models
           </span>
-        ) : null}
+        ) : (
+          <span className="text-[10px] text-low font-mono">Agent default</span>
+        )}
       </div>
       <input
         type="text"
         list={`models-list-${index}`}
         value={model ?? ''}
-        onChange={(e) => onChange(e.target.value || undefined)}
+        onChange={(e) =>
+          onChange(e.target.value.trim() ? e.target.value.trim() : undefined)
+        }
         className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high font-mono"
         placeholder={
           availableModels[0]
-            ? `e.g. ${availableModels[0]}`
-            : 'e.g. gemini-2.5-pro'
+            ? `Default (${availableModels[0]}) or select below`
+            : 'Default (omit --model)'
         }
       />
-      <datalist id={`models-list-${index}`}>
-        {availableModels.map((m) => (
-          <option key={m} value={m} />
-        ))}
-      </datalist>
+      {availableModels.length > 0 ? (
+        <datalist id={`models-list-${index}`}>
+          {availableModels.map((m) => (
+            <option key={m} value={m} />
+          ))}
+        </datalist>
+      ) : null}
     </div>
   );
 }
@@ -327,39 +266,6 @@ export function PipelineSettingsSection() {
   useEffect(() => {
     void reload();
   }, [reload]);
-
-  const [liveModelsByExecutor, setLiveModelsByExecutor] = useState<
-    Record<string, string[]>
-  >({});
-  const fetchingExecutorsRef = useRef<Set<string>>(new Set());
-
-  const fetchLiveModels = useCallback(
-    async (executor: string) => {
-      const clean = executor.trim();
-      if (
-        !clean ||
-        liveModelsByExecutor[clean] !== undefined ||
-        fetchingExecutorsRef.current.has(clean)
-      ) {
-        return;
-      }
-      fetchingExecutorsRef.current.add(clean);
-      try {
-        const models = await configApi.getAgentModels(clean);
-        if (models && models.length > 0) {
-          setLiveModelsByExecutor((prev) => ({
-            ...prev,
-            [clean]: models.map((m) => m.id),
-          }));
-        }
-      } catch {
-        // Graceful fallback to static definitions
-      } finally {
-        fetchingExecutorsRef.current.delete(clean);
-      }
-    },
-    [liveModelsByExecutor]
-  );
 
   const hasUnsavedChanges = useMemo(
     () =>
@@ -968,18 +874,6 @@ export function PipelineSettingsSection() {
                                           onChange={(e) => {
                                             const newExec =
                                               e.target.value || undefined;
-                                            if (newExec) {
-                                              void fetchLiveModels(newExec);
-                                            }
-                                            const availableModels =
-                                              newExec &&
-                                              (liveModelsByExecutor[newExec] ||
-                                                MODELS_BY_EXECUTOR[newExec]);
-                                            const suggestedModel =
-                                              availableModels &&
-                                              availableModels.length > 0
-                                                ? availableModels[0]
-                                                : undefined;
                                             updateVisualPipeline(
                                               s.id,
                                               (prev) => {
@@ -989,7 +883,7 @@ export function PipelineSettingsSection() {
                                                 nextStages[idx] = {
                                                   ...nextStages[idx],
                                                   executor: newExec,
-                                                  model: suggestedModel,
+                                                  model: undefined,
                                                 };
                                                 return {
                                                   ...prev,
