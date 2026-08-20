@@ -14,7 +14,7 @@ import {
 } from '@phosphor-icons/react';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
 import type { PipelineFileStatus, PipelineValidation } from 'shared/types';
-import { pipelinesApi } from '@/shared/lib/api';
+import { configApi, pipelinesApi } from '@/shared/lib/api';
 import { PrimaryButton } from '@vibe/ui/components/PrimaryButton';
 import { IconButton } from '@vibe/ui/components/IconButton';
 import { SettingsCard, SettingsTextarea } from './SettingsComponents';
@@ -241,6 +241,39 @@ export function PipelineSettingsSection() {
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  const [liveModelsByExecutor, setLiveModelsByExecutor] = useState<
+    Record<string, string[]>
+  >({});
+  const fetchingExecutorsRef = useRef<Set<string>>(new Set());
+
+  const fetchLiveModels = useCallback(
+    async (executor: string) => {
+      const clean = executor.trim();
+      if (
+        !clean ||
+        liveModelsByExecutor[clean] !== undefined ||
+        fetchingExecutorsRef.current.has(clean)
+      ) {
+        return;
+      }
+      fetchingExecutorsRef.current.add(clean);
+      try {
+        const models = await configApi.getAgentModels(clean);
+        if (models && models.length > 0) {
+          setLiveModelsByExecutor((prev) => ({
+            ...prev,
+            [clean]: models.map((m) => m.id),
+          }));
+        }
+      } catch {
+        // Graceful fallback to static definitions
+      } finally {
+        fetchingExecutorsRef.current.delete(clean);
+      }
+    },
+    [liveModelsByExecutor]
+  );
 
   const hasUnsavedChanges = useMemo(
     () =>
@@ -849,10 +882,17 @@ export function PipelineSettingsSection() {
                                           onChange={(e) => {
                                             const newExec =
                                               e.target.value || undefined;
-                                            const suggestedModel =
+                                            if (newExec) {
+                                              void fetchLiveModels(newExec);
+                                            }
+                                            const availableModels =
                                               newExec &&
-                                              MODELS_BY_EXECUTOR[newExec]
-                                                ? MODELS_BY_EXECUTOR[newExec][0]
+                                              (liveModelsByExecutor[newExec] ||
+                                                MODELS_BY_EXECUTOR[newExec]);
+                                            const suggestedModel =
+                                              availableModels &&
+                                              availableModels.length > 0
+                                                ? availableModels[0]
                                                 : undefined;
                                             updateVisualPipeline(
                                               s.id,
@@ -888,13 +928,32 @@ export function PipelineSettingsSection() {
 
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
                                       <div>
-                                        <label className="block text-low mb-1">
-                                          Model (Select or Type)
-                                        </label>
+                                        <div className="flex items-center justify-between mb-1">
+                                          <label className="block text-low">
+                                            Model (Live CLI / Custom)
+                                          </label>
+                                          {st.executor &&
+                                          liveModelsByExecutor[st.executor] ? (
+                                            <span className="text-[10px] text-green-500 font-mono">
+                                              ● Live CLI (
+                                              {
+                                                liveModelsByExecutor[
+                                                  st.executor
+                                                ].length
+                                              }
+                                              )
+                                            </span>
+                                          ) : null}
+                                        </div>
                                         <input
                                           type="text"
                                           list={`models-list-${idx}`}
                                           value={st.model ?? ''}
+                                          onFocus={() => {
+                                            if (st.executor) {
+                                              void fetchLiveModels(st.executor);
+                                            }
+                                          }}
                                           onChange={(e) =>
                                             updateVisualPipeline(
                                               s.id,
@@ -917,16 +976,33 @@ export function PipelineSettingsSection() {
                                           className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high font-mono"
                                           placeholder={
                                             st.executor &&
-                                            MODELS_BY_EXECUTOR[st.executor]
-                                              ? `e.g. ${MODELS_BY_EXECUTOR[st.executor][0]}`
+                                            (liveModelsByExecutor[
+                                              st.executor
+                                            ]?.[0] ||
+                                              MODELS_BY_EXECUTOR[
+                                                st.executor
+                                              ]?.[0])
+                                              ? `e.g. ${
+                                                  liveModelsByExecutor[
+                                                    st.executor
+                                                  ]?.[0] ||
+                                                  MODELS_BY_EXECUTOR[
+                                                    st.executor
+                                                  ][0]
+                                                }`
                                               : 'e.g. gemini-2.5-pro, claude-3-7-sonnet'
                                           }
                                         />
                                         <datalist id={`models-list-${idx}`}>
-                                          {(st.executor &&
-                                          MODELS_BY_EXECUTOR[st.executor]
-                                            ? MODELS_BY_EXECUTOR[st.executor]
-                                            : DEFAULT_ALL_MODELS
+                                          {(
+                                            (st.executor &&
+                                              (liveModelsByExecutor[
+                                                st.executor
+                                              ] ||
+                                                MODELS_BY_EXECUTOR[
+                                                  st.executor
+                                                ])) ||
+                                            DEFAULT_ALL_MODELS
                                           ).map((m) => (
                                             <option key={m} value={m} />
                                           ))}

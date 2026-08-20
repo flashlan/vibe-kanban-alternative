@@ -20,6 +20,7 @@ services.workspace = true
 worktree-manager.workspace = true
 workspace-manager.workspace = true
 preview-proxy.workspace = true
+json-patch.workspace = true
 tokio.workspace = true
 shlex.workspace = true
 tokio-util.workspace = true

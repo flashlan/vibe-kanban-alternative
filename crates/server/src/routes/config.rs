@@ -53,6 +53,7 @@ pub fn router() -> Router<DeploymentImpl> {
         )
         .route("/agents/check-availability", get(check_agent_availability))
         .route("/agents/preset-options", get(get_agent_preset_options))
+        .route("/agents/models", get(get_agent_models))
         .route(
             "/agents/discovered-options/ws",
             get(stream_executor_discovered_options_ws),
@@ -518,6 +519,84 @@ async fn get_agent_preset_options(
     };
 
     ResponseJson(ApiResponse::success(options))
+}
+
+#[derive(Debug, Deserialize, TS)]
+pub struct AgentModelsQuery {
+    pub executor: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+pub struct DiscoveredModelEntry {
+    pub id: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+}
+
+async fn get_agent_models(
+    State(deployment): State<DeploymentImpl>,
+    Query(query): Query<AgentModelsQuery>,
+) -> ResponseJson<ApiResponse<Vec<DiscoveredModelEntry>>> {
+    use std::str::FromStr;
+
+    let base_agent = match BaseCodingAgent::from_str(&query.executor.to_uppercase()) {
+        Ok(a) => a,
+        Err(_) => match query.executor.to_lowercase().as_str() {
+            "antigravity" | "gemini" => BaseCodingAgent::Antigravity,
+            "claude" | "claude_code" | "claude-code" => BaseCodingAgent::ClaudeCode,
+            "codex" => BaseCodingAgent::Codex,
+            "opencode" => BaseCodingAgent::Opencode,
+            "qwen" | "qwen_code" | "qwen-code" => BaseCodingAgent::QwenCode,
+            "droid" => BaseCodingAgent::Droid,
+            "cursor" | "cursor_agent" | "cursor-agent" => BaseCodingAgent::CursorAgent,
+            "copilot" => BaseCodingAgent::Copilot,
+            "amp" => BaseCodingAgent::Amp,
+            _ => return ResponseJson(ApiResponse::success(Vec::new())),
+        },
+    };
+
+    let profile_id = ExecutorProfileId::new(base_agent);
+    let mut models_out = Vec::new();
+
+    if let Ok(Some(mut stream)) = deployment
+        .container()
+        .discover_executor_options(profile_id, None, None, None)
+        .await
+    {
+        use futures_util::StreamExt;
+        while let Some(patch) = stream.next().await {
+            for op in patch.0 {
+                if let json_patch::PatchOperation::Add(add_op) = op {
+                    if add_op.path.starts_with("/model_selector/models") {
+                        if let Ok(model_list) = serde_json::from_value::<
+                            Vec<executors::model_selector::ModelInfo>,
+                        >(add_op.value.clone())
+                        {
+                            for m in model_list {
+                                models_out.push(DiscoveredModelEntry {
+                                    id: m.id,
+                                    name: m.name,
+                                    provider: m.provider_id,
+                                });
+                            }
+                        } else if let Ok(model) = serde_json::from_value::<
+                            executors::model_selector::ModelInfo,
+                        >(add_op.value)
+                        {
+                            models_out.push(DiscoveredModelEntry {
+                                id: model.id,
+                                name: model.name,
+                                provider: model.provider_id,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    ResponseJson(ApiResponse::success(models_out))
 }
 
 #[derive(Debug, Deserialize)]

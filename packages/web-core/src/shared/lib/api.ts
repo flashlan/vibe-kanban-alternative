@@ -1211,6 +1211,16 @@ export const configApi = {
     );
     return handleApiResponse<AvailabilityInfo>(response);
   },
+  getAgentModels: async (
+    executor: string
+  ): Promise<Array<{ id: string; name: string; provider?: string }>> => {
+    const response = await makeRequest(
+      `/api/agents/models?executor=${encodeURIComponent(executor)}`
+    );
+    return handleApiResponse<
+      Array<{ id: string; name: string; provider?: string }>
+    >(response);
+  },
 };
 
 // File-based card pipelines (`~/.vibe-kanban/pipelines/*.toml`).
