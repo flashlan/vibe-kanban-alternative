@@ -735,6 +735,9 @@ importers:
       simple-icons:
         specifier: ^15.16.0
         version: 15.18.0
+      smol-toml:
+        specifier: ^1.8.0
+        version: 1.8.0
       tailwind-merge:
         specifier: ^2.2.0
         version: 2.6.0
@@ -4731,6 +4734,10 @@ packages:
   slash@3.0.0:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
+
+  smol-toml@1.8.0:
+    resolution: {integrity: sha512-kCZr2V3ch9i00x8zXRhjUNVcjG9ijES5dDudkXvUVCT5QlJNQWElSJdZqyPemffHoLNUYwOcou0Fy+ojN0uHSQ==}
+    engines: {node: '>= 18'}
 
   sorted-btree@1.8.1:
     resolution: {integrity: sha512-395+XIP+wqNn3USkFSrNz7G3Ss/MXlZEqesxvzCRFwL14h6e8LukDHdLBePn5pwbm5OQ9vGu8mDyz2lLDIqamQ==}
@@ -9791,6 +9798,8 @@ snapshots:
   simple-icons@15.18.0: {}
 
   slash@3.0.0: {}
+
+  smol-toml@1.8.0: {}
 
   sorted-btree@1.8.1: {}
 

@@ -85,6 +85,7 @@
     "remark-gfm": "^4.0.0",
     "rfc6902": "^5.1.2",
     "simple-icons": "^15.16.0",
+    "smol-toml": "^1.8.0",
     "tailwind-merge": "^2.2.0",
     "tailwind-scrollbar": "^3.1.0",
     "tailwindcss-animate": "^1.0.7",
