@@ -13,8 +13,13 @@ import {
   TrashIcon,
 } from '@phosphor-icons/react';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
-import type { PipelineFileStatus, PipelineValidation } from 'shared/types';
+import {
+  BaseCodingAgent,
+  type PipelineFileStatus,
+  type PipelineValidation,
+} from 'shared/types';
 import { configApi, pipelinesApi } from '@/shared/lib/api';
+import { useModelSelectorConfig } from '@/shared/hooks/useExecutorDiscovery';
 import { PrimaryButton } from '@vibe/ui/components/PrimaryButton';
 import { IconButton } from '@vibe/ui/components/IconButton';
 import { SettingsCard, SettingsTextarea } from './SettingsComponents';
@@ -201,6 +206,87 @@ function pipelineDataToToml(data: PipelineData): string {
 
 function errorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
+}
+
+function parseBaseCodingAgent(executor?: string): BaseCodingAgent | null {
+  if (!executor) return null;
+  const clean = executor.toLowerCase().replace(/[-_]/g, '');
+  if (clean === 'antigravity') return BaseCodingAgent.ANTIGRAVITY;
+  if (clean === 'claude' || clean === 'claudecode')
+    return BaseCodingAgent.CLAUDE_CODE;
+  if (clean === 'codex') return BaseCodingAgent.CODEX;
+  if (clean === 'opencode') return BaseCodingAgent.OPENCODE;
+  if (clean === 'qwencode' || clean === 'qwen')
+    return BaseCodingAgent.QWEN_CODE;
+  if (clean === 'droid') return BaseCodingAgent.DROID;
+  if (clean === 'gemini') return BaseCodingAgent.GEMINI;
+  if (clean === 'cursor' || clean === 'cursoragent')
+    return BaseCodingAgent.CURSOR_AGENT;
+  if (clean === 'copilot') return BaseCodingAgent.COPILOT;
+  if (clean === 'amp') return BaseCodingAgent.AMP;
+  return null;
+}
+
+function StageModelInput({
+  executor,
+  model,
+  index,
+  onChange,
+}: {
+  executor?: string;
+  model?: string;
+  index: number;
+  onChange: (newModel: string | undefined) => void;
+}) {
+  const baseAgent = useMemo(() => parseBaseCodingAgent(executor), [executor]);
+  const { config, loadingModels } = useModelSelectorConfig(baseAgent);
+
+  const availableModels = useMemo(() => {
+    if (config?.models && config.models.length > 0) {
+      return config.models.map((m) => m.id);
+    }
+    if (executor && MODELS_BY_EXECUTOR[executor]) {
+      return MODELS_BY_EXECUTOR[executor];
+    }
+    return DEFAULT_ALL_MODELS;
+  }, [config?.models, executor]);
+
+  const isLive = Boolean(config?.models && config.models.length > 0);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="block text-low">Model (Live CLI / Custom)</label>
+        {loadingModels ? (
+          <span className="text-[10px] text-yellow-500 animate-pulse font-mono flex items-center gap-1">
+            <span className="inline-block size-1.5 rounded-full bg-yellow-500 animate-ping" />
+            Querying CLI...
+          </span>
+        ) : isLive ? (
+          <span className="text-[10px] text-green-500 font-mono">
+            ● Live CLI ({availableModels.length})
+          </span>
+        ) : null}
+      </div>
+      <input
+        type="text"
+        list={`models-list-${index}`}
+        value={model ?? ''}
+        onChange={(e) => onChange(e.target.value || undefined)}
+        className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high font-mono"
+        placeholder={
+          availableModels[0]
+            ? `e.g. ${availableModels[0]}`
+            : 'e.g. gemini-2.5-pro'
+        }
+      />
+      <datalist id={`models-list-${index}`}>
+        {availableModels.map((m) => (
+          <option key={m} value={m} />
+        ))}
+      </datalist>
+    </div>
+  );
 }
 
 export function PipelineSettingsSection() {
@@ -927,87 +1013,26 @@ export function PipelineSettingsSection() {
                                     </div>
 
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
-                                      <div>
-                                        <div className="flex items-center justify-between mb-1">
-                                          <label className="block text-low">
-                                            Model (Live CLI / Custom)
-                                          </label>
-                                          {st.executor &&
-                                          liveModelsByExecutor[st.executor] ? (
-                                            <span className="text-[10px] text-green-500 font-mono">
-                                              ● Live CLI (
-                                              {
-                                                liveModelsByExecutor[
-                                                  st.executor
-                                                ].length
-                                              }
-                                              )
-                                            </span>
-                                          ) : null}
-                                        </div>
-                                        <input
-                                          type="text"
-                                          list={`models-list-${idx}`}
-                                          value={st.model ?? ''}
-                                          onFocus={() => {
-                                            if (st.executor) {
-                                              void fetchLiveModels(st.executor);
-                                            }
-                                          }}
-                                          onChange={(e) =>
-                                            updateVisualPipeline(
-                                              s.id,
-                                              (prev) => {
-                                                const nextStages = [
-                                                  ...(prev.stage ?? []),
-                                                ];
-                                                nextStages[idx] = {
-                                                  ...nextStages[idx],
-                                                  model:
-                                                    e.target.value || undefined,
-                                                };
-                                                return {
-                                                  ...prev,
-                                                  stage: nextStages,
-                                                };
-                                              }
-                                            )
-                                          }
-                                          className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high font-mono"
-                                          placeholder={
-                                            st.executor &&
-                                            (liveModelsByExecutor[
-                                              st.executor
-                                            ]?.[0] ||
-                                              MODELS_BY_EXECUTOR[
-                                                st.executor
-                                              ]?.[0])
-                                              ? `e.g. ${
-                                                  liveModelsByExecutor[
-                                                    st.executor
-                                                  ]?.[0] ||
-                                                  MODELS_BY_EXECUTOR[
-                                                    st.executor
-                                                  ][0]
-                                                }`
-                                              : 'e.g. gemini-2.5-pro, claude-3-7-sonnet'
-                                          }
-                                        />
-                                        <datalist id={`models-list-${idx}`}>
-                                          {(
-                                            (st.executor &&
-                                              (liveModelsByExecutor[
-                                                st.executor
-                                              ] ||
-                                                MODELS_BY_EXECUTOR[
-                                                  st.executor
-                                                ])) ||
-                                            DEFAULT_ALL_MODELS
-                                          ).map((m) => (
-                                            <option key={m} value={m} />
-                                          ))}
-                                        </datalist>
-                                      </div>
+                                      <StageModelInput
+                                        executor={st.executor}
+                                        model={st.model}
+                                        index={idx}
+                                        onChange={(newModel) =>
+                                          updateVisualPipeline(s.id, (prev) => {
+                                            const nextStages = [
+                                              ...(prev.stage ?? []),
+                                            ];
+                                            nextStages[idx] = {
+                                              ...nextStages[idx],
+                                              model: newModel,
+                                            };
+                                            return {
+                                              ...prev,
+                                              stage: nextStages,
+                                            };
+                                          })
+                                        }
+                                      />
 
                                       <div>
                                         <label className="block text-low mb-1">

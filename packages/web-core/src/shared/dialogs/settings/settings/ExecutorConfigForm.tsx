@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { BaseCodingAgent } from 'shared/types';
 import { settingsRjsfTheme } from './rjsf/theme';
 import { SettingsSaveBar } from './SettingsComponents';
+import { useModelSelectorConfig } from '@/shared/hooks/useExecutorDiscovery';
 
 interface ExecutorConfigFormProps {
   executor: BaseCodingAgent;
@@ -37,9 +38,38 @@ export function ExecutorConfigForm({
     RJSFValidationError[]
   >([]);
 
-  const schema = useMemo(() => {
+  const { config: discoveredConfig, loadingModels } =
+    useModelSelectorConfig(executor);
+
+  const baseSchema = useMemo(() => {
     return schemas[executor];
   }, [executor]);
+
+  const dynamicSchema = useMemo(() => {
+    if (!baseSchema) return null;
+    if (!discoveredConfig?.models || discoveredConfig.models.length === 0) {
+      return baseSchema;
+    }
+
+    try {
+      const cloned = JSON.parse(JSON.stringify(baseSchema));
+      const modelList = discoveredConfig.models;
+      const modelIds = modelList.map((m) => m.id);
+      const modelNames = modelList.map((m) => m.name || m.id);
+
+      if (cloned.properties?.model) {
+        cloned.properties.model.enum = modelIds;
+        cloned.properties.model.enumNames = modelNames;
+      }
+      if (cloned.properties?.default_model) {
+        cloned.properties.default_model.enum = modelIds;
+        cloned.properties.default_model.enumNames = modelNames;
+      }
+      return cloned;
+    } catch {
+      return baseSchema;
+    }
+  }, [baseSchema, discoveredConfig?.models]);
 
   // Custom handler for env field updates
   const handleEnvChange = useCallback(
@@ -96,7 +126,7 @@ export function ExecutorConfigForm({
     setValidationErrors(errors);
   };
 
-  if (!schema) {
+  if (!dynamicSchema) {
     return (
       <div className="bg-error/10 border border-error/50 rounded-sm p-4 text-error">
         {t('settings.agents.errors.schemaNotFound', { executor })}
@@ -108,8 +138,26 @@ export function ExecutorConfigForm({
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between bg-panel/60 border border-border px-3 py-1.5 rounded-sm text-xs">
+        <span className="text-low">Live CLI Discovery:</span>
+        {loadingModels ? (
+          <span className="text-yellow-500 animate-pulse font-mono flex items-center gap-1">
+            <span className="inline-block size-1.5 rounded-full bg-yellow-500 animate-ping" />
+            Querying {executor} models...
+          </span>
+        ) : discoveredConfig?.models?.length ? (
+          <span className="text-green-500 font-medium font-mono">
+            ● {discoveredConfig.models.length} models discovered from {executor}
+          </span>
+        ) : (
+          <span className="text-low font-mono">
+            Static default schemas active
+          </span>
+        )}
+      </div>
+
       <Form
-        schema={schema}
+        schema={dynamicSchema}
         uiSchema={uiSchema}
         formData={formData}
         formContext={formContext}
