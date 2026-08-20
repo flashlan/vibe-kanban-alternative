@@ -127,3 +127,18 @@ prompt = "Boot workspace dev server, output preview URL, and pause for human ope
 
 * **Desmarcada**: O pipeline roda 100% autônomo até o merge e conclusão.
 * **Marcada**: O pipeline pausa após o Review, sobe o Dev Server no Preview Proxy (porta `3003`), exibe o link ao vivo e só realiza o merge após o desenvolvedor clicar em **`[Approve & Merge]`**.
+
+---
+
+## 🔒 7. Padrão ADR-027: Swarm de Leitura Paralela e Execução Linear de Código
+
+Para garantir **zero conflitos de Git** e eliminar riscos de agentes corrompendo arquivos simultâneos, o Vibe Kanban adota o padrão formalizado no [**ADR-027**](ADR/ADR-027-parallel-read-swarm-and-linear-execution.md):
+
+1. **Fase 1: Paralelismo de Leitura (Swarm)**:
+   * Múltiplos agentes leves (`Researcher`, `Codebase Inspector`, `RAG Recall`) rodam concorrentemente para ler e indexar o contexto sem risco de escrita.
+   * O `Planner` consolida tudo na `SPEC.md`.
+2. **Fase 2: Escrita Linear (Coder Especialista)**:
+   * O `Claude 3.7 Sonnet` executa a implementação de código de forma linear e determinística.
+3. **Fase 3: Relações de Bloqueio no Kanban (`IssueRelationshipType::Blocking`)**:
+   * Sub-issues dependentes exibem o status `⏳ Bloqueada por #ID` e só são liberadas para execução quando as tarefas anteriores alcançarem `Done`.
+
