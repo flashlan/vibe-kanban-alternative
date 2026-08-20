@@ -48,14 +48,66 @@ const VALIDATE_DEBOUNCE_MS = 400;
 
 const KNOWN_EXECUTORS = [
   { value: '', label: 'Default / Project Lead' },
-  { value: 'antigravity', label: '🤖 Antigravity (Gemini Pro / Flash)' },
-  { value: 'claude', label: '🤖 Claude Code' },
-  { value: 'codex', label: '🤖 Codex' },
-  { value: 'opencode', label: '🤖 OpenCode' },
+  { value: 'antigravity', label: '🤖 Antigravity (Gemini 2.5 Pro / Flash)' },
+  { value: 'claude', label: '🤖 Claude Code (Sonnet / Haiku / Opus)' },
+  { value: 'codex', label: '🤖 Codex (GPT-4o / o3-mini / o1)' },
+  { value: 'opencode', label: '🤖 OpenCode (DeepSeek R1 / GLM / Qwen)' },
+  { value: 'qwen_code', label: '🤖 Qwen Code (Qwen 2.5 Coder / Max)' },
+  { value: 'droid', label: '🤖 Droid (Factory Droid / Claude / GPT)' },
+  { value: 'gemini', label: '🤖 Gemini (Google AI Studio)' },
+  { value: 'cursor', label: '🤖 Cursor Agent' },
+  { value: 'copilot', label: '🤖 GitHub Copilot' },
+  { value: 'amp', label: '🤖 Amp' },
   { value: 'local-executor', label: '⚡ Local Host Command' },
 ];
 
-const KNOWN_MODELS = [
+const MODELS_BY_EXECUTOR: Record<string, string[]> = {
+  antigravity: [
+    'gemini-2.5-pro',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-2.0-pro-exp-02-05',
+    'gemini-1.5-pro',
+    'gemini-1.5-flash',
+  ],
+  claude: [
+    'claude-3-7-sonnet',
+    'claude-3-5-sonnet',
+    'claude-3-5-haiku',
+    'claude-3-opus',
+  ],
+  codex: ['o3-mini', 'gpt-4o', 'gpt-4o-mini', 'o1', 'o1-mini', 'codex-v1'],
+  opencode: [
+    'deepseek-reasoner',
+    'deepseek-chat',
+    'glm-4-plus',
+    'glm-4-air',
+    'qwen-max',
+    'qwen-plus',
+    'claude-3-5-sonnet',
+    'gpt-4o',
+  ],
+  qwen_code: [
+    'qwen2.5-coder-32b',
+    'qwen2.5-coder-7b',
+    'qwen-max',
+    'qwen-plus',
+    'qwen-turbo',
+  ],
+  droid: ['claude-3-7-sonnet', 'claude-3-5-sonnet', 'gpt-4o', 'droid-agent'],
+  gemini: [
+    'gemini-2.5-pro',
+    'gemini-2.5-flash',
+    'gemini-2.0-flash',
+    'gemini-1.5-pro',
+  ],
+  cursor: ['claude-3-7-sonnet', 'cursor-small', 'gpt-4o'],
+  copilot: ['claude-3.5-sonnet', 'gpt-4o', 'o3-mini'],
+  amp: ['claude-3-5-sonnet', 'gpt-4o', 'amp-default'],
+  'local-executor': ['system-shell'],
+};
+
+const DEFAULT_ALL_MODELS = [
   'gemini-2.5-pro',
   'gemini-2.5-flash',
   'claude-3-7-sonnet',
@@ -63,8 +115,11 @@ const KNOWN_MODELS = [
   'claude-3-5-haiku',
   'gpt-4o',
   'o3-mini',
+  'deepseek-reasoner',
+  'deepseek-chat',
+  'qwen2.5-coder-32b',
+  'qwen-max',
   'codex-v1',
-  'deepseek-r1',
 ];
 
 interface StageData {
@@ -791,7 +846,14 @@ export function PipelineSettingsSection() {
                                         </label>
                                         <select
                                           value={st.executor ?? ''}
-                                          onChange={(e) =>
+                                          onChange={(e) => {
+                                            const newExec =
+                                              e.target.value || undefined;
+                                            const suggestedModel =
+                                              newExec &&
+                                              MODELS_BY_EXECUTOR[newExec]
+                                                ? MODELS_BY_EXECUTOR[newExec][0]
+                                                : undefined;
                                             updateVisualPipeline(
                                               s.id,
                                               (prev) => {
@@ -800,16 +862,16 @@ export function PipelineSettingsSection() {
                                                 ];
                                                 nextStages[idx] = {
                                                   ...nextStages[idx],
-                                                  executor:
-                                                    e.target.value || undefined,
+                                                  executor: newExec,
+                                                  model: suggestedModel,
                                                 };
                                                 return {
                                                   ...prev,
                                                   stage: nextStages,
                                                 };
                                               }
-                                            )
-                                          }
+                                            );
+                                          }}
                                           className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high"
                                         >
                                           {KNOWN_EXECUTORS.map((ex) => (
@@ -827,7 +889,7 @@ export function PipelineSettingsSection() {
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
                                       <div>
                                         <label className="block text-low mb-1">
-                                          Model (Optional)
+                                          Model (Select or Type)
                                         </label>
                                         <input
                                           type="text"
@@ -852,11 +914,20 @@ export function PipelineSettingsSection() {
                                               }
                                             )
                                           }
-                                          className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high"
-                                          placeholder="e.g. gemini-2.5-pro, claude-3-7-sonnet"
+                                          className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high font-mono"
+                                          placeholder={
+                                            st.executor &&
+                                            MODELS_BY_EXECUTOR[st.executor]
+                                              ? `e.g. ${MODELS_BY_EXECUTOR[st.executor][0]}`
+                                              : 'e.g. gemini-2.5-pro, claude-3-7-sonnet'
+                                          }
                                         />
                                         <datalist id={`models-list-${idx}`}>
-                                          {KNOWN_MODELS.map((m) => (
+                                          {(st.executor &&
+                                          MODELS_BY_EXECUTOR[st.executor]
+                                            ? MODELS_BY_EXECUTOR[st.executor]
+                                            : DEFAULT_ALL_MODELS
+                                          ).map((m) => (
                                             <option key={m} value={m} />
                                           ))}
                                         </datalist>
