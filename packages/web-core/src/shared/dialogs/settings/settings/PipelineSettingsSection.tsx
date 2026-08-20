@@ -6,6 +6,7 @@ import {
   CaretDownIcon,
   CaretRightIcon,
   CodeIcon,
+  LockIcon,
   PlusIcon,
   SlidersHorizontalIcon,
   SpinnerIcon,
@@ -30,6 +31,18 @@ const BUNDLED_IDS = new Set([
   'async-claude-sonnet',
   'async-claude-fable',
   'async-opencode-glm',
+]);
+const CORE_STAGE_IDS = new Set([
+  'plan',
+  'implement',
+  'code-review',
+  'manual-review',
+  'merge',
+  'spec',
+  'test',
+  'review',
+  'verify',
+  'deploy',
 ]);
 const VALIDATE_DEBOUNCE_MS = 400;
 
@@ -408,6 +421,7 @@ export function PipelineSettingsSection() {
               const draftInvalid = draftValidation?.valid === false;
               const editorMode = editorModeById[s.id] ?? 'visual';
               const parsedData = tomlToPipelineData(draft);
+              const isBundled = BUNDLED_IDS.has(s.id);
 
               return (
                 <div
@@ -652,28 +666,55 @@ export function PipelineSettingsSection() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
                                   <div>
-                                    <label className="block text-low mb-1">
-                                      Stage ID (Slug)
+                                    <label className="flex items-center gap-1 text-low mb-1">
+                                      {isBundled ||
+                                      CORE_STAGE_IDS.has(st.id) ? (
+                                        <>
+                                          <LockIcon className="size-3 text-brand" />
+                                          <span>Stage ID (Protected)</span>
+                                        </>
+                                      ) : (
+                                        <span>Stage ID (Slug)</span>
+                                      )}
                                     </label>
                                     <input
                                       type="text"
                                       value={st.id}
-                                      onChange={(e) =>
+                                      disabled={
+                                        isBundled || CORE_STAGE_IDS.has(st.id)
+                                      }
+                                      readOnly={
+                                        isBundled || CORE_STAGE_IDS.has(st.id)
+                                      }
+                                      onChange={(e) => {
+                                        const cleanSlug = e.target.value
+                                          .toLowerCase()
+                                          .replace(/[^a-z0-9_-]/g, '-');
                                         updateVisualPipeline(s.id, (prev) => {
                                           const nextStages = [
                                             ...(prev.stage ?? []),
                                           ];
                                           nextStages[idx] = {
                                             ...nextStages[idx],
-                                            id: e.target.value,
+                                            id: cleanSlug,
                                           };
                                           return {
                                             ...prev,
                                             stage: nextStages,
                                           };
-                                        })
+                                        });
+                                      }}
+                                      className={cn(
+                                        'w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high',
+                                        (isBundled ||
+                                          CORE_STAGE_IDS.has(st.id)) &&
+                                          'cursor-not-allowed opacity-60 bg-panel font-mono text-[11px]'
+                                      )}
+                                      title={
+                                        isBundled || CORE_STAGE_IDS.has(st.id)
+                                          ? 'Stage ID is protected to ensure system and card compatibility.'
+                                          : 'Unique stage identifier slug'
                                       }
-                                      className="w-full text-xs rounded-sm border border-border bg-secondary px-2 py-1.5 text-high"
                                       placeholder="e.g. plan, code-review"
                                     />
                                   </div>
