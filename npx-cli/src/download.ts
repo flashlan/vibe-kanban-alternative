@@ -53,9 +53,13 @@ type ProgressCallback = (downloaded: number, total: number) => void;
 function fetchJson<T>(url: string): Promise<T> {
   return new Promise((resolve, reject) => {
     https
-      .get(url, (res) => {
-        if (res.statusCode === 301 || res.statusCode === 302) {
-          return fetchJson<T>(res.headers.location!)
+      .get(url, { headers: { 'User-Agent': 'vibe-kanban-alternative-cli' } }, (res) => {
+        if (
+          res.statusCode &&
+          [301, 302, 303, 307, 308].includes(res.statusCode) &&
+          res.headers.location
+        ) {
+          return fetchJson<T>(res.headers.location)
             .then(resolve)
             .catch(reject);
         }
@@ -94,12 +98,16 @@ function downloadFile(
     };
 
     https
-      .get(url, (res) => {
-        if (res.statusCode === 301 || res.statusCode === 302) {
+      .get(url, { headers: { 'User-Agent': 'vibe-kanban-alternative-cli' } }, (res) => {
+        if (
+          res.statusCode &&
+          [301, 302, 303, 307, 308].includes(res.statusCode) &&
+          res.headers.location
+        ) {
           file.close();
           cleanup();
           return downloadFile(
-            res.headers.location!,
+            res.headers.location,
             destPath,
             expectedSha256,
             onProgress

@@ -7,6 +7,15 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-indie.ym
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.33] - 2026-08-19
+
+### Fixed
+
+- **Lightweight NPM Wrapper with Robust Redirects**:
+  - Configured `npx-cli` `package.json` to publish only the 14KB Node runner (`bin/cli.js`).
+  - Added HTTP redirect (301, 302, 303, 307, 308) and `User-Agent` support to `download.ts`.
+  - Ensures clean automatic GitHub Release binary retrieval across macOS, Linux, and Windows.
+
 ## [0.2.32] - 2026-08-19
 
 ### Fixed
