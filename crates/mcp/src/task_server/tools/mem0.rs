@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use rmcp::{
     ErrorData, handler::server::wrapper::Parameters, model::CallToolResult, schemars, tool,
     tool_router,
@@ -16,6 +18,33 @@ fn mem0_url() -> String {
 /// Keeps a vague query from flooding the agent's context with loosely
 /// related memories — see ADR-028.
 const DEFAULT_SEARCH_LIMIT: usize = 5;
+
+/// mem0 is an OPTIONAL dependency (a separate Docker container the user may
+/// not have running). A connection failure — as opposed to mem0 responding
+/// with an error — almost always just means "not installed/not started",
+/// not a bug worth repeating on every single tool call across a whole
+/// session. Log it once per process at `warn`, then drop to `debug` for the
+/// rest of that process's lifetime; every call still gracefully degrades
+/// (empty search results / stored=false) rather than failing the tool call,
+/// so an agent is never blocked by mem0 being absent.
+static MEM0_UNREACHABLE_WARNED: AtomicBool = AtomicBool::new(false);
+
+fn note_mem0_unreachable(op: &str, user_id: &str, error: &str) {
+    if MEM0_UNREACHABLE_WARNED
+        .compare_exchange(false, true, Ordering::Relaxed, Ordering::Relaxed)
+        .is_ok()
+    {
+        tracing::warn!(
+            target: "mem0",
+            op,
+            user_id,
+            error,
+            "mem0 unreachable — treating as not installed; degrading gracefully for the rest of this session (further occurrences logged at debug)"
+        );
+    } else {
+        tracing::debug!(target: "mem0", op, user_id, error, "mem0 still unreachable");
+    }
+}
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 struct McpMemorySearchRequest {
@@ -83,10 +112,12 @@ struct Mem0SaveResponse {
 #[tool_router(router = mem0_tools_router, vis = "pub")]
 impl McpServer {
     /// Search the project's shared mem0 memory for facts relevant to a query.
-    /// Returns ranked, deduplicated memory contents (best-effort: empty list
-    /// when mem0 is unreachable).
+    /// Returns ranked, deduplicated memory contents. Best-effort: mem0 is an
+    /// optional dependency, so any failure (unreachable, bad status,
+    /// unparseable response) degrades to an empty list instead of failing
+    /// the tool call — a missing/misbehaving mem0 must never block an agent.
     #[tool(
-        description = "Search the project's shared memory (mem0) for facts relevant to a query. Use this BEFORE analyzing code or starting work to recall decisions, conventions, and lessons the project already learned. Returns at most `limit` hits (default 5) — a small, cheap call. If the results don't cover what you need, call this again with a narrower or differently-worded query rather than raising `limit`; iterating with a sharper query beats fetching more of a vague one."
+        description = "Search the project's shared memory (mem0) for facts relevant to a query. Use this BEFORE analyzing code or starting work to recall decisions, conventions, and lessons the project already learned. Returns at most `limit` hits (default 5) — a small, cheap call. If the results don't cover what you need, call this again with a narrower or differently-worded query rather than raising `limit`; iterating with a sharper query beats fetching more of a vague one. mem0 is optional — if it isn't running, this returns an empty list rather than an error."
     )]
     async fn memory_search(
         &self,
@@ -112,18 +143,30 @@ impl McpServer {
         let resp = match client.post(&url).json(&body).send().await {
             Ok(r) if r.status().is_success() => r,
             Ok(r) => {
-                return McpServer::err(format!("mem0 search returned status {}", r.status()), None);
+                tracing::warn!(
+                    target: "mem0",
+                    user_id = %user_id,
+                    status = %r.status(),
+                    "memory_search: mem0 responded with a non-success status; degrading to empty results"
+                );
+                return McpServer::success(&McpMemorySearchResult { memories: vec![] });
             }
-            Err(e) => return McpServer::err("mem0 search failed".to_string(), Some(e.to_string())),
+            Err(e) => {
+                note_mem0_unreachable("memory_search", &user_id, &e.to_string());
+                return McpServer::success(&McpMemorySearchResult { memories: vec![] });
+            }
         };
 
         let parsed: Mem0SearchResponse = match resp.json().await {
             Ok(parsed) => parsed,
             Err(e) => {
-                return McpServer::err(
-                    "failed to parse mem0 search response".to_string(),
-                    Some(e.to_string()),
+                tracing::warn!(
+                    target: "mem0",
+                    user_id = %user_id,
+                    error = %e,
+                    "memory_search: unparseable mem0 response; degrading to empty results"
                 );
+                return McpServer::success(&McpMemorySearchResult { memories: vec![] });
             }
         };
 
@@ -145,15 +188,24 @@ impl McpServer {
             .take(limit)
             .collect();
 
+        tracing::info!(
+            target: "mem0",
+            user_id = %user_id,
+            query = %query,
+            hits = memories.len(),
+            "memory_search ok"
+        );
+
         McpServer::success(&McpMemorySearchResult { memories })
     }
 
     /// Save a fact to the project's shared mem0 memory. Only persist VERIFIED,
     /// durable, self-contained facts (decisions, conventions, root causes) —
     /// never speculation or unverified claims, so future agents do not pick up
-    /// false memories.
+    /// false memories. Best-effort: mem0 is an optional dependency, so any
+    /// failure degrades to `stored: false` instead of failing the tool call.
     #[tool(
-        description = "Save a verified, durable fact to the project's shared memory (mem0). Best-effort: returns stored=false when mem0 is unreachable."
+        description = "Save a verified, durable fact to the project's shared memory (mem0). Best-effort: returns stored=false when mem0 is unreachable or misbehaving, rather than an error — mem0 is optional."
     )]
     async fn memory_save(
         &self,
@@ -170,14 +222,35 @@ impl McpServer {
         let resp = match client.post(&url).json(&body).send().await {
             Ok(r) if r.status().is_success() => r,
             Ok(r) => {
-                return McpServer::err(format!("mem0 save returned status {}", r.status()), None);
+                tracing::warn!(
+                    target: "mem0",
+                    user_id = %user_id,
+                    status = %r.status(),
+                    "memory_save: mem0 responded with a non-success status; degrading to stored=false"
+                );
+                return McpServer::success(&McpMemorySaveResult {
+                    success: false,
+                    stored: false,
+                });
             }
-            Err(e) => return McpServer::err("mem0 save failed".to_string(), Some(e.to_string())),
+            Err(e) => {
+                note_mem0_unreachable("memory_save", &user_id, &e.to_string());
+                return McpServer::success(&McpMemorySaveResult {
+                    success: false,
+                    stored: false,
+                });
+            }
         };
 
         let parsed: Mem0SaveResponse = match resp.json().await {
             Ok(parsed) => parsed,
-            Err(_) => {
+            Err(e) => {
+                tracing::warn!(
+                    target: "mem0",
+                    user_id = %user_id,
+                    error = %e,
+                    "memory_save: unparseable mem0 response; degrading to stored=false"
+                );
                 return McpServer::success(&McpMemorySaveResult {
                     success: false,
                     stored: false,
@@ -186,9 +259,18 @@ impl McpServer {
         };
 
         let stored = parsed.stored.map(|s| !s.is_empty()).unwrap_or(false);
-        McpServer::success(&McpMemorySaveResult {
-            success: parsed.ok.unwrap_or(true),
-            stored,
-        })
+        let success = parsed.ok.unwrap_or(true);
+        if success && stored {
+            tracing::info!(target: "mem0", user_id = %user_id, "memory_save ok");
+        } else {
+            tracing::warn!(
+                target: "mem0",
+                user_id = %user_id,
+                success,
+                stored,
+                "memory_save returned ok status but did not confirm storage"
+            );
+        }
+        McpServer::success(&McpMemorySaveResult { success, stored })
     }
 }

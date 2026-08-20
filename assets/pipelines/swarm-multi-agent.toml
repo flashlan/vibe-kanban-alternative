@@ -2,19 +2,25 @@ name = "Swarm Multi-Agent"
 description = "Plan (Antigravity) → Implement (Claude Code) → Review (Codex) → Manual Preview → Squash-merge"
 
 [[stage]]
+id = "memory"
+label = "Project memory (mem0) — per-stage recall & save"
+default_enabled = true
+prompt = "PROJECT MEMORY (mem0) — this discipline applies at EVERY stage below (plan, implement, review, merge), not just once. This pipeline hands work off between stages, and sometimes between different coding-agent CLIs or a freshly resumed session with no memory of earlier turns — mem0 is the durable bridge between them. SCOPING: call `get_context` first — `workspace_repos` lists every repo attached to this workspace (usually one); use `workspace_repos[0].repo_name` as the PRIMARY `user_id` for `memory_search`/`memory_save`. If a second repo in that list is genuinely involved (e.g. cross-repo integration work), also use its `repo_name`. Never use a repo slug outside `workspace_repos`. (1) BEFORE starting your stage's work, call `memory_search` with a query naming the files/modules/area this card touches — recall what an earlier stage already decided or discovered so you don't redo that work. Returns at most 5 hits per call; refine and re-call if they don't cover what you need. Apply only genuinely relevant hits — never let one override the card's explicit instructions. (2) RIGHT BEFORE you finish your stage and advance (emit `VK-PIPELINE-STAGE: N`), call `memory_save` with a self-contained, factual, VERIFIED summary of what THIS stage decided or produced — the plan's key architectural choices and exact file list, the implementer's key non-obvious tradeoffs, the reviewer's confirmed findings and how they were resolved. This is what lets the next stage's agent — even a different CLI, even a freshly resumed session — `memory_search` for it instead of starting blind. Never save speculation, half-finished work, or ephemeral state (commit hashes, timestamps, log lines) — a false or unverified memory poisons every later stage and every future card."
+
+[[stage]]
 id = "plan"
 label = "1. Architecture & Plan (Antigravity)"
 default_enabled = true
 executor = "antigravity"
 reasoning_effort = "high"
-prompt = "Analyze the codebase, project context, and requirements. Write a technical spec to `SPEC.md` and a step-by-step implementation plan to `IMPLEMENTATION_PLAN.md` at the workspace root (one level above the repo) with explicit task checklists before proceeding."
+prompt = "Analyze the codebase, project context, and requirements. Write a technical spec to `SPEC.md` and a step-by-step implementation plan to `IMPLEMENTATION_PLAN.md` at the workspace root (one level above the repo) with explicit task checklists before proceeding. For EACH task in the checklist, name the exact file path(s) and, where useful, the specific function/module inside them that the task touches — this file map is what the implementation stage reads instead of re-exploring the codebase from scratch, saving a large amount of tokens. Be concrete: prefer 'edit `crates/foo/src/bar.rs`, function `baz()`' over a vague area description."
 
 [[stage]]
 id = "implement"
 label = "2. Code Implementation (Claude Code)"
 default_enabled = true
 executor = "claude"
-prompt = "Read `IMPLEMENTATION_PLAN.md` and `SPEC.md` from the workspace root. Implement each planned task in order, writing clean code and tests, running the test suite to verify, and committing incrementally."
+prompt = "Read `IMPLEMENTATION_PLAN.md` and `SPEC.md` from the workspace root. Trust the file map the plan stage built — go directly to the files/functions it named for each task instead of re-exploring the codebase from scratch; only fall back to broader exploration if a named location turns out to be wrong or incomplete. Implement each planned task in order, writing clean code and tests, running the test suite to verify, and committing incrementally."
 
 [[stage]]
 id = "code-review"
