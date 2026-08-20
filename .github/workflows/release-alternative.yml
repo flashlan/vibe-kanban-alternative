@@ -217,7 +217,6 @@ jobs:
         with:
           # npm@latest (12.x) requires node >= 22; keep this in step with it.
           node-version: 24
-          registry-url: "https://registry.npmjs.org"
 
       # Trusted publishing (OIDC) needs npm >= 11.5.1, newer than setup-node ships.
       # Pinned to the 11.x line: npm@12.0.0 crashes on publish (its bundled
@@ -253,7 +252,14 @@ jobs:
       - run: npm ci
       - run: npm run build
       # Authenticates via OIDC (Trusted Publishing configured on npmjs.com) or
-      # fallback NODE_AUTH_TOKEN if NPM_TOKEN secret is configured.
-      - run: npm publish --access public --tag "$NPM_DIST_TAG"
+      # fallback NPM_TOKEN if secret is configured.
+      - name: Publish to npm
+        shell: bash
+        run: |
+          if [ -n "${NPM_TOKEN:-}" ]; then
+            echo "Configuring .npmrc with provided NPM_TOKEN"
+            echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          fi
+          npm publish --access public --tag "$NPM_DIST_TAG"
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
