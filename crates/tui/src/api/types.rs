@@ -97,6 +97,7 @@ impl ProcStatus {
 #[derive(Debug, Clone, Deserialize)]
 pub struct Repo {
     pub id: Uuid,
+    pub path: String,
     pub name: String,
     pub display_name: String,
     pub default_target_branch: Option<String>,

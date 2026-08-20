@@ -1802,6 +1802,7 @@ impl App {
                     self.load_board(pid);
                 }
             }
+            KeyCode::Char('t') => self.open_project_terminal(),
             KeyCode::Char('p') => self.cycle_project(1),
             KeyCode::Left | KeyCode::Char('h') => self.move_column(-1),
             KeyCode::Right | KeyCode::Char('l') => self.move_column(1),
@@ -1822,6 +1823,21 @@ impl App {
         self.kanban = Some(KanbanView::new());
         self.screen = Screen::Kanban;
         self.load_projects();
+    }
+
+    /// Open the current project's default repository in an external terminal
+    /// emulator. Falls back to a toast if the project has no linked repos.
+    fn open_project_terminal(&mut self) {
+        let Some(project_id) = self.kanban_project_id() else {
+            self.toast = Some("no project selected".into());
+            return;
+        };
+        let client = self.client.clone();
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            let result = open_project_terminal(&client, project_id).await;
+            let _ = tx.send(AppEvent::Toast(result));
+        });
     }
 
     fn kanban_project_id(&self) -> Option<Uuid> {
@@ -2768,4 +2784,65 @@ pub fn process_label(p: &ExecutionProcess) -> String {
         RunReason::DevServer => "devserver",
     };
     format!("{reason} · {}", short(&p.id))
+}
+
+/// Open an external terminal emulator in the first linked repo of `project_id`.
+/// Returns a user-facing toast message.
+async fn open_project_terminal(client: &ApiClient, project_id: Uuid) -> String {
+    let repos = match client.project_repos(project_id).await {
+        Ok(list) => list,
+        Err(e) => return format!("could not load project repos: {e}"),
+    };
+    let repo = match repos.first() {
+        Some(r) => r,
+        None => return "no repositories linked to this project".into(),
+    };
+    let path = std::path::PathBuf::from(&repo.path);
+    if !path.exists() {
+        return format!("repo path does not exist: {}", repo.path);
+    }
+    match open_terminal_at(&path) {
+        Ok(_) => format!("opened terminal at {}", repo.path),
+        Err(e) => format!("could not open terminal: {e}"),
+    }
+}
+
+/// Best-effort cross-platform external terminal launcher.
+fn open_terminal_at(path: &std::path::Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let path_str = path.to_str().unwrap_or(".");
+        // Prefer Terminal.app; fall back to the first available common emulator.
+        for app in ["Terminal", "iTerm", "Ghostty", "Warp", "Kitty"] {
+            if std::process::Command::new("open")
+                .args(["-a", app, path_str])
+                .spawn()
+                .is_ok()
+            {
+                return Ok(());
+            }
+        }
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let path_str = path.to_str().unwrap_or(".");
+        let candidates = [
+            vec!["xdg-terminal", path_str],
+            vec!["gnome-terminal", "--working-directory", path_str],
+            vec!["konsole", "--workdir", path_str],
+            vec!["alacritty", "--working-directory", path_str],
+            vec!["kitty", "--working-directory", path_str],
+            vec!["xfce4-terminal", "--working-directory", path_str],
+        ];
+        for args in &candidates {
+            if std::process::Command::new(args[0])
+                .args(&args[1..])
+                .spawn()
+                .is_ok()
+            {
+                return Ok(());
+            }
+        }
+    }
+    Err("no supported terminal emulator found".into())
 }

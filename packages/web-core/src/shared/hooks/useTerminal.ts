@@ -11,11 +11,21 @@ export interface TerminalInstance {
 export interface TerminalTab {
   id: string;
   title: string;
-  workspaceId: string;
+  /** Workspace-scoped terminal tabs carry the workspace id. */
+  workspaceId?: string;
+  /** Project/repo-scoped terminal tabs carry the project id and repo path. */
+  projectId?: string;
+  repoPath?: string;
   cwd: string;
   /** When set, this tab is attached to the agent's tmux session (`vk-<id>`). */
   executionProcessId?: string;
+  /** Persistent tmux session name for re-attachment after page reload. */
+  tmuxSessionName?: string;
 }
+
+export type TerminalScope =
+  | { type: 'workspace'; id: string }
+  | { type: 'project'; id: string };
 
 interface TerminalConnection {
   ws: WebSocket;
@@ -44,7 +54,31 @@ export interface TerminalContextType {
   closeTab: (workspaceId: string, tabId: string) => void;
   setActiveTab: (workspaceId: string, tabId: string) => void;
   updateTabTitle: (workspaceId: string, tabId: string, title: string) => void;
+  updateTabCwd: (workspaceId: string, tabId: string, cwd: string) => void;
+  setTmuxSessionName: (
+    workspaceId: string,
+    tabId: string,
+    tmuxSessionName: string
+  ) => void;
   clearWorkspaceTabs: (workspaceId: string) => void;
+  /** Project-scoped terminal tabs. */
+  getTabsForProject: (projectId: string) => TerminalTab[];
+  getActiveProjectTab: (projectId: string) => TerminalTab | null;
+  createProjectTab: (projectId: string, repoPath: string) => void;
+  closeProjectTab: (projectId: string, tabId: string) => void;
+  setActiveProjectTab: (projectId: string, tabId: string) => void;
+  updateProjectTabTitle: (
+    projectId: string,
+    tabId: string,
+    title: string
+  ) => void;
+  updateProjectTabCwd: (projectId: string, tabId: string, cwd: string) => void;
+  setProjectTabTmuxSessionName: (
+    projectId: string,
+    tabId: string,
+    tmuxSessionName: string
+  ) => void;
+  clearProjectTabs: (projectId: string) => void;
   registerTerminalInstance: (
     tabId: string,
     terminal: Terminal,
@@ -63,7 +97,8 @@ export interface TerminalContextType {
     tabId: string,
     endpoint: string,
     onData: (data: string) => void,
-    onExit?: () => void
+    onExit?: () => void,
+    onSessionName?: (name: string) => void
   ) => {
     send: (data: string) => void;
     resize: (cols: number, rows: number) => void;

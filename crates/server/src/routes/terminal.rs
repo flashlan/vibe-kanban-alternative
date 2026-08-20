@@ -30,13 +30,22 @@ use crate::{
 
 #[derive(Debug, Deserialize)]
 struct TerminalQuery {
-    pub workspace_id: Uuid,
+    /// Workspace-scoped terminal: the shell opens in the workspace's repo
+    /// directory. Required unless `repo_path` is provided.
+    pub workspace_id: Option<Uuid>,
+    /// Project/repo-scoped terminal: open a shell directly in this directory,
+    /// without needing a workspace. Required unless `workspace_id` is provided.
+    pub repo_path: Option<String>,
     /// When present, attach the terminal to the running headed agent's tmux
     /// session (`vk-<execution_process_id>`) instead of spawning a plain shell.
     /// The tmux session name is always server-derived from this id; the client
-    /// never supplies a shell command.
+    /// never supplies a shell command. Only valid together with `workspace_id`.
     #[serde(default)]
     pub execution_process_id: Option<Uuid>,
+    /// When present, re-attach to an existing tmux session by name (for
+    /// persistent terminal sessions that survive page reloads).
+    #[serde(default)]
+    pub tmux_session: Option<String>,
     #[serde(default = "default_cols")]
     pub cols: u16,
     #[serde(default = "default_rows")]
@@ -165,38 +174,7 @@ async fn terminal_ws(
     State(deployment): State<DeploymentImpl>,
     Query(query): Query<TerminalQuery>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let attempt = Workspace::find_by_id(&deployment.db().pool, query.workspace_id)
-        .await?
-        .ok_or_else(|| ApiError::BadRequest("Attempt not found".to_string()))?;
-
-    let container_ref = attempt
-        .container_ref
-        .ok_or_else(|| ApiError::BadRequest("Attempt has no workspace directory".to_string()))?;
-
-    let base_dir = PathBuf::from(&container_ref);
-    if !base_dir.exists() {
-        return Err(ApiError::BadRequest(
-            "Workspace directory does not exist".to_string(),
-        ));
-    }
-
-    let mut working_dir = base_dir.clone();
-    match WorkspaceRepo::find_repos_for_workspace(&deployment.db().pool, query.workspace_id).await {
-        Ok(repos) if repos.len() == 1 => {
-            let repo_dir = base_dir.join(&repos[0].name);
-            if repo_dir.exists() {
-                working_dir = repo_dir;
-            }
-        }
-        Ok(_) => {}
-        Err(e) => {
-            tracing::warn!(
-                "Failed to resolve repos for workspace {}: {}",
-                attempt.id,
-                e
-            );
-        }
-    }
+    let working_dir = resolve_working_dir(&deployment, &query).await?;
 
     // NOTE: attach-target validation is intentionally deferred to AFTER the WS
     // upgrade. Failing pre-upgrade would surface to the browser as a failed
@@ -205,6 +183,7 @@ async fn terminal_ws(
     // `TerminalMessage::Error` and close cleanly (code 1000), which the client
     // treats as terminal.
     let attach_process_id = query.execution_process_id;
+    let tmux_session = query.tmux_session;
     let workspace_id = query.workspace_id;
     Ok(ws.on_upgrade(move |socket| {
         handle_terminal_ws(
@@ -214,9 +193,89 @@ async fn terminal_ws(
             query.cols,
             query.rows,
             attach_process_id,
+            tmux_session,
             workspace_id,
         )
     }))
+}
+
+/// Validate an explicit `repo_path` for a project/repo-scoped terminal.
+fn validate_repo_path(repo_path: &str) -> Result<PathBuf, ApiError> {
+    let path = PathBuf::from(repo_path);
+    if !path.is_absolute() {
+        return Err(ApiError::BadRequest(
+            "repo_path must be absolute".to_string(),
+        ));
+    }
+    if !path.exists() {
+        return Err(ApiError::BadRequest("repo_path does not exist".to_string()));
+    }
+    if !path.is_dir() {
+        return Err(ApiError::BadRequest(
+            "repo_path is not a directory".to_string(),
+        ));
+    }
+    Ok(path)
+}
+
+/// Resolve the shell working directory from either a workspace id or an
+/// explicit repo path. Returns `BadRequest` when neither or both are supplied.
+async fn resolve_working_dir(
+    deployment: &DeploymentImpl,
+    query: &TerminalQuery,
+) -> Result<PathBuf, ApiError> {
+    match (&query.workspace_id, &query.repo_path) {
+        (None, None) => {
+            return Err(ApiError::BadRequest(
+                "Either workspace_id or repo_path is required".to_string(),
+            ));
+        }
+        (Some(_), Some(_)) => {
+            return Err(ApiError::BadRequest(
+                "Only one of workspace_id or repo_path is allowed".to_string(),
+            ));
+        }
+        (None, Some(repo_path)) => {
+            return validate_repo_path(repo_path);
+        }
+        (Some(workspace_id), None) => {
+            let attempt = Workspace::find_by_id(&deployment.db().pool, *workspace_id)
+                .await?
+                .ok_or_else(|| ApiError::BadRequest("Workspace not found".to_string()))?;
+
+            let container_ref = attempt.container_ref.ok_or_else(|| {
+                ApiError::BadRequest("Workspace has no workspace directory".to_string())
+            })?;
+
+            let base_dir = PathBuf::from(&container_ref);
+            if !base_dir.exists() {
+                return Err(ApiError::BadRequest(
+                    "Workspace directory does not exist".to_string(),
+                ));
+            }
+
+            let mut working_dir = base_dir.clone();
+            match WorkspaceRepo::find_repos_for_workspace(&deployment.db().pool, *workspace_id)
+                .await
+            {
+                Ok(repos) if repos.len() == 1 => {
+                    let repo_dir = base_dir.join(&repos[0].name);
+                    if repo_dir.exists() {
+                        working_dir = repo_dir;
+                    }
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to resolve repos for workspace {}: {}",
+                        attempt.id,
+                        e
+                    );
+                }
+            }
+            return Ok(working_dir);
+        }
+    }
 }
 
 async fn handle_terminal_ws(
@@ -226,56 +285,116 @@ async fn handle_terminal_ws(
     cols: u16,
     rows: u16,
     attach_process_id: Option<Uuid>,
-    workspace_id: Uuid,
+    tmux_session: Option<String>,
+    workspace_id: Option<Uuid>,
 ) {
     let is_attach = attach_process_id.is_some();
+    let is_resume = tmux_session.is_some();
+
+    // Attach mode is only meaningful for workspace-scoped terminals; a
+    // project/repo-scoped terminal has no execution process to attach to.
+    if is_attach && workspace_id.is_none() {
+        close_with_error(&mut socket, "execution_process_id requires workspace_id").await;
+        return;
+    }
 
     // Resolve the attach target (if any) post-upgrade. Any failure is reported
     // in-band and the socket is closed cleanly so the client does not reconnect.
-    let session_result = match attach_process_id {
-        Some(proc_id) => {
-            match resolve_attach_session(&deployment, proc_id, workspace_id).await {
-                Ok(session_name) => {
-                    // `-f ignore-size` makes this (web) client ignored when tmux
-                    // computes the shared window size, so the web xterm's
-                    // transient 80x24 (it opens before xterm's FitAddon settles)
-                    // never shrinks an already-attached external `tmux attach`.
-                    // Requires tmux >= 3.0. Exact-match target (`=`) mirrors
-                    // `tmux_has_session`.
-                    let args = vec![
-                        "attach-session".to_string(),
-                        "-f".to_string(),
-                        "ignore-size".to_string(),
-                        "-t".to_string(),
-                        format!("={session_name}"),
-                    ];
-                    deployment
-                        .pty()
-                        .create_session_with_command(
-                            "tmux".to_string(),
-                            args,
-                            working_dir,
-                            cols,
-                            rows,
-                        )
-                        .await
-                        .map_err(|e| e.to_string())
-                }
-                Err(attach_err) => Err(attach_err.message().to_string()),
-            }
+    let session_result = if let Some(session_name) = &tmux_session {
+        // Re-attach to an existing persistent tmux session
+        if local_deployment::terminal::tmux_has_session(session_name).await {
+            let args = vec![
+                "attach-session".to_string(),
+                "-f".to_string(),
+                "ignore-size".to_string(),
+                "-t".to_string(),
+                format!("={session_name}"),
+            ];
+            deployment
+                .pty()
+                .create_session_with_command("tmux".to_string(), args, working_dir, cols, rows)
+                .await
+                .map(|(id, rx)| (id, rx, Some(session_name.clone())))
+                .map_err(|e| e.to_string())
+        } else {
+            Err(format!(
+                "tmux session '{session_name}' is no longer running"
+            ))
         }
-        None => deployment
-            .pty()
-            .create_session(working_dir, cols, rows)
-            .await
-            .map_err(|e| e.to_string()),
+    } else if let Some(proc_id) = attach_process_id {
+        // Attach to an agent's tmux session. `workspace_id` is guaranteed
+        // `Some` here by the guard above.
+        let ws_id = workspace_id.expect("workspace_id checked above");
+        match resolve_attach_session(&deployment, proc_id, ws_id).await {
+            Ok(session_name) => {
+                let args = vec![
+                    "attach-session".to_string(),
+                    "-f".to_string(),
+                    "ignore-size".to_string(),
+                    "-t".to_string(),
+                    format!("={session_name}"),
+                ];
+                deployment
+                    .pty()
+                    .create_session_with_command("tmux".to_string(), args, working_dir, cols, rows)
+                    .await
+                    .map(|(id, rx)| (id, rx, None))
+                    .map_err(|e| e.to_string())
+            }
+            Err(attach_err) => Err(attach_err.message().to_string()),
+        }
+    } else {
+        // Create a new persistent tmux session for regular terminals
+        let session_name = format!("vk-tab-{}", Uuid::new_v4());
+        let shell = utils::shell::get_interactive_shell().await;
+        let shell_str = shell.to_string_lossy().to_string();
+
+        // Create the tmux session with the user's login shell
+        let mut tmux_args = vec![
+            "new-session".to_string(),
+            "-d".to_string(),
+            "-s".to_string(),
+            session_name.clone(),
+            "-c".to_string(),
+            working_dir.to_string_lossy().to_string(),
+            shell_str,
+        ];
+
+        let output = tokio::process::Command::new("tmux")
+            .args(&tmux_args)
+            .output()
+            .await;
+
+        match output {
+            Ok(out) if out.status.success() => {
+                // Attach to the newly created session
+                let args = vec![
+                    "attach-session".to_string(),
+                    "-f".to_string(),
+                    "ignore-size".to_string(),
+                    "-t".to_string(),
+                    format!("={session_name}"),
+                ];
+                deployment
+                    .pty()
+                    .create_session_with_command("tmux".to_string(), args, working_dir, cols, rows)
+                    .await
+                    .map(|(id, rx)| (id, rx, Some(session_name)))
+                    .map_err(|e| e.to_string())
+            }
+            Ok(out) => Err(format!(
+                "tmux new-session failed: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            )),
+            Err(e) => Err(format!("failed to run tmux: {e}")),
+        }
     };
 
-    let (session_id, mut output_rx) = match session_result {
+    let (session_id, mut output_rx, session_name) = match session_result {
         Ok(result) => result,
         Err(message) => {
             tracing::error!("Failed to create terminal session: {}", message);
-            if is_attach {
+            if is_attach || is_resume {
                 // Clean (code 1000) close so the client treats this as terminal
                 // and does not reconnect to a dead/absent session.
                 close_with_error(&mut socket, &message).await;
@@ -285,6 +404,14 @@ async fn handle_terminal_ws(
             return;
         }
     };
+
+    // Send the tmux session name to the client so it can store it for reconnection
+    if let Some(name) = &session_name {
+        let msg = serde_json::json!({ "type": "session_name", "name": name });
+        if let Ok(json) = serde_json::to_string(&msg) {
+            let _ = socket.send(Message::Text(json.into())).await;
+        }
+    }
 
     let pty_service = deployment.pty().clone();
     let session_id_for_input = session_id;
@@ -463,5 +590,27 @@ mod tests {
             ),
             Err(AttachError::WorkspaceMismatch)
         );
+    }
+
+    #[test]
+    fn validate_repo_path_rejects_relative() {
+        let result = validate_repo_path("relative/path");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("absolute"));
+    }
+
+    #[test]
+    fn validate_repo_path_rejects_missing() {
+        let result = validate_repo_path("/definitely/not/a/real/path/xyz");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("does not exist"));
+    }
+
+    #[test]
+    fn validate_repo_path_accepts_existing_dir() {
+        let tmp = std::env::temp_dir();
+        let result = validate_repo_path(tmp.to_str().unwrap());
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), tmp);
     }
 }

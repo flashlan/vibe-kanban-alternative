@@ -17,6 +17,8 @@ interface TerminalConnection {
 interface TerminalState {
   tabsByWorkspace: Record<string, TerminalTab[]>;
   activeTabByWorkspace: Record<string, string | null>;
+  tabsByProject: Record<string, TerminalTab[]>;
+  activeTabByProject: Record<string, string | null>;
 }
 
 type TerminalAction =
@@ -40,7 +42,45 @@ type TerminalAction =
       tabId: string;
       title: string;
     }
-  | { type: 'CLEAR_WORKSPACE_TABS'; workspaceId: string };
+  | {
+      type: 'UPDATE_TAB_CWD';
+      workspaceId: string;
+      tabId: string;
+      cwd: string;
+    }
+  | {
+      type: 'SET_TMUX_SESSION';
+      workspaceId: string;
+      tabId: string;
+      tmuxSessionName: string;
+    }
+  | { type: 'CLEAR_WORKSPACE_TABS'; workspaceId: string }
+  | {
+      type: 'CREATE_PROJECT_TAB';
+      projectId: string;
+      repoPath: string;
+    }
+  | { type: 'CLOSE_PROJECT_TAB'; projectId: string; tabId: string }
+  | { type: 'SET_ACTIVE_PROJECT_TAB'; projectId: string; tabId: string }
+  | {
+      type: 'UPDATE_PROJECT_TAB_TITLE';
+      projectId: string;
+      tabId: string;
+      title: string;
+    }
+  | {
+      type: 'UPDATE_PROJECT_TAB_CWD';
+      projectId: string;
+      tabId: string;
+      cwd: string;
+    }
+  | {
+      type: 'SET_PROJECT_TAB_TMUX_SESSION';
+      projectId: string;
+      tabId: string;
+      tmuxSessionName: string;
+    }
+  | { type: 'CLEAR_PROJECT_TABS'; projectId: string };
 
 function generateTabId(): string {
   return `term-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -59,7 +99,7 @@ function decodeBase64(base64: string): string {
 }
 
 /** Append a new tab for a workspace and make it active. */
-function addTab(
+function addWorkspaceTab(
   state: TerminalState,
   workspaceId: string,
   cwd: string,
@@ -68,7 +108,9 @@ function addTab(
   const existingTabs = state.tabsByWorkspace[workspaceId] || [];
   const newTab: TerminalTab = {
     id: generateTabId(),
-    title: executionProcessId ? 'Agent' : `Terminal ${existingTabs.length + 1}`,
+    title: executionProcessId
+      ? 'Agent'
+      : `Workspace ${existingTabs.length + 1} Terminal`,
     workspaceId,
     cwd,
     executionProcessId,
@@ -86,6 +128,33 @@ function addTab(
   };
 }
 
+/** Append a new tab for a project/repo and make it active. */
+function addProjectTab(
+  state: TerminalState,
+  projectId: string,
+  repoPath: string
+): TerminalState {
+  const existingTabs = state.tabsByProject[projectId] || [];
+  const newTab: TerminalTab = {
+    id: generateTabId(),
+    title: `Project Terminal ${existingTabs.length + 1}`,
+    projectId,
+    repoPath,
+    cwd: repoPath,
+  };
+  return {
+    ...state,
+    tabsByProject: {
+      ...state.tabsByProject,
+      [projectId]: [...existingTabs, newTab],
+    },
+    activeTabByProject: {
+      ...state.activeTabByProject,
+      [projectId]: newTab.id,
+    },
+  };
+}
+
 function terminalReducer(
   state: TerminalState,
   action: TerminalAction
@@ -93,7 +162,7 @@ function terminalReducer(
   switch (action.type) {
     case 'CREATE_TAB': {
       const { workspaceId, cwd, executionProcessId } = action;
-      return addTab(state, workspaceId, cwd, executionProcessId);
+      return addWorkspaceTab(state, workspaceId, cwd, executionProcessId);
     }
 
     case 'OPEN_OR_FOCUS_TAB': {
@@ -115,7 +184,7 @@ function terminalReducer(
           };
         }
       }
-      return addTab(state, workspaceId, cwd, executionProcessId);
+      return addWorkspaceTab(state, workspaceId, cwd, executionProcessId);
     }
 
     case 'CLOSE_TAB': {
@@ -171,6 +240,32 @@ function terminalReducer(
       };
     }
 
+    case 'UPDATE_TAB_CWD': {
+      const { workspaceId, tabId, cwd } = action;
+      const tabs = state.tabsByWorkspace[workspaceId] || [];
+      return {
+        ...state,
+        tabsByWorkspace: {
+          ...state.tabsByWorkspace,
+          [workspaceId]: tabs.map((t) => (t.id === tabId ? { ...t, cwd } : t)),
+        },
+      };
+    }
+
+    case 'SET_TMUX_SESSION': {
+      const { workspaceId, tabId, tmuxSessionName } = action;
+      const tabs = state.tabsByWorkspace[workspaceId] || [];
+      return {
+        ...state,
+        tabsByWorkspace: {
+          ...state.tabsByWorkspace,
+          [workspaceId]: tabs.map((t) =>
+            t.id === tabId ? { ...t, tmuxSessionName } : t
+          ),
+        },
+      };
+    }
+
     case 'CLEAR_WORKSPACE_TABS': {
       const { workspaceId } = action;
       const restTabs = Object.fromEntries(
@@ -184,8 +279,108 @@ function terminalReducer(
         )
       );
       return {
+        ...state,
         tabsByWorkspace: restTabs,
         activeTabByWorkspace: restActive,
+      };
+    }
+
+    case 'CREATE_PROJECT_TAB': {
+      const { projectId, repoPath } = action;
+      return addProjectTab(state, projectId, repoPath);
+    }
+
+    case 'CLOSE_PROJECT_TAB': {
+      const { projectId, tabId } = action;
+      const tabs = state.tabsByProject[projectId] || [];
+      const newTabs = tabs.filter((t) => t.id !== tabId);
+      const wasActive = state.activeTabByProject[projectId] === tabId;
+      let newActiveTab = state.activeTabByProject[projectId];
+
+      if (wasActive && newTabs.length > 0) {
+        const closedIndex = tabs.findIndex((t) => t.id === tabId);
+        const newIndex = Math.min(closedIndex, newTabs.length - 1);
+        newActiveTab = newTabs[newIndex]?.id ?? null;
+      } else if (newTabs.length === 0) {
+        newActiveTab = null;
+      }
+
+      return {
+        ...state,
+        tabsByProject: {
+          ...state.tabsByProject,
+          [projectId]: newTabs,
+        },
+        activeTabByProject: {
+          ...state.activeTabByProject,
+          [projectId]: newActiveTab,
+        },
+      };
+    }
+
+    case 'SET_ACTIVE_PROJECT_TAB': {
+      const { projectId, tabId } = action;
+      return {
+        ...state,
+        activeTabByProject: {
+          ...state.activeTabByProject,
+          [projectId]: tabId,
+        },
+      };
+    }
+
+    case 'UPDATE_PROJECT_TAB_TITLE': {
+      const { projectId, tabId, title } = action;
+      const tabs = state.tabsByProject[projectId] || [];
+      return {
+        ...state,
+        tabsByProject: {
+          ...state.tabsByProject,
+          [projectId]: tabs.map((t) => (t.id === tabId ? { ...t, title } : t)),
+        },
+      };
+    }
+
+    case 'UPDATE_PROJECT_TAB_CWD': {
+      const { projectId, tabId, cwd } = action;
+      const tabs = state.tabsByProject[projectId] || [];
+      return {
+        ...state,
+        tabsByProject: {
+          ...state.tabsByProject,
+          [projectId]: tabs.map((t) => (t.id === tabId ? { ...t, cwd } : t)),
+        },
+      };
+    }
+
+    case 'SET_PROJECT_TAB_TMUX_SESSION': {
+      const { projectId, tabId, tmuxSessionName } = action;
+      const tabs = state.tabsByProject[projectId] || [];
+      return {
+        ...state,
+        tabsByProject: {
+          ...state.tabsByProject,
+          [projectId]: tabs.map((t) =>
+            t.id === tabId ? { ...t, tmuxSessionName } : t
+          ),
+        },
+      };
+    }
+
+    case 'CLEAR_PROJECT_TABS': {
+      const { projectId } = action;
+      const restTabs = Object.fromEntries(
+        Object.entries(state.tabsByProject).filter(([key]) => key !== projectId)
+      );
+      const restActive = Object.fromEntries(
+        Object.entries(state.activeTabByProject).filter(
+          ([key]) => key !== projectId
+        )
+      );
+      return {
+        ...state,
+        tabsByProject: restTabs,
+        activeTabByProject: restActive,
       };
     }
 
@@ -202,6 +397,8 @@ export function TerminalProvider({ children }: TerminalProviderProps) {
   const [state, dispatch] = useReducer(terminalReducer, {
     tabsByWorkspace: {},
     activeTabByWorkspace: {},
+    tabsByProject: {},
+    activeTabByProject: {},
   });
 
   // Store terminal instances in a ref to persist across re-renders
@@ -214,7 +411,14 @@ export function TerminalProvider({ children }: TerminalProviderProps) {
 
   // Store callback refs for each connection to prevent stale closures
   const connectionCallbacksRef = useRef<
-    Map<string, { onData: (data: string) => void; onExit?: () => void }>
+    Map<
+      string,
+      {
+        onData: (data: string) => void;
+        onExit?: () => void;
+        onSessionName?: (name: string) => void;
+      }
+    >
   >(new Map());
 
   // Store reconnection state for each connection
@@ -245,6 +449,23 @@ export function TerminalProvider({ children }: TerminalProviderProps) {
       return tabs.find((t) => t.id === activeId) || null;
     },
     [state.tabsByWorkspace, state.activeTabByWorkspace]
+  );
+
+  const getTabsForProject = useCallback(
+    (projectId: string): TerminalTab[] => {
+      return state.tabsByProject[projectId] || [];
+    },
+    [state.tabsByProject]
+  );
+
+  const getActiveProjectTab = useCallback(
+    (projectId: string): TerminalTab | null => {
+      const activeId = state.activeTabByProject[projectId];
+      if (!activeId) return null;
+      const tabs = state.tabsByProject[projectId] || [];
+      return tabs.find((t) => t.id === activeId) || null;
+    },
+    [state.tabsByProject, state.activeTabByProject]
   );
 
   const createTab = useCallback(
@@ -311,6 +532,25 @@ export function TerminalProvider({ children }: TerminalProviderProps) {
     []
   );
 
+  const updateTabCwd = useCallback(
+    (workspaceId: string, tabId: string, cwd: string) => {
+      dispatch({ type: 'UPDATE_TAB_CWD', workspaceId, tabId, cwd });
+    },
+    []
+  );
+
+  const setTmuxSessionName = useCallback(
+    (workspaceId: string, tabId: string, tmuxSessionName: string) => {
+      dispatch({
+        type: 'SET_TMUX_SESSION',
+        workspaceId,
+        tabId,
+        tmuxSessionName,
+      });
+    },
+    []
+  );
+
   const clearWorkspaceTabs = useCallback(
     (workspaceId: string) => {
       // Dispose all terminal instances for this workspace
@@ -327,6 +567,75 @@ export function TerminalProvider({ children }: TerminalProviderProps) {
       dispatch({ type: 'CLEAR_WORKSPACE_TABS', workspaceId });
     },
     [state.tabsByWorkspace, closeTerminalConnection]
+  );
+
+  const createProjectTab = useCallback(
+    (projectId: string, repoPath: string) => {
+      dispatch({ type: 'CREATE_PROJECT_TAB', projectId, repoPath });
+    },
+    []
+  );
+
+  const closeProjectTab = useCallback(
+    (projectId: string, tabId: string) => {
+      const instance = terminalInstancesRef.current.get(tabId);
+      if (instance) {
+        instance.terminal.dispose();
+        terminalInstancesRef.current.delete(tabId);
+      }
+      closeTerminalConnection(tabId);
+      dispatch({ type: 'CLOSE_PROJECT_TAB', projectId, tabId });
+    },
+    [closeTerminalConnection]
+  );
+
+  const setActiveProjectTab = useCallback(
+    (projectId: string, tabId: string) => {
+      dispatch({ type: 'SET_ACTIVE_PROJECT_TAB', projectId, tabId });
+    },
+    []
+  );
+
+  const updateProjectTabTitle = useCallback(
+    (projectId: string, tabId: string, title: string) => {
+      dispatch({ type: 'UPDATE_PROJECT_TAB_TITLE', projectId, tabId, title });
+    },
+    []
+  );
+
+  const updateProjectTabCwd = useCallback(
+    (projectId: string, tabId: string, cwd: string) => {
+      dispatch({ type: 'UPDATE_PROJECT_TAB_CWD', projectId, tabId, cwd });
+    },
+    []
+  );
+
+  const setProjectTabTmuxSessionName = useCallback(
+    (projectId: string, tabId: string, tmuxSessionName: string) => {
+      dispatch({
+        type: 'SET_PROJECT_TAB_TMUX_SESSION',
+        projectId,
+        tabId,
+        tmuxSessionName,
+      });
+    },
+    []
+  );
+
+  const clearProjectTabs = useCallback(
+    (projectId: string) => {
+      const tabs = state.tabsByProject[projectId] || [];
+      tabs.forEach((tab) => {
+        const instance = terminalInstancesRef.current.get(tab.id);
+        if (instance) {
+          instance.terminal.dispose();
+          terminalInstancesRef.current.delete(tab.id);
+        }
+        closeTerminalConnection(tab.id);
+      });
+      dispatch({ type: 'CLEAR_PROJECT_TABS', projectId });
+    },
+    [state.tabsByProject, closeTerminalConnection]
   );
 
   const registerTerminalInstance = useCallback(
@@ -368,7 +677,8 @@ export function TerminalProvider({ children }: TerminalProviderProps) {
       tabId: string,
       endpoint: string,
       onData: (data: string) => void,
-      onExit?: () => void
+      onExit?: () => void,
+      onSessionName?: (name: string) => void
     ) => {
       // Close existing connection if any
       const existing = terminalConnectionsRef.current.get(tabId);
@@ -377,7 +687,11 @@ export function TerminalProvider({ children }: TerminalProviderProps) {
       }
 
       // Store callbacks in ref so they can be updated without recreating connection
-      connectionCallbacksRef.current.set(tabId, { onData, onExit });
+      connectionCallbacksRef.current.set(tabId, {
+        onData,
+        onExit,
+        onSessionName,
+      });
 
       // Initialize or reset reconnection state
       const existingReconnectState = reconnectStateRef.current.get(tabId);
@@ -447,6 +761,12 @@ export function TerminalProvider({ children }: TerminalProviderProps) {
                   callbacks.onData(`\r\n\x1b[31m${msg.message}\x1b[0m\r\n`);
                 } else if (msg.type === 'exit' && callbacks) {
                   callbacks.onExit?.();
+                } else if (
+                  msg.type === 'session_name' &&
+                  msg.name &&
+                  callbacks
+                ) {
+                  callbacks.onSessionName?.(msg.name);
                 }
               } catch {
                 // Ignore parse errors
@@ -527,7 +847,18 @@ export function TerminalProvider({ children }: TerminalProviderProps) {
       closeTab,
       setActiveTab,
       updateTabTitle,
+      updateTabCwd,
+      setTmuxSessionName,
       clearWorkspaceTabs,
+      getTabsForProject,
+      getActiveProjectTab,
+      createProjectTab,
+      closeProjectTab,
+      setActiveProjectTab,
+      updateProjectTabTitle,
+      updateProjectTabCwd,
+      setProjectTabTmuxSessionName,
+      clearProjectTabs,
       registerTerminalInstance,
       getTerminalInstance,
       unregisterTerminalInstance,
@@ -543,7 +874,18 @@ export function TerminalProvider({ children }: TerminalProviderProps) {
       closeTab,
       setActiveTab,
       updateTabTitle,
+      updateTabCwd,
+      setTmuxSessionName,
       clearWorkspaceTabs,
+      getTabsForProject,
+      getActiveProjectTab,
+      createProjectTab,
+      closeProjectTab,
+      setActiveProjectTab,
+      updateProjectTabTitle,
+      updateProjectTabCwd,
+      setProjectTabTmuxSessionName,
+      clearProjectTabs,
       registerTerminalInstance,
       getTerminalInstance,
       unregisterTerminalInstance,

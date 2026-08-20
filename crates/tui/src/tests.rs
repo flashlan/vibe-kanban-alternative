@@ -643,6 +643,7 @@ fn process_list_projects_and_sorts() {
 fn sample_repo(name: &str) -> crate::api::types::Repo {
     crate::api::types::Repo {
         id: Uuid::new_v4(),
+        path: format!("/tmp/{name}"),
         name: name.to_string(),
         display_name: name.to_string(),
         default_target_branch: Some("main".to_string()),

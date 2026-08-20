@@ -78,7 +78,7 @@ fn render_help(f: &mut Frame, area: Rect) {
         Line::from("  inbox     ↑↓ move · y approve · d deny · ⏎ answer · esc back"),
         Line::from("  create    ⇥ field · ←→ cycle option · ^s create · esc cancel"),
         Line::from(
-            "  board     ←→ column · ↑↓ card · [ ] move · n new · e edit · d delete · w workspace · p project · ⏎ detail",
+            "  board     ←→/hl column · ↑↓/jk card · [ ] move · n new · e edit · d delete · w workspace · t terminal · p project · ⏎ detail",
         ),
         Line::from(
             "  routines  ↑↓/jk move · space/t toggle · x run now · ⏎ open last run · r refresh · esc back",
