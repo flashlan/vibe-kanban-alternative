@@ -2,12 +2,12 @@
 
 All notable changes to **vibe-kanban-alternative** are documented here. This fork is
 local-only and single-developer focused; releases are cut by pushing a `v<version>`
-tag that matches `npx-cli/package.json` (see `.github/workflows/release-indie.yml`).
+tag that matches `npx-cli/package.json` (see `.github/workflows/release-alternative.yml`).
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.34] - Unreleased
+## [0.2.34] - 2026-08-20
 
 ### Added
 
@@ -21,6 +21,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     5. Squash-merge & Done.
   - Enhanced Issue/Card Creation and Pipeline Settings UI to display specialized agent/model badges next to each stage.
   - Documented complete architecture in [`docs/ADR/ADR-025-multi-agent-handoff-pipelines.md`](docs/ADR/ADR-025-multi-agent-handoff-pipelines.md) and [`docs/ADR/ADR-026-swarm-pm-agent-and-manual-review-gate.md`](docs/ADR/ADR-026-swarm-pm-agent-and-manual-review-gate.md).
+- **Per-stage mem0 handoff for Swarm Multi-Agent**: each stage now recalls via `memory_search` before starting and saves via `memory_save` before advancing, so a stage picked up by a different CLI or a freshly resumed session isn't starting blind. The plan stage also records an exact file/function map per task so the implementation stage can go straight there instead of re-exploring the codebase.
+- **Live CLI model discovery**: new discovery endpoint and WebSocket stream (`useModelSelectorConfig`) that queries each installed coding-agent CLI directly and dynamically populates model pickers, replacing hardcoded model lists across executors (Claude, Antigravity, Cursor, Droid, Copilot, Gemini, Codex).
+- **Project-scoped terminals**: terminal panel and selector scoped per project, with drawer UI.
+- Dual-mode pipeline editor (Visual Form + Raw TOML) with a custom stage builder.
+- `pnpm run tui` shortcut to launch the `vibe-tui` cockpit.
+- Comprehensive guide for Swarm Multi-Agent, MCP, and RAG configuration (`docs/SWARM-MULTI-AGENT-AND-RAG-GUIDE.md`).
+
+### Changed
+
+- Interactive live discovered-model pills and dynamic schema dropdown in Settings → Agents.
+- Collapsible pipeline progress with persisted expand/collapse state; persisted description-collapse state; grouped pipeline models; compact inline prompt in the sub-issue workspace bar.
+
+### Fixed
+
+- **mem0 is now genuinely optional**: `memory_search`/`memory_save` previously returned a hard tool error on any failure, contradicting their own "best-effort" contract. Every failure path now degrades gracefully (empty results / `stored: false`) instead of failing the calling agent's tool call. An unreachable mem0 logs a warning once per process, then drops to debug for the rest of that session — no per-call log spam. All mem0 activity is now logged under `target: "mem0"`.
+- Patch parsing in `/api/agents/models`; merged the HTTP discovery endpoint with the WebSocket stream in Settings so both surfaces stay in sync.
+- Eliminated remaining hardcoded model constants, labels, and descriptions across pipeline executors in favor of live discovery.
+- Editor mode selector badge and loading spinner now render correctly during pipeline load.
+- Core and bundled pipeline stage IDs are protected from accidental modification in the pipeline editor.
+- `restart.sh` now purges the Vite cache and refreshes bundled pipeline seeds.
+- Sanitized the PM-agent `mcp.json` endpoint and port for local dev.
 
 ## [0.2.33] - 2026-08-19
 
