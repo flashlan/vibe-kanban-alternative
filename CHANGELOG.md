@@ -7,6 +7,13 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-indie.ym
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.32] - 2026-08-19
+
+### Fixed
+
+- **Remote-Only NPM Packaging**:
+  - Removed stale local `dist/` directory from `npx-cli` package to ensure clean runtime binary download from GitHub Releases matching latest DB migrations.
+
 ## [0.2.31] - 2026-08-19
 
 ### Fixed
