@@ -27,12 +27,12 @@ prompt = "Run an independent Codex review of the card's diff against the base br
 
 [[stage]]
 id = "manual-review"
-label = "4. Manual Review & Live Preview (Dev Server)"
-default_enabled = true
+label = "4. Manual Review & Live Preview (Dev Server) [Optional]"
+default_enabled = false
 prompt = "All implementation, tests, and code reviews are complete. Boot the workspace dev server (or preview build), output the live preview URL, and present the diff and test summary for human operator review. Pause for manual approval before proceeding to merge."
 
 [[stage]]
 id = "merge"
 label = "5. Squash-merge to base"
 default_enabled = true
-prompt = "Once manual review approval is confirmed by the operator, squash-merge this card's branch into the base branch yourself. Local only — do NOT git push, do NOT open a PR. Report that you squash-merged to the base branch with the SHA and mark the card DONE."
+prompt = "Once build and review pass (and manual review approval is confirmed if that stage was selected), squash-merge this card's branch into the base branch yourself. Local only — do NOT git push, do NOT open a PR. Report that you squash-merged to the base branch with the SHA and mark the card DONE."
