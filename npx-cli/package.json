@@ -1,10 +1,11 @@
 {
   "name": "vibe-kanban-alternative",
   "private": false,
-  "version": "0.2.30",
+  "version": "0.2.31",
   "main": "index.js",
   "bin": {
     "vibe-kanban-alternative": "bin/cli.js",
+    "vibe-kanban": "bin/cli.js",
     "vibe-kanban-indie": "bin/cli.js"
   },
   "scripts": {
