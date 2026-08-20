@@ -11,11 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Multi-Agent Handoff Pipelines (ADR-025)**:
+- **Multi-Agent Handoff Pipelines & Swarm PM (ADR-025 & ADR-026)**:
   - Added support for per-stage `executor`, `model`, and `reasoning_effort` fields in pipeline configurations (`[[stage]]`).
-  - Added bundled `Swarm Multi-Agent` pipeline (`swarm-multi-agent.toml`) with Plan (Gemini 2.5 Pro) → Implement (Claude 3.7 Sonnet) → Review (Codex) stages.
+  - Added bundled `Swarm Multi-Agent` pipeline (`swarm-multi-agent.toml`) with:
+    1. Plan (Gemini 2.5 Pro)
+    2. Implement (Claude 3.7 Sonnet)
+    3. Independent Review (Codex)
+    4. **Manual Review & Live Preview Gate** (Dev Server launch & operator verification)
+    5. Squash-merge & Done.
   - Enhanced Issue/Card Creation and Pipeline Settings UI to display specialized agent/model badges next to each stage.
-  - Documented complete architecture in [`docs/ADR/ADR-025-multi-agent-handoff-pipelines.md`](docs/ADR/ADR-025-multi-agent-handoff-pipelines.md).
+  - Documented complete architecture in [`docs/ADR/ADR-025-multi-agent-handoff-pipelines.md`](docs/ADR/ADR-025-multi-agent-handoff-pipelines.md) and [`docs/ADR/ADR-026-swarm-pm-agent-and-manual-review-gate.md`](docs/ADR/ADR-026-swarm-pm-agent-and-manual-review-gate.md).
 
 ## [0.2.33] - 2026-08-19
 
