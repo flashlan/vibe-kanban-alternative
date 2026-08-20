@@ -58,12 +58,18 @@ export function ExecutorConfigForm({
       const modelNames = modelList.map((m) => m.name || m.id);
 
       if (cloned.properties?.model) {
-        cloned.properties.model.enum = modelIds;
-        cloned.properties.model.enumNames = modelNames;
+        cloned.properties.model.enum = [null, ...modelIds];
+        cloned.properties.model.enumNames = [
+          'Default (omit / latest)',
+          ...modelNames,
+        ];
       }
       if (cloned.properties?.default_model) {
-        cloned.properties.default_model.enum = modelIds;
-        cloned.properties.default_model.enumNames = modelNames;
+        cloned.properties.default_model.enum = [null, ...modelIds];
+        cloned.properties.default_model.enumNames = [
+          'Default (omit / latest)',
+          ...modelNames,
+        ];
       }
       return cloned;
     } catch {
@@ -135,6 +141,7 @@ export function ExecutorConfigForm({
   }
 
   const hasValidationErrors = validationErrors.length > 0;
+  const currentModel = (formData as Record<string, unknown>)?.model;
 
   return (
     <div className="space-y-4">
@@ -150,11 +157,66 @@ export function ExecutorConfigForm({
             ● {discoveredConfig.models.length} models discovered from {executor}
           </span>
         ) : (
-          <span className="text-low font-mono">
-            Static default schemas active
-          </span>
+          <span className="text-low font-mono">Using default CLI config</span>
         )}
       </div>
+
+      {discoveredConfig?.models && discoveredConfig.models.length > 0 ? (
+        <div className="bg-panel/40 border border-border/60 p-3 rounded-sm space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-high uppercase tracking-wide">
+              Discovered Models ({discoveredConfig.models.length})
+            </span>
+            <span className="text-[11px] text-low">
+              Click to select model for this profile
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                const updated = {
+                  ...(formData as Record<string, unknown>),
+                  model: null,
+                };
+                setFormData(updated);
+                onChange?.(updated);
+              }}
+              className={`px-2 py-1 rounded-sm text-xs border transition-colors ${
+                !currentModel
+                  ? 'bg-brand/20 border-brand text-brand font-medium'
+                  : 'bg-secondary/60 border-border text-low hover:text-high'
+              }`}
+            >
+              Default (Latest)
+            </button>
+            {discoveredConfig.models.map((m) => {
+              const isSelected = currentModel === m.id;
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    const updated = {
+                      ...(formData as Record<string, unknown>),
+                      model: m.id,
+                    };
+                    setFormData(updated);
+                    onChange?.(updated);
+                  }}
+                  className={`px-2 py-1 rounded-sm text-xs border transition-colors ${
+                    isSelected
+                      ? 'bg-brand/20 border-brand text-brand font-medium'
+                      : 'bg-secondary/60 border-border text-low hover:text-high'
+                  }`}
+                >
+                  {m.name || m.id}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       <Form
         schema={dynamicSchema}
