@@ -23,7 +23,7 @@ Following the [official cloud shutdown of Bloop's hosted servers](https://vibeka
 
 `vibe-kanban-alternative` is an actively maintained, independent evolution of [BloopAI/vibe-kanban](https://github.com/BloopAI/vibe-kanban) and [dexloom/vibe-kanban-indie](https://github.com/dexloom/vibe-kanban-indie). Built specifically for a **single-developer workflow**, it requires **no cloud accounts, no team auth, and zero remote telemetry**. You run it entirely on your machine, orchestrating a fleet of coding agents via browser, terminal (TUI), or phone (Telegram).
 
-![](packages/public/vibe-kanban-indie-screenshot-overview.png)
+![](packages/public/vibe-kanban-alternative-screenshot-overview.png)
 
 ---
 
