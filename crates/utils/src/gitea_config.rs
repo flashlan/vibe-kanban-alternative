@@ -127,6 +127,8 @@ mod tests {
     use super::*;
     use tempfile::{TempDir, tempdir};
 
+    static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     fn write_toml(dir: &TempDir, name: &str, content: &str) -> std::path::PathBuf {
         let path = dir.path().join(name);
         std::fs::write(&path, content).unwrap();
@@ -135,10 +137,13 @@ mod tests {
 
     #[test]
     fn resolves_token_from_toml() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let dir = tempdir().unwrap();
         let path = write_toml(&dir, "gitea.toml", "token = \"pat-from-toml\"\n");
-        std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", path);
-        std::env::remove_var("GITEA_TOKEN");
+        unsafe {
+            std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", path);
+            std::env::remove_var("GITEA_TOKEN");
+        }
 
         let cfg = load().expect("should load");
         let (token, source) = resolve_token(&cfg).expect("should resolve");
@@ -148,38 +153,51 @@ mod tests {
 
     #[test]
     fn falls_back_to_env_when_toml_absent() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let dir = tempdir().unwrap();
-        std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", dir.path().join("missing.toml"));
-        std::env::set_var("GITEA_TOKEN", "pat-from-env");
+        unsafe {
+            std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", dir.path().join("missing.toml"));
+            std::env::set_var("GITEA_TOKEN", "pat-from-env");
+        }
 
         let cfg = load().unwrap_or_default();
         let (token, source) = resolve_token(&cfg).expect("should resolve from env");
         assert_eq!(token, "pat-from-env");
         assert_eq!(source, TokenSource::Env);
 
-        std::env::remove_var("GITEA_TOKEN");
+        unsafe {
+            std::env::remove_var("GITEA_TOKEN");
+        }
     }
 
     #[test]
     fn toml_takes_priority_over_env() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let dir = tempdir().unwrap();
         let path = write_toml(&dir, "gitea.toml", "token = \"pat-from-toml\"\n");
-        std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", path);
-        std::env::set_var("GITEA_TOKEN", "pat-from-env");
+        unsafe {
+            std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", path);
+            std::env::set_var("GITEA_TOKEN", "pat-from-env");
+        }
 
         let cfg = load().expect("should load");
         let (token, source) = resolve_token(&cfg).expect("should resolve");
         assert_eq!(token, "pat-from-toml");
         assert_eq!(source, TokenSource::Toml);
 
-        std::env::remove_var("GITEA_TOKEN");
+        unsafe {
+            std::env::remove_var("GITEA_TOKEN");
+        }
     }
 
     #[test]
     fn no_token_anywhere_resolves_none() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let dir = tempdir().unwrap();
-        std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", dir.path().join("missing.toml"));
-        std::env::remove_var("GITEA_TOKEN");
+        unsafe {
+            std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", dir.path().join("missing.toml"));
+            std::env::remove_var("GITEA_TOKEN");
+        }
 
         let cfg = load().unwrap_or_default();
         assert!(resolve_token(&cfg).is_none());
@@ -187,17 +205,23 @@ mod tests {
 
     #[test]
     fn missing_config_file_returns_none() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let dir = tempdir().unwrap();
-        std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", dir.path().join("missing.toml"));
+        unsafe {
+            std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", dir.path().join("missing.toml"));
+        }
         assert!(load().is_none());
     }
 
     #[test]
     fn empty_token_is_treated_as_absent() {
+        let _guard = ENV_MUTEX.lock().unwrap();
         let dir = tempdir().unwrap();
         let path = write_toml(&dir, "gitea.toml", "token = \"   \"\n");
-        std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", path);
-        std::env::remove_var("GITEA_TOKEN");
+        unsafe {
+            std::env::set_var("VIBE_KANBAN_GITEA_CONFIG", path);
+            std::env::remove_var("GITEA_TOKEN");
+        }
 
         let cfg = load().expect("should load");
         assert!(resolve_token(&cfg).is_none());

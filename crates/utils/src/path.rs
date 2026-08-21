@@ -39,7 +39,7 @@ pub fn make_path_relative(path: &str, worktree_path: &str) -> String {
 
     match (canonical_path, canonical_worktree) {
         (Ok(canon_path), Ok(canon_worktree)) => {
-            tracing::debug!(
+            tracing::trace!(
                 "Trying canonical path resolution: '{}' -> '{}', '{}' -> '{}'",
                 path,
                 canon_path.display(),
@@ -50,7 +50,7 @@ pub fn make_path_relative(path: &str, worktree_path: &str) -> String {
             match canon_path.strip_prefix(&canon_worktree) {
                 Ok(relative_path) => {
                     let result = relative_path.to_string_lossy().to_string();
-                    tracing::debug!(
+                    tracing::trace!(
                         "Successfully made relative with canonical paths: '{}' -> '{}'",
                         path,
                         result
@@ -61,7 +61,7 @@ pub fn make_path_relative(path: &str, worktree_path: &str) -> String {
                     result
                 }
                 Err(e) => {
-                    tracing::debug!(
+                    tracing::trace!(
                         "Failed to make canonical path relative: '{}' relative to '{}', error: {}, returning original",
                         canon_path.display(),
                         canon_worktree.display(),
@@ -72,7 +72,7 @@ pub fn make_path_relative(path: &str, worktree_path: &str) -> String {
             }
         }
         _ => {
-            tracing::debug!(
+            tracing::trace!(
                 "Could not canonicalize paths (paths may not exist): '{}', '{}', returning original",
                 path,
                 worktree_path
