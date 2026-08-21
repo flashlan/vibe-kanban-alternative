@@ -80,6 +80,45 @@ To minimize token costs on providers with prompt caching (Anthropic, OpenRouter,
 1. **No Automatic Prefix Injection**: There is no memory block prepended to the prompt — the injected block used to change on every new memory, invalidating the cached prefix on every workspace start. See [ADR-028](docs/ADR/ADR-028-mem0-agentic-recall.md).
 2. **Tool Calls, Not Prompt Mutations**: `memory_search` and `memory_save` execute as MCP tool calls scoped to the current card, keeping the static system/task prefix identical (and cache-hit) across workspace starts.
 
+
+```mermaid
+flowchart TB
+    Mem0["🧠 Mem0 · Context<br/>Vector and semantic memory"]
+
+    Worktree["Worktree<br/>Input"]
+    A1["Agent 1<br/>Gemini<br/>Research"]
+    A2["Agent 2<br/>Opus<br/>Planner"]
+    A3["Agent 3<br/>Qwen3.8 Local<br/>Coding"]
+    A4["Agent 4<br/>Opencode<br/>Review"]
+    Merge["Merge<br/>Output"]
+
+    Worktree --> A1
+    A1 --> A2
+    A2 --> A3
+    A3 --> A4
+    A4 --> Merge
+
+    A1 -.->|write| Mem0
+    Mem0 -.->|fetch| A1
+
+    A2 -.->|write| Mem0
+    Mem0 -.->|fetch| A2
+
+    A3 -.->|write| Mem0
+    Mem0 -.->|fetch| A3
+
+    A4 -.->|write| Mem0
+    Mem0 -.->|fetch| A4
+
+    style Mem0 fill:#7d6608,stroke:#f9e79f,stroke-width:2px,color:#ffffff
+    style Worktree fill:#424949,stroke:#d5dbdb,stroke-width:2px,color:#ffffff
+    style A1 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
+    style A2 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
+    style A3 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
+    style A4 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
+    style Merge fill:#1b4f3d,stroke:#a9dfbf,stroke-width:2px,color:#ffffff
+```
+
 ### mem0 Setup
 
 The project memory layer runs on a local Docker stack (`mem0-vk`): a mem0 API server on `:8000`, a Qdrant vector store, and a Python embeddings + NetworkX graph service.
@@ -185,44 +224,6 @@ Full REST API integration alongside GitHub:
 
 ---
 
-
-```mermaid
-flowchart TB
-    Mem0["🧠 Mem0 · Context<br/>Vector and semantic memory"]
-
-    Worktree["Worktree<br/>Input"]
-    A1["Agent 1<br/>Gemini<br/>Research"]
-    A2["Agent 2<br/>Opus<br/>Planner"]
-    A3["Agent 3<br/>Qwen3.8 Local<br/>Coding"]
-    A4["Agent 4<br/>Opencode<br/>Review"]
-    Merge["Merge<br/>Output"]
-
-    Worktree --> A1
-    A1 --> A2
-    A2 --> A3
-    A3 --> A4
-    A4 --> Merge
-
-    A1 -.->|write| Mem0
-    Mem0 -.->|fetch| A1
-
-    A2 -.->|write| Mem0
-    Mem0 -.->|fetch| A2
-
-    A3 -.->|write| Mem0
-    Mem0 -.->|fetch| A3
-
-    A4 -.->|write| Mem0
-    Mem0 -.->|fetch| A4
-
-    style Mem0 fill:#7d6608,stroke:#f9e79f,stroke-width:2px,color:#ffffff
-    style Worktree fill:#424949,stroke:#d5dbdb,stroke-width:2px,color:#ffffff
-    style A1 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
-    style A2 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
-    style A3 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
-    style A4 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
-    style Merge fill:#1b4f3d,stroke:#a9dfbf,stroke-width:2px,color:#ffffff
-```
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> •
