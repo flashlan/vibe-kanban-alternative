@@ -22,9 +22,9 @@ use crate::{
     command::CommandBuildError,
     env::ExecutionEnv,
     executors::{
-        amp::Amp, antigravity::Antigravity, claude::ClaudeCode, claude::ClaudeCodeHeaded,
-        codex::Codex, copilot::Copilot, cursor::CursorAgent, droid::Droid, gemini::Gemini,
-        opencode::Opencode, opencode::OpencodeHeaded, qwen::QwenCode,
+        amp::Amp, antigravity::Antigravity, antigravity::AntigravityHeaded, claude::ClaudeCode,
+        claude::ClaudeCodeHeaded, codex::Codex, copilot::Copilot, cursor::CursorAgent,
+        droid::Droid, gemini::Gemini, opencode::Opencode, opencode::OpencodeHeaded, qwen::QwenCode,
     },
     logs::utils::patch,
     mcp_config::McpConfig,
@@ -114,6 +114,7 @@ pub enum CodingAgent {
     Amp,
     Gemini,
     Antigravity,
+    AntigravityHeaded,
     Codex,
     Opencode,
     OpencodeHeaded,
@@ -138,6 +139,30 @@ impl CodingAgent {
                 }),
                 self.preconfigured_mcp(),
                 true,
+            ),
+            Self::Gemini(_) => McpConfig::new(
+                vec!["mcpServers".to_string()],
+                serde_json::json!({
+                    "mcpServers": {}
+                }),
+                self.preconfigured_mcp(),
+                false,
+            ),
+            Self::Antigravity(_) | Self::AntigravityHeaded(_) => McpConfig::new(
+                vec!["mcpServers".to_string()],
+                serde_json::json!({
+                    "mcpServers": {}
+                }),
+                self.preconfigured_mcp(),
+                false,
+            ),
+            Self::ClaudeCode(_) | Self::ClaudeCodeHeaded(_) => McpConfig::new(
+                vec!["mcpServers".to_string()],
+                serde_json::json!({
+                    "mcpServers": {}
+                }),
+                self.preconfigured_mcp(),
+                false,
             ),
             Self::Amp(_) => McpConfig::new(
                 vec!["amp.mcpServers".to_string()],
@@ -197,7 +222,7 @@ impl CodingAgent {
             Self::Gemini(_) | Self::QwenCode(_) => {
                 vec![BaseAgentCapability::SessionFork]
             }
-            Self::Antigravity(_) => vec![
+            Self::Antigravity(_) | Self::AntigravityHeaded(_) => vec![
                 BaseAgentCapability::SessionFork,
                 BaseAgentCapability::ContextUsage,
             ],
@@ -215,7 +240,10 @@ impl BaseCodingAgent {
     /// stdio/HTTP. The container uses this to decide between the detached-tmux
     /// launch path and a normal owned-child spawn.
     pub fn is_headed(&self) -> bool {
-        matches!(self, Self::ClaudeCodeHeaded | Self::OpencodeHeaded)
+        matches!(
+            self,
+            Self::ClaudeCodeHeaded | Self::OpencodeHeaded | Self::AntigravityHeaded
+        )
     }
 }
 

@@ -214,6 +214,7 @@ fn generate_types_content() -> String {
         executors::executors::claude::ClaudeCodeHeaded::decl(),
         executors::executors::gemini::Gemini::decl(),
         executors::executors::antigravity::Antigravity::decl(),
+        executors::executors::antigravity::AntigravityHeaded::decl(),
         executors::executors::amp::Amp::decl(),
         executors::executors::codex::Codex::decl(),
         executors::executors::codex::SandboxMode::decl(),
@@ -327,6 +328,10 @@ fn generate_schemas() -> Result<HashMap<&'static str, String>, serde_json::Error
         (
             "antigravity",
             generate_json_schema::<executors::executors::antigravity::Antigravity>()?,
+        ),
+        (
+            "antigravity_headed",
+            generate_json_schema::<executors::executors::antigravity::AntigravityHeaded>()?,
         ),
         (
             "codex",

@@ -1465,6 +1465,19 @@ impl LocalContainerService {
                     )
                     .await;
             }
+            if let CodingAgent::AntigravityHeaded(agh) = agent {
+                return self
+                    .start_detached_tmux_antigravity(
+                        execution_process,
+                        cfg,
+                        current_dir,
+                        agh,
+                        resume,
+                        prompt,
+                        env,
+                    )
+                    .await;
+            }
             let (claude, telegram_channel, open_terminal, is_headed) = match agent {
                 // A bare (non-headed) Claude reaching this interactive path keeps
                 // the historical behavior of opening a terminal.
@@ -1802,6 +1815,111 @@ impl LocalContainerService {
         );
     }
 
+    /// Launch Antigravity's interactive TUI inside a detached tmux session.
+    #[allow(clippy::too_many_arguments)]
+    async fn start_detached_tmux_antigravity(
+        &self,
+        execution_process: &ExecutionProcess,
+        cfg: &InteractiveTmuxConfig,
+        current_dir: &Path,
+        agh: executors::executors::antigravity::AntigravityHeaded,
+        resume: bool,
+        prompt: String,
+        env: ExecutionEnv,
+    ) -> Result<(), ContainerError> {
+        let exec_id = execution_process.id;
+        let open_terminal = agh.open_terminal_enabled();
+
+        let conversation_id = if resume {
+            Some(cfg.session_uuid.to_string())
+        } else {
+            None
+        };
+
+        let command = agh
+            .build_interactive_command(&prompt, conversation_id.as_deref())
+            .map_err(|e| {
+                ContainerError::Other(anyhow!(
+                    "Failed to build antigravity interactive command: {e}"
+                ))
+            })?;
+        let (program, args) = command
+            .into_resolved()
+            .await
+            .map_err(ContainerError::ExecutorError)?;
+        let mut argv = vec![program.to_string_lossy().into_owned()];
+        argv.extend(args);
+
+        let env = env.with_profile(&agh.inner.cmd);
+        let env_map = env.vars.clone();
+
+        let tmux_session = interactive::tmux_session_name(exec_id);
+        terminal::tmux_new_session(&tmux_session, current_dir, &argv, &env_map, &[])
+            .await
+            .map_err(|e| ContainerError::Other(anyhow!(e)))?;
+
+        tracing::info!(
+            "interactive antigravity session started: tmux={tmux_session} attach=`{}`",
+            terminal::attach_command(&tmux_session)
+        );
+
+        if open_terminal {
+            let iterm_tabs = self.config.read().await.iterm_tabs;
+            let tab_title = self.interactive_tab_title(exec_id, &tmux_session).await;
+            if let Err(e) =
+                terminal::open_in_terminal(cfg.terminal, &tmux_session, &tab_title, iterm_tabs)
+                    .await
+            {
+                tracing::warn!("Could not open terminal emulator for {tmux_session}: {e}");
+            }
+        } else {
+            tracing::info!(
+                "headed antigravity session {tmux_session} started detached (open_terminal=off); \
+                 attach with `{}`",
+                terminal::attach_command(&tmux_session)
+            );
+        }
+
+        self.attach_detached_tracking_antigravity(exec_id, cfg)
+            .await;
+
+        Ok(())
+    }
+
+    async fn attach_detached_tracking_antigravity(
+        &self,
+        exec_id: Uuid,
+        cfg: &InteractiveTmuxConfig,
+    ) {
+        let tmux_session = interactive::tmux_session_name(exec_id);
+        let store = {
+            let map = self.msg_stores.read().await;
+            map.get(&exec_id).cloned()
+        };
+        let Some(store) = store else {
+            tracing::error!("MsgStore missing for detached antigravity execution {exec_id}");
+            return;
+        };
+        store.push_session_id(cfg.session_uuid.to_string());
+
+        let cancel = CancellationToken::new();
+        let cancel_for_tail = cancel.clone();
+        let tail_handle = tokio::spawn(async move {
+            cancel_for_tail.cancelled().await;
+        });
+        let poll_handle = self.spawn_liveness_poller(exec_id, tmux_session.clone(), cancel.clone());
+
+        self.detached_store.write().await.insert(
+            exec_id,
+            DetachedHandle {
+                tmux_session,
+                cancel,
+                tail_handle,
+                poll_handle,
+            },
+        );
+    }
+
     /// Human-readable title for an interactive terminal tab: the kanban card id
     /// (issue `simple_id`) followed by the card title, e.g. `VIBE-3 iTerm tab
     /// name`. Falls back to the workspace branch when no card is linked, or to
@@ -2060,6 +2178,11 @@ impl LocalContainerService {
             // other headed variant) keeps the transcript-tail path.
             if profile_id.executor == executors::executors::BaseCodingAgent::OpencodeHeaded {
                 self.attach_detached_tracking_opencode(exec_id, cfg, &effective_dir, 4096)
+                    .await;
+            } else if profile_id.executor
+                == executors::executors::BaseCodingAgent::AntigravityHeaded
+            {
+                self.attach_detached_tracking_antigravity(exec_id, cfg)
                     .await;
             } else {
                 // Resume the transcript tail after the lines already mirrored

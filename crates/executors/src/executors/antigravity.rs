@@ -12,7 +12,7 @@ use workspace_utils::{
 
 use crate::{
     approvals::ExecutorApprovalService,
-    command::{CmdOverrides, CommandBuildError, CommandBuilder, apply_overrides},
+    command::{CmdOverrides, CommandBuildError, CommandBuilder, CommandParts, apply_overrides},
     env::ExecutionEnv,
     executor_discovery::ExecutorDiscoveredOptions,
     executors::{
@@ -829,6 +829,145 @@ impl StandardCodingAgentExecutor for Antigravity {
     }
 }
 
+/// Antigravity Headed — runs `agy` interactively in a detached tmux session.
+#[derive(Derivative, Clone, Serialize, Deserialize, TS, JsonSchema)]
+#[derivative(Debug, PartialEq)]
+pub struct AntigravityHeaded {
+    #[serde(flatten)]
+    #[ts(flatten)]
+    #[schemars(flatten)]
+    pub inner: Antigravity,
+
+    /// Open a terminal-emulator window attached to the session when a headed run
+    /// starts. When disabled, the agent still runs in a detached tmux session
+    /// (`tmux attach -t vk-<id>`) but no window is opened.
+    #[serde(default = "default_open_terminal")]
+    #[schemars(
+        title = "Open terminal window",
+        description = "Open a terminal window attached to the session on start. When off, the agent runs in a background tmux session you can attach to later."
+    )]
+    pub open_terminal: bool,
+}
+
+fn default_open_terminal() -> bool {
+    true
+}
+
+impl AntigravityHeaded {
+    pub fn open_terminal_enabled(&self) -> bool {
+        self.open_terminal
+    }
+
+    /// Build the command that launches the `agy` interactive TUI for a headed run.
+    pub fn build_interactive_command(
+        &self,
+        prompt: &str,
+        conversation_id: Option<&str>,
+    ) -> Result<CommandParts, CommandBuildError> {
+        let mut builder = CommandBuilder::new(&Antigravity::agy_binary());
+
+        if let Some(conv_id) = conversation_id {
+            builder = builder.extend_params(["--conversation", conv_id]);
+        }
+
+        if let Some(model) = &self.inner.model {
+            builder = builder.extend_params(["--model", model.as_str()]);
+        }
+
+        let effort = self.inner.effort.as_deref().or_else(|| {
+            if let Some(model) = &self.inner.model {
+                if model.contains("3.7") || model.contains("gemini-3.7") {
+                    Some("high")
+                } else {
+                    None
+                }
+            } else {
+                Some("high")
+            }
+        });
+
+        if let Some(effort) = effort {
+            if !effort.is_empty() {
+                builder = builder.extend_params(["--effort", effort]);
+            }
+        }
+
+        if self.inner.yolo.unwrap_or(true) {
+            builder = builder.extend_params(["--dangerously-skip-permissions"]);
+        }
+
+        if !prompt.is_empty() {
+            builder = builder.extend_params(["--prompt", prompt]);
+        }
+
+        let builder = apply_overrides(builder, &self.inner.cmd)?;
+        builder.build_initial()
+    }
+}
+
+#[async_trait]
+impl StandardCodingAgentExecutor for AntigravityHeaded {
+    fn apply_overrides(&mut self, executor_config: &ExecutorConfig) {
+        self.inner.apply_overrides(executor_config);
+    }
+
+    fn use_approvals(&mut self, approvals: Arc<dyn ExecutorApprovalService>) {
+        self.inner.use_approvals(approvals);
+    }
+
+    async fn spawn(
+        &self,
+        current_dir: &Path,
+        prompt: &str,
+        env: &ExecutionEnv,
+    ) -> Result<SpawnedChild, ExecutorError> {
+        self.inner.spawn(current_dir, prompt, env).await
+    }
+
+    async fn spawn_follow_up(
+        &self,
+        current_dir: &Path,
+        prompt: &str,
+        session_id: &str,
+        reset_to_message_id: Option<&str>,
+        env: &ExecutionEnv,
+    ) -> Result<SpawnedChild, ExecutorError> {
+        self.inner
+            .spawn_follow_up(current_dir, prompt, session_id, reset_to_message_id, env)
+            .await
+    }
+
+    fn normalize_logs(
+        &self,
+        msg_store: Arc<MsgStore>,
+        current_dir: &Path,
+    ) -> Vec<tokio::task::JoinHandle<()>> {
+        self.inner.normalize_logs(msg_store, current_dir)
+    }
+
+    async fn discover_options(
+        &self,
+        workdir: Option<&Path>,
+        repo_path: Option<&Path>,
+    ) -> Result<futures::stream::BoxStream<'static, json_patch::Patch>, ExecutorError> {
+        self.inner.discover_options(workdir, repo_path).await
+    }
+
+    fn get_preset_options(&self) -> ExecutorConfig {
+        let mut cfg = self.inner.get_preset_options();
+        cfg.executor = BaseCodingAgent::AntigravityHeaded;
+        cfg
+    }
+
+    fn default_mcp_config_path(&self) -> Option<std::path::PathBuf> {
+        self.inner.default_mcp_config_path()
+    }
+
+    fn get_availability_info(&self) -> AvailabilityInfo {
+        self.inner.get_availability_info()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -924,5 +1063,38 @@ mod tests {
             }
             _ => panic!("Expected ActionType::FileRead"),
         }
+    }
+
+    #[test]
+    fn test_antigravity_headed_build_command() {
+        let headed = AntigravityHeaded {
+            inner: Antigravity {
+                append_prompt: AppendPrompt::default(),
+                model: Some("gemini-2.5-pro".to_string()),
+                effort: Some("high".to_string()),
+                yolo: Some(true),
+                cmd: CmdOverrides::default(),
+                approvals: None,
+            },
+            open_terminal: true,
+        };
+
+        assert!(headed.open_terminal_enabled());
+        let cmd = headed
+            .build_interactive_command("Fix login bug", Some("conv-test-123"))
+            .unwrap();
+
+        assert!(cmd.args().contains(&"--conversation".to_string()));
+        assert!(cmd.args().contains(&"conv-test-123".to_string()));
+        assert!(cmd.args().contains(&"--model".to_string()));
+        assert!(cmd.args().contains(&"gemini-2.5-pro".to_string()));
+        assert!(cmd.args().contains(&"--effort".to_string()));
+        assert!(cmd.args().contains(&"high".to_string()));
+        assert!(
+            cmd.args()
+                .contains(&"--dangerously-skip-permissions".to_string())
+        );
+        assert!(cmd.args().contains(&"--prompt".to_string()));
+        assert!(cmd.args().contains(&"Fix login bug".to_string()));
     }
 }

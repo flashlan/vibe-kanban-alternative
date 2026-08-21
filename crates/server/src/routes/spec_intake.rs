@@ -47,6 +47,7 @@ fn headless_for_intake(mut config: ExecutorConfig) -> ExecutorConfig {
     match config.executor {
         BaseCodingAgent::ClaudeCodeHeaded => config.executor = BaseCodingAgent::ClaudeCode,
         BaseCodingAgent::OpencodeHeaded => config.executor = BaseCodingAgent::Opencode,
+        BaseCodingAgent::AntigravityHeaded => config.executor = BaseCodingAgent::Antigravity,
         _ => {}
     }
     config

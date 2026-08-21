@@ -894,9 +894,9 @@ working_dir: string | null, };
 
 export type ScriptRequestLanguage = "Bash";
 
-export enum BaseCodingAgent { CLAUDE_CODE = "CLAUDE_CODE", CLAUDE_CODE_HEADED = "CLAUDE_CODE_HEADED", AMP = "AMP", GEMINI = "GEMINI", ANTIGRAVITY = "ANTIGRAVITY", CODEX = "CODEX", OPENCODE = "OPENCODE", OPENCODE_HEADED = "OPENCODE_HEADED", CURSOR_AGENT = "CURSOR_AGENT", QWEN_CODE = "QWEN_CODE", COPILOT = "COPILOT", DROID = "DROID" }
+export enum BaseCodingAgent { CLAUDE_CODE = "CLAUDE_CODE", CLAUDE_CODE_HEADED = "CLAUDE_CODE_HEADED", AMP = "AMP", GEMINI = "GEMINI", ANTIGRAVITY = "ANTIGRAVITY", ANTIGRAVITY_HEADED = "ANTIGRAVITY_HEADED", CODEX = "CODEX", OPENCODE = "OPENCODE", OPENCODE_HEADED = "OPENCODE_HEADED", CURSOR_AGENT = "CURSOR_AGENT", QWEN_CODE = "QWEN_CODE", COPILOT = "COPILOT", DROID = "DROID" }
 
-export type CodingAgent = { "CLAUDE_CODE": ClaudeCode } | { "CLAUDE_CODE_HEADED": ClaudeCodeHeaded } | { "AMP": Amp } | { "GEMINI": Gemini } | { "ANTIGRAVITY": Antigravity } | { "CODEX": Codex } | { "OPENCODE": Opencode } | { "OPENCODE_HEADED": OpencodeHeaded } | { "CURSOR_AGENT": CursorAgent } | { "QWEN_CODE": QwenCode } | { "COPILOT": Copilot } | { "DROID": Droid };
+export type CodingAgent = { "CLAUDE_CODE": ClaudeCode } | { "CLAUDE_CODE_HEADED": ClaudeCodeHeaded } | { "AMP": Amp } | { "GEMINI": Gemini } | { "ANTIGRAVITY": Antigravity } | { "ANTIGRAVITY_HEADED": AntigravityHeaded } | { "CODEX": Codex } | { "OPENCODE": Opencode } | { "OPENCODE_HEADED": OpencodeHeaded } | { "CURSOR_AGENT": CursorAgent } | { "QWEN_CODE": QwenCode } | { "COPILOT": Copilot } | { "DROID": Droid };
 
 export type SlashCommandDescription = { 
 /**
@@ -936,7 +936,7 @@ models?: Array<string>,
  */
 reasoning_by_model?: { [key in string]?: string }, };
 
-export type ExecutorProfile = { recently_used_models?: ExecutorRecentModels | null, } & ({ [key in string]?: { "CLAUDE_CODE": ClaudeCode } | { "CLAUDE_CODE_HEADED": ClaudeCodeHeaded } | { "AMP": Amp } | { "GEMINI": Gemini } | { "ANTIGRAVITY": Antigravity } | { "CODEX": Codex } | { "OPENCODE": Opencode } | { "OPENCODE_HEADED": OpencodeHeaded } | { "CURSOR_AGENT": CursorAgent } | { "QWEN_CODE": QwenCode } | { "COPILOT": Copilot } | { "DROID": Droid } });
+export type ExecutorProfile = { recently_used_models?: ExecutorRecentModels | null, } & ({ [key in string]?: { "CLAUDE_CODE": ClaudeCode } | { "CLAUDE_CODE_HEADED": ClaudeCodeHeaded } | { "AMP": Amp } | { "GEMINI": Gemini } | { "ANTIGRAVITY": Antigravity } | { "ANTIGRAVITY_HEADED": AntigravityHeaded } | { "CODEX": Codex } | { "OPENCODE": Opencode } | { "OPENCODE_HEADED": OpencodeHeaded } | { "CURSOR_AGENT": CursorAgent } | { "QWEN_CODE": QwenCode } | { "COPILOT": Copilot } | { "DROID": Droid } });
 
 export type ExecutorConfigs = { executors: { [key in BaseCodingAgent]?: ExecutorProfile }, };
 
@@ -979,6 +979,14 @@ open_terminal: boolean, append_prompt: AppendPrompt, claude_code_router?: boolea
 export type Gemini = { append_prompt: AppendPrompt, model?: string | null, yolo?: boolean | null, base_command_override?: string | null, additional_params?: Array<string> | null, env?: { [key in string]?: string } | null, };
 
 export type Antigravity = { append_prompt: AppendPrompt, model?: string | null, effort?: string | null, yolo?: boolean | null, base_command_override?: string | null, additional_params?: Array<string> | null, env?: { [key in string]?: string } | null, };
+
+export type AntigravityHeaded = { 
+/**
+ * Open a terminal-emulator window attached to the session when a headed run
+ * starts. When disabled, the agent still runs in a detached tmux session
+ * (`tmux attach -t vk-<id>`) but no window is opened.
+ */
+open_terminal: boolean, append_prompt: AppendPrompt, model?: string | null, effort?: string | null, yolo?: boolean | null, base_command_override?: string | null, additional_params?: Array<string> | null, env?: { [key in string]?: string } | null, };
 
 export type Amp = { append_prompt: AppendPrompt, dangerously_allow_all?: boolean | null, base_command_override?: string | null, additional_params?: Array<string> | null, env?: { [key in string]?: string } | null, };
 

@@ -25,7 +25,7 @@ export const PIPELINE_END = '<!-- vk:pipeline:end -->';
 const ORDER_INSTRUCTION =
   'Execute these stages in the order listed. Do not add, skip, or reorder stages. ' +
   'As you begin each numbered stage below, call the `report_pipeline_stage` MCP tool with ' +
-  'that stage\'s number, AND output a line exactly `VK-PIPELINE-STAGE: N` (N = the number of ' +
+  "that stage's number, AND output a line exactly `VK-PIPELINE-STAGE: N` (N = the number of " +
   'the stage you are starting) so pipeline progress can be tracked.';
 
 /** Matches an executor-pin line in any pinned form (any agent name). */

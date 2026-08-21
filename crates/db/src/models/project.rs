@@ -654,6 +654,7 @@ mod tests {
                 sort_order: existing.sort_order,
                 default_agent_working_dir: existing.default_agent_working_dir.as_deref(),
                 parent_id: existing.parent_id,
+                archived: existing.archived,
             },
         )
         .await
