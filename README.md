@@ -41,23 +41,21 @@ Following the [shutdown of Bloop's hosted servers](https://vibekanban.com/blog/s
 
 `vibe-kanban-alternative` is an actively maintained, independent evolution of [BloopAI/vibe-kanban](https://github.com/BloopAI/vibe-kanban) and [dexloom/vibe-kanban-indie](https://github.com/dexloom/vibe-kanban-indie). It is built for a single-developer workflow: no cloud accounts, no team auth, no remote telemetry. Everything runs on your own machine, and you orchestrate a fleet of coding agents from the browser, a terminal (TUI), or a phone (Telegram).
 
-![](packages/public/vibe-kanban-alternative-screenshot-overview.png)
+![Kanban board overview in vibe-kanban-alternative, showing columns of cards with agent status](packages/public/vibe-kanban-alternative-screenshot-overview.png)
 
 ## What This Fork Adds
 
-| Capability | Upstream / Indie Baseline | **This Fork** |
-| :--- | :--- | :--- |
-| Server infrastructure | Upstream is sunsetting; Indie runs locally | **Fully offline, self-hosted runtime** |
-| Cross-session memory | Ephemeral, or none | **Native `mem0` with Qdrant and a NetworkX graph** |
-| Prompt cache-hit architecture | Not present | **Deterministic memory-prefix injection preserves cache hits** |
-| Telemetry and observability | None, or minimal | **`Settings → Usage` dashboard: tokens, activity heatmaps, per-agent breakdown** |
-| Coding agent support | Legacy CLI subset | **10+ agents, including Claude Code, Antigravity, Codex, Gemini CLI** |
-| Antigravity (AGY) agent | Not supported, or basic text mode | **Full `stream-json` parsing, tool-use cards, reasoning-effort control** |
-| Chat input and history | Basic textarea | **Terminal-style prompt history, configurable send shortcuts** |
-| Self-hosted git remotes | GitHub only, or basic Gitea | **Auto-routes between Gitea/Forgejo REST API and the GitHub CLI** |
-| Remote control | Web UI only | **Terminal TUI and a send-only Telegram bridge** |
-| Backup and recovery | None, or basic | **Full export/import of the database, settings, and mem0 state** |
-| Chat and UI streaming | Latency issues on long diffs | **Optimized canvas/chat rendering and worktree panel fixes** |
+- **Server infrastructure** — upstream sunsetting, Indie runs locally → **fully offline, self-hosted runtime**
+- **Cross-session memory** — ephemeral, or none → **native `mem0` with Qdrant and a NetworkX graph**
+- **Prompt cache-hit architecture** — not present → **deterministic memory-prefix injection preserves cache hits**
+- **Telemetry and observability** — none, or minimal → **`Settings → Usage` dashboard: tokens, activity heatmaps, per-agent breakdown**
+- **Coding agent support** — legacy CLI subset → **10+ agents, including Claude Code, Antigravity, Codex, Gemini CLI**
+- **Antigravity (AGY) agent** — not supported, or basic text mode → **full `stream-json` parsing, tool-use cards, reasoning-effort control**
+- **Chat input and history** — basic textarea → **terminal-style prompt history, configurable send shortcuts**
+- **Self-hosted git remotes** — GitHub only, or basic Gitea → **auto-routes between Gitea/Forgejo REST API and the GitHub CLI**
+- **Remote control** — web UI only → **terminal TUI and a send-only Telegram bridge**
+- **Backup and recovery** — none, or basic → **full export/import of the database, settings, and mem0 state**
+- **Chat and UI streaming** — latency issues on long diffs → **optimized canvas/chat rendering and worktree panel fixes**
 
 ## Overview
 
@@ -73,7 +71,7 @@ At its core it's a kanban board that plans and tracks agent work, plus a workspa
 - **Workspaces, PRs, and merge** — dispatch work to existing sessions, open PRs (GitHub or Gitea/Forgejo) with AI-generated descriptions, and squash-merge to base.
 - **Terminal and phone control** — a [TUI cockpit](#terminal-ui-tui) and [Telegram escalation](#telegram-orchestration) keep you in control without the browser.
 
-![](packages/public/vibe-kanban-screenshot-workspace.png)
+![Workspace view showing an agent session, terminal, and diff review panel](packages/public/vibe-kanban-screenshot-workspace.png)
 
 ## Getting Started
 
@@ -274,7 +272,7 @@ A per-machine activity dashboard in **Settings → Usage** shows how your agent 
 - **Extraction token usage** — tokens spent on mem0 graph extractions.
 - **Project and issue progress** — open/done counts and completion bars per project.
 
-![](packages/public/vibe-kanban-usage-dashboard.png)
+![Usage and observability dashboard with an activity heatmap and per-agent execution bars](packages/public/vibe-kanban-usage-dashboard.png)
 
 ## Terminal UI (TUI)
 
@@ -284,14 +282,12 @@ A per-machine activity dashboard in **Settings → Usage** shows how your agent 
 cargo run -p tui
 ```
 
-| Context | Keys |
-|---|---|
-| Global | `a` approvals inbox · `?` help · `q` quit |
-| List | `↑↓`/`jk` move · `⇥` switch pane · `⏎` open · `n` new task · `b` board · `r` refresh |
-| Detail | `⇥`/`←→` move focus · `↑↓`/`jk` navigate · `f` follow · `i` message agent · `s` stop · `esc` back |
-| Git pane | `⇥` focus · `↑↓` select repo · `m` merge · `R` rebase · `P` create PR · `u` push |
-| Approvals inbox | `↑↓` move · `y` approve · `d` deny · `⏎` answer · `esc` back |
-| Board | `←→` column · `↑↓` card · `[ ]` move card · `n` new · `e` edit · `d` delete · `w` workspace |
+- **Global** — `a` approvals inbox · `?` help · `q` quit
+- **List** — `↑↓`/`jk` move · `⇥` switch pane · `⏎` open · `n` new task · `b` board · `r` refresh
+- **Detail** — `⇥`/`←→` move focus · `↑↓`/`jk` navigate · `f` follow · `i` message agent · `s` stop · `esc` back
+- **Git pane** — `⇥` focus · `↑↓` select repo · `m` merge · `R` rebase · `P` create PR · `u` push
+- **Approvals inbox** — `↑↓` move · `y` approve · `d` deny · `⏎` answer · `esc` back
+- **Board** — `←→` column · `↑↓` card · `[ ]` move card · `n` new · `e` edit · `d` delete · `w` workspace
 
 ## Telegram Orchestration
 
