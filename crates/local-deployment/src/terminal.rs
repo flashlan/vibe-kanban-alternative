@@ -144,6 +144,12 @@ fn tmux_launch_command(script_path: &Path) -> Result<String, TerminalError> {
 async fn write_launch_script(session_name: &str, inner: &str) -> Result<PathBuf, TerminalError> {
     let path = std::env::temp_dir().join(format!("{session_name}-launch.sh"));
     tokio::fs::write(&path, launch_script_body(inner)).await?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o700);
+        let _ = tokio::fs::set_permissions(&path, perms).await;
+    }
     Ok(path)
 }
 

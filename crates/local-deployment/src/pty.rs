@@ -93,7 +93,7 @@ impl PtyService {
                 .spawn_command(cmd)
                 .map_err(|e| PtyError::CreateFailed(e.to_string()))?;
 
-            let mut writer = pty_pair
+            let writer = pty_pair
                 .master
                 .take_writer()
                 .map_err(|e| PtyError::CreateFailed(e.to_string()))?;

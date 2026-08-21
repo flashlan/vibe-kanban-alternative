@@ -1857,12 +1857,11 @@ impl LocalContainerService {
         expect_trust_prompt: bool,
         expect_channel_prompt: bool,
     ) {
-        const INITIAL_DELAY: Duration = Duration::from_secs(5);
-        const POLL_INTERVAL: Duration = Duration::from_millis(500);
+        const INITIAL_DELAY: Duration = Duration::from_millis(200);
+        const POLL_INTERVAL: Duration = Duration::from_millis(200);
         const TIMEOUT: Duration = Duration::from_secs(40);
 
-        // Grace period before the first Enter, so the prompt is fully rendered
-        // (and to leave a window for manual interaction).
+        // Brief grace period before the first poll so the tmux process has begun.
         tokio::time::sleep(INITIAL_DELAY).await;
 
         let deadline = Instant::now() + TIMEOUT;

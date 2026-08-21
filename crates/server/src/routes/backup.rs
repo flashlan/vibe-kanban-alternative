@@ -89,7 +89,6 @@ async fn export_backup(State(deployment): State<DeploymentImpl>) -> Response {
     let _ = deployment;
     let cursor = Cursor::new(Vec::new());
     let mut zip = ZipWriter::new(cursor);
-    use std::io::Write;
     use zip::write::SimpleFileOptions;
     let opts = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 

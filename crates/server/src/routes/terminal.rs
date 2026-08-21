@@ -350,7 +350,7 @@ async fn handle_terminal_ws(
         let shell_str = shell.to_string_lossy().to_string();
 
         // Create the tmux session with the user's login shell
-        let mut tmux_args = vec![
+        let tmux_args = vec![
             "new-session".to_string(),
             "-d".to_string(),
             "-s".to_string(),
