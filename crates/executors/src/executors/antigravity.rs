@@ -21,7 +21,8 @@ use crate::{
     },
     logs::{
         ActionType, CommandRunResult, FileChange, NormalizedEntry, NormalizedEntryError,
-        NormalizedEntryType, ToolResult, ToolStatus,
+        NormalizedEntryType, TokenUsageInfo, ToolResult, ToolStatus,
+        stderr_processor::normalize_stderr_logs,
         utils::{
             EntryIndexProvider, patch,
             patch::{add_normalized_entry, replace_normalized_entry},
@@ -37,6 +38,9 @@ use crate::{
 enum AgyEvent {
     Init {
         conversation_id: Option<String>,
+        #[serde(default)]
+        #[allow(dead_code)]
+        init: Option<AgyInitData>,
     },
     StepUpdate {
         step_update: AgyStepUpdate,
@@ -48,7 +52,16 @@ enum AgyEvent {
     Other,
 }
 
+#[derive(Deserialize, Debug, Default)]
+#[allow(dead_code)]
+struct AgyInitData {
+    cwd: Option<String>,
+    tools: Option<Vec<String>>,
+    permission_mode: Option<String>,
+}
+
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 struct AgyStepUpdate {
     step_type: Option<String>,
     step_index: Option<usize>,
@@ -57,21 +70,38 @@ struct AgyStepUpdate {
     tool_info: Option<AgyToolInfo>,
     text_delta: Option<String>,
     conversation_id: Option<String>,
+    duration_seconds: Option<f64>,
+    usage: Option<AgyUsage>,
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 struct AgyToolInfo {
     name: Option<String>,
     parameters: Option<serde_json::Value>,
     output: Option<String>,
 }
 
+#[derive(Deserialize, Debug, Clone)]
+#[allow(dead_code)]
+struct AgyUsage {
+    input_tokens: Option<i64>,
+    output_tokens: Option<i64>,
+    thinking_tokens: Option<i64>,
+    cache_read_tokens: Option<i64>,
+    total_tokens: Option<i64>,
+}
+
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 struct AgyResult {
     conversation_id: Option<String>,
     status: Option<String>,
     response: Option<String>,
     error: Option<String>,
+    duration_seconds: Option<f64>,
+    num_turns: Option<usize>,
+    usage: Option<AgyUsage>,
 }
 
 /// Antigravity (agy) — Google's agentic CLI.
@@ -128,6 +158,7 @@ impl Antigravity {
 
         builder = builder.extend_params(["--print", prompt]);
         builder = builder.extend_params(["--output-format", "stream-json"]);
+        builder = builder.extend_params(["--print-timeout", "30m"]);
 
         if let Some(conv_id) = conversation_id {
             builder = builder.extend_params(["--conversation", conv_id]);
@@ -253,6 +284,152 @@ impl Antigravity {
     }
 }
 
+fn map_tool_action(
+    tool_name: &str,
+    params: Option<&serde_json::Value>,
+    output: &str,
+    worktree: &str,
+) -> ActionType {
+    match tool_name {
+        "view_file" | "read_file" => {
+            let raw_path = params
+                .and_then(|p| {
+                    p.get("AbsolutePath")
+                        .or_else(|| p.get("path"))
+                        .or_else(|| p.get("file_path"))
+                })
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let path = make_path_relative(raw_path, worktree);
+            ActionType::FileRead { path }
+        }
+        "grep_search" | "find_by_name" => {
+            let query = params
+                .and_then(|p| {
+                    p.get("Query")
+                        .or_else(|| p.get("query"))
+                        .or_else(|| p.get("Pattern"))
+                        .or_else(|| p.get("pattern"))
+                })
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            ActionType::Search { query }
+        }
+        "search_web" => {
+            let query = params
+                .and_then(|p| p.get("query").or_else(|| p.get("Query")))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            ActionType::Search { query }
+        }
+        "read_url_content" | "open_browser_url" | "read_browser_page" => {
+            let url = params
+                .and_then(|p| p.get("Url").or_else(|| p.get("url")))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            ActionType::WebFetch { url }
+        }
+        "list_dir" => {
+            let raw_path = params
+                .and_then(|p| {
+                    p.get("DirectoryPath")
+                        .or_else(|| p.get("path"))
+                        .or_else(|| p.get("dir_path"))
+                })
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let path = make_path_relative(raw_path, worktree);
+            ActionType::FileRead { path }
+        }
+        "run_command" => {
+            let command = params
+                .and_then(|p| p.get("CommandLine").or_else(|| p.get("command")))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let category = CommandCategory::from_command(&command);
+            ActionType::CommandRun {
+                command,
+                result: Some(CommandRunResult {
+                    exit_status: None,
+                    output: if output.is_empty() {
+                        None
+                    } else {
+                        Some(output.to_string())
+                    },
+                }),
+                category,
+            }
+        }
+        "replace_file_content" => {
+            let raw_path = params
+                .and_then(|p| {
+                    p.get("TargetFile")
+                        .or_else(|| p.get("path"))
+                        .or_else(|| p.get("file_path"))
+                })
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let target = params
+                .and_then(|p| p.get("TargetContent").or_else(|| p.get("target_content")))
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let replacement = params
+                .and_then(|p| {
+                    p.get("ReplacementContent")
+                        .or_else(|| p.get("replacement_content"))
+                })
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let changes = if !target.is_empty() || !replacement.is_empty() {
+                vec![FileChange::Edit {
+                    unified_diff: create_unified_diff(raw_path, target, replacement),
+                    has_line_numbers: false,
+                }]
+            } else {
+                vec![]
+            };
+            ActionType::FileEdit {
+                path: make_path_relative(raw_path, worktree),
+                changes,
+            }
+        }
+        "write_to_file" => {
+            let raw_path = params
+                .and_then(|p| {
+                    p.get("TargetFile")
+                        .or_else(|| p.get("path"))
+                        .or_else(|| p.get("file_path"))
+                })
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let content = params
+                .and_then(|p| {
+                    p.get("CodeContent")
+                        .or_else(|| p.get("content"))
+                        .or_else(|| p.get("code"))
+                })
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let changes = vec![FileChange::Write {
+                content: content.to_string(),
+            }];
+            ActionType::FileEdit {
+                path: make_path_relative(raw_path, worktree),
+                changes,
+            }
+        }
+        _ => ActionType::Tool {
+            tool_name: tool_name.to_string(),
+            arguments: params.cloned(),
+            result: Some(ToolResult::markdown(output.to_string())),
+        },
+    }
+}
+
 #[async_trait]
 impl StandardCodingAgentExecutor for Antigravity {
     fn apply_overrides(&mut self, executor_config: &ExecutorConfig) {
@@ -304,7 +481,10 @@ impl StandardCodingAgentExecutor for Antigravity {
 
         let worktree = worktree_path.to_string_lossy().to_string();
         let entry_index = EntryIndexProvider::start_from(&msg_store);
-        let handle = tokio::spawn(async move {
+
+        let h_stderr = normalize_stderr_logs(msg_store.clone(), entry_index.clone());
+
+        let h_stdout = tokio::spawn(async move {
             let mut stdout_lines = msg_store.stdout_lines_stream();
             let mut current_assistant: Option<(usize, String)> = None;
             let mut active_tools: HashMap<usize, usize> = HashMap::new();
@@ -319,7 +499,10 @@ impl StandardCodingAgentExecutor for Antigravity {
                 // Check if line is a JSON stream event
                 if let Ok(event) = serde_json::from_str::<AgyEvent>(trimmed) {
                     match event {
-                        AgyEvent::Init { conversation_id } => {
+                        AgyEvent::Init {
+                            conversation_id,
+                            init: _,
+                        } => {
                             if let Some(conv_id) = conversation_id {
                                 msg_store.push_session_id(conv_id);
                                 session_id_reported = true;
@@ -331,6 +514,27 @@ impl StandardCodingAgentExecutor for Antigravity {
                             {
                                 msg_store.push_session_id(conv_id);
                                 session_id_reported = true;
+                            }
+
+                            // Token usage tracking
+                            if let Some(usage) = &step_update.usage
+                                && let Some(total) = usage.total_tokens
+                            {
+                                let entry = NormalizedEntry {
+                                    timestamp: None,
+                                    entry_type: NormalizedEntryType::TokenUsageInfo(
+                                        TokenUsageInfo {
+                                            total_tokens: total as u32,
+                                            model_context_window: 1_000_000,
+                                        },
+                                    ),
+                                    content: format!(
+                                        "Tokens used: {} / Context window: 1000000",
+                                        total
+                                    ),
+                                    metadata: None,
+                                };
+                                add_normalized_entry(&msg_store, &entry_index, entry);
                             }
 
                             let step_type = step_update.step_type.as_deref().unwrap_or("");
@@ -381,146 +585,20 @@ impl StandardCodingAgentExecutor for Antigravity {
                                 let tool_name =
                                     step_update.tool_name.unwrap_or_else(|| "tool".to_string());
                                 let tool_info = step_update.tool_info;
-                                let params = tool_info.as_ref().and_then(|i| i.parameters.clone());
+                                let params = tool_info.as_ref().and_then(|i| i.parameters.as_ref());
                                 let output = tool_info
                                     .as_ref()
-                                    .and_then(|i| i.output.clone())
+                                    .and_then(|i| i.output.as_deref())
                                     .unwrap_or_default();
 
-                                let status = if state == "ACTIVE" {
-                                    ToolStatus::Created
-                                } else {
-                                    ToolStatus::Success
+                                let status = match state {
+                                    "ACTIVE" => ToolStatus::Created,
+                                    "ERROR" | "FAILED" => ToolStatus::Failed,
+                                    _ => ToolStatus::Success,
                                 };
 
-                                let action_type = match tool_name.as_str() {
-                                    "view_file" | "read_file" => {
-                                        let raw_path = params
-                                            .as_ref()
-                                            .and_then(|p| {
-                                                p.get("AbsolutePath").or_else(|| p.get("path"))
-                                            })
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        let path = make_path_relative(raw_path, &worktree);
-                                        ActionType::FileRead { path }
-                                    }
-                                    "grep_search" | "find_by_name" => {
-                                        let query = params
-                                            .as_ref()
-                                            .and_then(|p| {
-                                                p.get("Query").or_else(|| {
-                                                    p.get("query").or_else(|| p.get("Pattern"))
-                                                })
-                                            })
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("")
-                                            .to_string();
-                                        ActionType::Search { query }
-                                    }
-                                    "search_web" => {
-                                        let query = params
-                                            .as_ref()
-                                            .and_then(|p| p.get("query").or_else(|| p.get("Query")))
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("")
-                                            .to_string();
-                                        ActionType::Search { query }
-                                    }
-                                    "read_url_content" => {
-                                        let url = params
-                                            .as_ref()
-                                            .and_then(|p| p.get("Url").or_else(|| p.get("url")))
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("")
-                                            .to_string();
-                                        ActionType::WebFetch { url }
-                                    }
-                                    "run_command" => {
-                                        let command = params
-                                            .as_ref()
-                                            .and_then(|p| {
-                                                p.get("CommandLine").or_else(|| p.get("command"))
-                                            })
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("")
-                                            .to_string();
-                                        let category = CommandCategory::from_command(&command);
-                                        ActionType::CommandRun {
-                                            command,
-                                            result: Some(CommandRunResult {
-                                                exit_status: None,
-                                                output: if output.is_empty() {
-                                                    None
-                                                } else {
-                                                    Some(output.clone())
-                                                },
-                                            }),
-                                            category,
-                                        }
-                                    }
-                                    "replace_file_content" => {
-                                        let raw_path = params
-                                            .as_ref()
-                                            .and_then(|p| {
-                                                p.get("TargetFile").or_else(|| p.get("path"))
-                                            })
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        let target = params
-                                            .as_ref()
-                                            .and_then(|p| p.get("TargetContent"))
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        let replacement = params
-                                            .as_ref()
-                                            .and_then(|p| p.get("ReplacementContent"))
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        let changes = if !target.is_empty() || !replacement.is_empty() {
-                                            vec![FileChange::Edit {
-                                                unified_diff: create_unified_diff(
-                                                    raw_path,
-                                                    target,
-                                                    replacement,
-                                                ),
-                                                has_line_numbers: false,
-                                            }]
-                                        } else {
-                                            vec![]
-                                        };
-                                        ActionType::FileEdit {
-                                            path: make_path_relative(raw_path, &worktree),
-                                            changes,
-                                        }
-                                    }
-                                    "write_to_file" => {
-                                        let raw_path = params
-                                            .as_ref()
-                                            .and_then(|p| {
-                                                p.get("TargetFile").or_else(|| p.get("path"))
-                                            })
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        let content = params
-                                            .as_ref()
-                                            .and_then(|p| p.get("CodeContent"))
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        let changes = vec![FileChange::Write {
-                                            content: content.to_string(),
-                                        }];
-                                        ActionType::FileEdit {
-                                            path: make_path_relative(raw_path, &worktree),
-                                            changes,
-                                        }
-                                    }
-                                    _ => ActionType::Tool {
-                                        tool_name: tool_name.clone(),
-                                        arguments: params,
-                                        result: Some(ToolResult::markdown(output.clone())),
-                                    },
-                                };
+                                let action_type =
+                                    map_tool_action(&tool_name, params, output, &worktree);
 
                                 let entry = NormalizedEntry {
                                     timestamp: None,
@@ -529,12 +607,15 @@ impl StandardCodingAgentExecutor for Antigravity {
                                         action_type,
                                         status,
                                     },
-                                    content: output,
+                                    content: output.to_string(),
                                     metadata: None,
                                 };
 
                                 if let Some(&existing_idx) = active_tools.get(&step_idx) {
                                     replace_normalized_entry(&msg_store, existing_idx, entry);
+                                    if state != "ACTIVE" {
+                                        active_tools.remove(&step_idx);
+                                    }
                                 } else {
                                     let idx = add_normalized_entry(&msg_store, &entry_index, entry);
                                     if state == "ACTIVE" {
@@ -547,6 +628,27 @@ impl StandardCodingAgentExecutor for Antigravity {
                             if !session_id_reported && let Some(conv_id) = result.conversation_id {
                                 msg_store.push_session_id(conv_id);
                                 session_id_reported = true;
+                            }
+
+                            // Token usage tracking on final result
+                            if let Some(usage) = &result.usage
+                                && let Some(total) = usage.total_tokens
+                            {
+                                let entry = NormalizedEntry {
+                                    timestamp: None,
+                                    entry_type: NormalizedEntryType::TokenUsageInfo(
+                                        TokenUsageInfo {
+                                            total_tokens: total as u32,
+                                            model_context_window: 1_000_000,
+                                        },
+                                    ),
+                                    content: format!(
+                                        "Tokens used: {} / Context window: 1000000",
+                                        total
+                                    ),
+                                    metadata: None,
+                                };
+                                add_normalized_entry(&msg_store, &entry_index, entry);
                             }
 
                             if let Some(response) = result.response {
@@ -581,6 +683,20 @@ impl StandardCodingAgentExecutor for Antigravity {
                                             error_type: NormalizedEntryError::Other,
                                         },
                                         content: error,
+                                        metadata: None,
+                                    };
+                                    add_normalized_entry(&msg_store, &entry_index, entry);
+                                }
+                            } else if let Some(status) = result.status {
+                                if status.eq_ignore_ascii_case("FAILURE")
+                                    || status.eq_ignore_ascii_case("ERROR")
+                                {
+                                    let entry = NormalizedEntry {
+                                        timestamp: None,
+                                        entry_type: NormalizedEntryType::ErrorMessage {
+                                            error_type: NormalizedEntryError::Other,
+                                        },
+                                        content: format!("Execution ended with status: {}", status),
                                         metadata: None,
                                     };
                                     add_normalized_entry(&msg_store, &entry_index, entry);
@@ -627,7 +743,7 @@ impl StandardCodingAgentExecutor for Antigravity {
             }
         });
 
-        vec![handle]
+        vec![h_stderr, h_stdout]
     }
 
     fn default_mcp_config_path(&self) -> Option<std::path::PathBuf> {
@@ -710,5 +826,103 @@ impl StandardCodingAgentExecutor for Antigravity {
         Ok(Box::pin(futures::stream::once(async move {
             patch::executor_discovered_options(options)
         })))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_agy_events() {
+        let init_json = r#"{"event":"init","conversation_id":"conv-123","init":{"cwd":"/tmp","tools":["run_command"]}}"#;
+        let event: AgyEvent = serde_json::from_str(init_json).unwrap();
+        match event {
+            AgyEvent::Init {
+                conversation_id, ..
+            } => {
+                assert_eq!(conversation_id, Some("conv-123".to_string()));
+            }
+            _ => panic!("Expected Init event"),
+        }
+
+        let step_json = r#"{"event":"step_update","step_update":{"conversation_id":"conv-123","step_index":1,"state":"ACTIVE","step_type":"tool","tool_name":"run_command","tool_info":{"name":"run_command","parameters":{"CommandLine":"cargo test"}}}}"#;
+        let event: AgyEvent = serde_json::from_str(step_json).unwrap();
+        match event {
+            AgyEvent::StepUpdate { step_update } => {
+                assert_eq!(step_update.tool_name, Some("run_command".to_string()));
+                assert_eq!(step_update.state, Some("ACTIVE".to_string()));
+            }
+            _ => panic!("Expected StepUpdate event"),
+        }
+
+        let result_json = r#"{"event":"result","result":{"conversation_id":"conv-123","status":"SUCCESS","response":"All done!","usage":{"total_tokens":1500}}}"#;
+        let event: AgyEvent = serde_json::from_str(result_json).unwrap();
+        match event {
+            AgyEvent::Result { result } => {
+                assert_eq!(result.status, Some("SUCCESS".to_string()));
+                assert_eq!(result.response, Some("All done!".to_string()));
+                assert_eq!(result.usage.and_then(|u| u.total_tokens), Some(1500));
+            }
+            _ => panic!("Expected Result event"),
+        }
+    }
+
+    #[test]
+    fn test_map_tool_action_replace_file_content() {
+        let params = serde_json::json!({
+            "TargetFile": "/workspace/src/main.rs",
+            "TargetContent": "fn old() {}",
+            "ReplacementContent": "fn new() {}"
+        });
+        let action = map_tool_action("replace_file_content", Some(&params), "Done", "/workspace");
+        match action {
+            ActionType::FileEdit { path, changes } => {
+                assert_eq!(path, "src/main.rs");
+                assert_eq!(changes.len(), 1);
+                match &changes[0] {
+                    FileChange::Edit { unified_diff, .. } => {
+                        assert!(unified_diff.contains("-fn old() {}"));
+                        assert!(unified_diff.contains("+fn new() {}"));
+                    }
+                    _ => panic!("Expected FileChange::Edit"),
+                }
+            }
+            _ => panic!("Expected ActionType::FileEdit"),
+        }
+    }
+
+    #[test]
+    fn test_map_tool_action_run_command() {
+        let params = serde_json::json!({
+            "CommandLine": "git status"
+        });
+        let action = map_tool_action("run_command", Some(&params), "clean", "/workspace");
+        match action {
+            ActionType::CommandRun {
+                command,
+                category,
+                result,
+            } => {
+                assert_eq!(command, "git status");
+                assert_eq!(category, CommandCategory::Other);
+                assert_eq!(result.and_then(|r| r.output), Some("clean".to_string()));
+            }
+            _ => panic!("Expected ActionType::CommandRun"),
+        }
+    }
+
+    #[test]
+    fn test_map_tool_action_list_dir() {
+        let params = serde_json::json!({
+            "DirectoryPath": "/workspace/src"
+        });
+        let action = map_tool_action("list_dir", Some(&params), "main.rs", "/workspace");
+        match action {
+            ActionType::FileRead { path } => {
+                assert_eq!(path, "src");
+            }
+            _ => panic!("Expected ActionType::FileRead"),
+        }
     }
 }
