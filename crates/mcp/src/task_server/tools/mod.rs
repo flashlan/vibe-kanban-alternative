@@ -93,6 +93,10 @@ impl McpServer {
             + Self::orchestrator_prompt_tools_router();
         router.remove_route("list_workspaces");
         router.remove_route("delete_workspace");
+        // The orchestrator spawns/manages sessions but doesn't itself execute
+        // a card's pipeline stages — that happens in the execution agent's
+        // own session, which connects via global mode.
+        router.remove_route("report_pipeline_stage");
         router
     }
 }
@@ -528,6 +532,7 @@ mod tests {
             "memory_save".to_string(),
             "memory_search".to_string(),
             "remove_issue_tag".to_string(),
+            "report_pipeline_stage".to_string(),
             "respond_to_approval".to_string(),
             "run_issue_in_workspace".to_string(),
             "run_session_prompt".to_string(),

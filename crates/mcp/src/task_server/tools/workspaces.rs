@@ -111,6 +111,25 @@ struct McpDeleteWorkspaceResponse {
     delete_branches: bool,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct McpReportPipelineStageRequest {
+    #[schemars(
+        description = "Workspace ID to report progress for. Optional if running inside that workspace context."
+    )]
+    workspace_id: Option<Uuid>,
+    #[schemars(
+        description = "1-based stage number, matching the numbered list in the card's ## Pipeline instructions (e.g. 2 for the second stage)"
+    )]
+    stage: i64,
+}
+
+#[derive(Debug, Serialize, schemars::JsonSchema)]
+struct McpReportPipelineStageResponse {
+    success: bool,
+    workspace_id: String,
+    stage: i64,
+}
+
 #[tool_router(router = workspaces_tools_router, vis = "pub")]
 impl McpServer {
     #[tool(
@@ -271,6 +290,50 @@ impl McpServer {
             success: true,
             workspace_id: workspace_id.to_string(),
             delete_branches,
+        })
+    }
+
+    /// Reliable counterpart to the log-marker pipeline tracker
+    /// (`services::pipeline_stage`): that one watches raw execution output
+    /// for an agent-narrated `VK-PIPELINE-STAGE: N` text line, which some
+    /// agents omit even while doing the actual stage's work — leaving the
+    /// card's progress checklist stuck showing no progress. A tool call the
+    /// agent is explicitly instructed to make doesn't share that failure
+    /// mode. Both write the same `current_pipeline_stage` column server-side
+    /// (`crates/server/src/routes/workspaces/core.rs::report_pipeline_stage`),
+    /// so either signal keeps the UI accurate — this one is just the
+    /// dependable one.
+    #[tool(
+        description = "Report that you are beginning a numbered stage of this card's ## Pipeline instructions, so the card's progress checklist reflects it live. Call this once as you start EACH stage (stage 1, then stage 2, ...), matching the numbered list in the instructions. `workspace_id` is optional if running inside that workspace context."
+    )]
+    async fn report_pipeline_stage(
+        &self,
+        Parameters(McpReportPipelineStageRequest {
+            workspace_id,
+            stage,
+        }): Parameters<McpReportPipelineStageRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let workspace_id = match self.resolve_workspace_id(workspace_id) {
+            Ok(id) => id,
+            Err(error_result) => return Ok(Self::tool_error(error_result)),
+        };
+        if let Err(error_result) = self.scope_allows_workspace(workspace_id) {
+            return Ok(Self::tool_error(error_result));
+        }
+
+        let url = self.url(&format!("/api/workspaces/{}/pipeline-stage", workspace_id));
+        let payload = serde_json::json!({ "stage": stage });
+        if let Err(e) = self
+            .send_empty_json(self.client.post(&url).json(&payload))
+            .await
+        {
+            return Ok(Self::tool_error(e));
+        }
+
+        McpServer::success(&McpReportPipelineStageResponse {
+            success: true,
+            workspace_id: workspace_id.to_string(),
+            stage,
         })
     }
 }

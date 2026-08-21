@@ -152,3 +152,29 @@ pub async fn mark_seen(
     CodingAgentTurn::mark_seen_by_workspace_id(pool, workspace.id).await?;
     Ok(ResponseJson(ApiResponse::success(())))
 }
+
+#[derive(Debug, Deserialize)]
+pub struct ReportPipelineStageRequest {
+    /// 1-based stage number, matching the numbered list in the card's
+    /// `## Pipeline` block (see `cardPipeline.ts`).
+    pub stage: i64,
+}
+
+/// Called by the `report_pipeline_stage` MCP tool as the execution agent
+/// begins each pipeline stage. This is the reliable counterpart to the
+/// log-marker tracker (`services::pipeline_stage`): that one depends on the
+/// agent narrating a `VK-PIPELINE-STAGE: N` text line, which some agents
+/// silently omit even while doing the actual work. A tool call the agent is
+/// explicitly instructed to make doesn't share that failure mode. Both
+/// write to the same `current_pipeline_stage` column, so either one keeps
+/// the UI's live progress accurate.
+#[axum::debug_handler]
+pub async fn report_pipeline_stage(
+    Extension(workspace): Extension<Workspace>,
+    State(deployment): State<DeploymentImpl>,
+    Json(request): Json<ReportPipelineStageRequest>,
+) -> Result<ResponseJson<ApiResponse<()>>, ApiError> {
+    let pool = &deployment.db().pool;
+    Workspace::set_current_pipeline_stage(pool, workspace.id, Some(request.stage)).await?;
+    Ok(ResponseJson(ApiResponse::success(())))
+}
