@@ -5,7 +5,10 @@ use derivative::Derivative;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
-use workspace_utils::{command_ext::GroupSpawnNoWindowExt, msg_store::MsgStore};
+use workspace_utils::{
+    command_ext::GroupSpawnNoWindowExt, diff::create_unified_diff, msg_store::MsgStore,
+    path::make_path_relative,
+};
 
 use crate::{
     approvals::ExecutorApprovalService,
@@ -17,8 +20,8 @@ use crate::{
         StandardCodingAgentExecutor,
     },
     logs::{
-        ActionType, CommandRunResult, NormalizedEntry, NormalizedEntryError, NormalizedEntryType,
-        ToolResult, ToolStatus,
+        ActionType, CommandRunResult, FileChange, NormalizedEntry, NormalizedEntryError,
+        NormalizedEntryType, ToolResult, ToolStatus,
         utils::{
             EntryIndexProvider, patch,
             patch::{add_normalized_entry, replace_normalized_entry},
@@ -295,10 +298,11 @@ impl StandardCodingAgentExecutor for Antigravity {
     fn normalize_logs(
         &self,
         msg_store: Arc<MsgStore>,
-        _worktree_path: &Path,
+        worktree_path: &Path,
     ) -> Vec<tokio::task::JoinHandle<()>> {
         use futures::StreamExt;
 
+        let worktree = worktree_path.to_string_lossy().to_string();
         let entry_index = EntryIndexProvider::start_from(&msg_store);
         let handle = tokio::spawn(async move {
             let mut stdout_lines = msg_store.stdout_lines_stream();
@@ -391,17 +395,17 @@ impl StandardCodingAgentExecutor for Antigravity {
 
                                 let action_type = match tool_name.as_str() {
                                     "view_file" | "read_file" => {
-                                        let path = params
+                                        let raw_path = params
                                             .as_ref()
                                             .and_then(|p| {
                                                 p.get("AbsolutePath").or_else(|| p.get("path"))
                                             })
                                             .and_then(|v| v.as_str())
-                                            .unwrap_or("")
-                                            .to_string();
+                                            .unwrap_or("");
+                                        let path = make_path_relative(raw_path, &worktree);
                                         ActionType::FileRead { path }
                                     }
-                                    "grep_search" | "find_by_name" | "search_web" => {
+                                    "grep_search" | "find_by_name" => {
                                         let query = params
                                             .as_ref()
                                             .and_then(|p| {
@@ -414,6 +418,24 @@ impl StandardCodingAgentExecutor for Antigravity {
                                             .to_string();
                                         ActionType::Search { query }
                                     }
+                                    "search_web" => {
+                                        let query = params
+                                            .as_ref()
+                                            .and_then(|p| p.get("query").or_else(|| p.get("Query")))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        ActionType::Search { query }
+                                    }
+                                    "read_url_content" => {
+                                        let url = params
+                                            .as_ref()
+                                            .and_then(|p| p.get("Url").or_else(|| p.get("url")))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        ActionType::WebFetch { url }
+                                    }
                                     "run_command" => {
                                         let command = params
                                             .as_ref()
@@ -423,6 +445,7 @@ impl StandardCodingAgentExecutor for Antigravity {
                                             .and_then(|v| v.as_str())
                                             .unwrap_or("")
                                             .to_string();
+                                        let category = CommandCategory::from_command(&command);
                                         ActionType::CommandRun {
                                             command,
                                             result: Some(CommandRunResult {
@@ -433,21 +456,63 @@ impl StandardCodingAgentExecutor for Antigravity {
                                                     Some(output.clone())
                                                 },
                                             }),
-                                            category: CommandCategory::Other,
+                                            category,
                                         }
                                     }
-                                    "replace_file_content" | "write_to_file" => {
-                                        let path = params
+                                    "replace_file_content" => {
+                                        let raw_path = params
                                             .as_ref()
                                             .and_then(|p| {
                                                 p.get("TargetFile").or_else(|| p.get("path"))
                                             })
                                             .and_then(|v| v.as_str())
-                                            .unwrap_or("")
-                                            .to_string();
+                                            .unwrap_or("");
+                                        let target = params
+                                            .as_ref()
+                                            .and_then(|p| p.get("TargetContent"))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("");
+                                        let replacement = params
+                                            .as_ref()
+                                            .and_then(|p| p.get("ReplacementContent"))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("");
+                                        let changes = if !target.is_empty() || !replacement.is_empty() {
+                                            vec![FileChange::Edit {
+                                                unified_diff: create_unified_diff(
+                                                    raw_path,
+                                                    target,
+                                                    replacement,
+                                                ),
+                                                has_line_numbers: false,
+                                            }]
+                                        } else {
+                                            vec![]
+                                        };
                                         ActionType::FileEdit {
-                                            path,
-                                            changes: vec![],
+                                            path: make_path_relative(raw_path, &worktree),
+                                            changes,
+                                        }
+                                    }
+                                    "write_to_file" => {
+                                        let raw_path = params
+                                            .as_ref()
+                                            .and_then(|p| {
+                                                p.get("TargetFile").or_else(|| p.get("path"))
+                                            })
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("");
+                                        let content = params
+                                            .as_ref()
+                                            .and_then(|p| p.get("CodeContent"))
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("");
+                                        let changes = vec![FileChange::Write {
+                                            content: content.to_string(),
+                                        }];
+                                        ActionType::FileEdit {
+                                            path: make_path_relative(raw_path, &worktree),
+                                            changes,
                                         }
                                     }
                                     _ => ActionType::Tool {
