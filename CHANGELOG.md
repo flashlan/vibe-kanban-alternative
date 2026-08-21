@@ -7,6 +7,31 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-alternat
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.35] - 2026-08-21
+
+### Added
+
+- **mem0 real graph navigation**: new `/graph/traverse` endpoint (proper multi-hop BFS, replacing the old substring-match-plus-one-hop `/graph/neighbors`) and a `memory_graph_traverse` MCP tool, so agents can ask "what's connected to X" instead of only "what reads similarly to this text."
+- **mem0 fact/graph provenance & staleness checking**: every saved fact and graph node/edge now optionally records the commit SHA it was true at; a new `memory_check_staleness` MCP tool diffs the repo since that commit and flags entities whose referenced code was actually removed since — verified against this repo's own real project memory and commit history, not simulated data.
+- **mem0 recall relevance in Settings → Usage**: new "mem0 recall relevance" panel (day-bucketed `top_score`/`avg_score`, weak-call counts). This signal existed before but only in an MCP child process's stderr that nothing captured.
+- All 9 bundled pipelines' "memory" stage prompt now instructs the agent to use `memory_graph_traverse` and `memory_check_staleness` instead of judging memory relevance/staleness unaided.
+- `report_pipeline_stage` MCP tool for reliable, structured pipeline-progress reporting (ADR-032), backed by a new `current_pipeline_stage` write path; the existing text-marker tracker stays as a redundant fallback.
+- Deeper mem0 test coverage (`mem0-vk/test/`): real-embedding recall tests (including an adversarial zero-word-overlap paraphrase case) and live extraction-quality tests against the real configured LLM provider.
+- Documented all of the above in [`docs/ADR/ADR-030-mem0-context-drift-measurement.md`](docs/ADR/ADR-030-mem0-context-drift-measurement.md).
+
+### Fixed
+
+- **Reconnected the `containers` MCP-context router**, disconnected for 19 days as collateral damage of the cloud-removal refactor (`e41e2c16`). Every MCP session had been silently running with no workspace context (`get_context` was never a registered tool, `self.context` was always `None`) — affecting any tool relying on the implicit-workspace-context fallback, including the new `report_pipeline_stage` and `memory_check_staleness`.
+- Headed coding-agent sessions (Claude Code Headed, OpenCode Headed): Send now works while the agent is mid-turn instead of being disabled, routing through the same live-delivery path the backend already used for idle sessions. Fixed a related stuck-`Stop`-button state when a queued message's target process had already finished by the time it was displayed.
+- `mem0-vk`'s extraction failover now retries the next provider when a candidate returns syntactically valid but empty-graph JSON, instead of silently accepting it — fixes a real, observed reliability gap in graph extraction quality.
+- `mem0-vk`'s Docker build now actually compiles TypeScript (two-stage build) instead of copying a gitignored `dist/` directory that never existed on a fresh clone.
+- Create-mode now recovers a sensible default target branch from the project's last workspace.
+- Fixed a test-suite bug where every `mem0-vk` test file called `process.exit()` before its own cleanup `DELETE` request could complete, leaking orphaned Qdrant test collections on every run.
+
+### Changed
+
+- README rewritten in a more sober tone. `mem0-vk/` now ships the real, complete Node/TypeScript implementation in-repo (previously a non-functional Python stub that the README's own setup instructions couldn't actually produce).
+
 ## [0.2.34] - 2026-08-20
 
 ### Added
