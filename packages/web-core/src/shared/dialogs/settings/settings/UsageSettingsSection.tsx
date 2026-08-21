@@ -45,6 +45,19 @@ export interface Mem0TokenUsage {
   total: number;
 }
 
+export interface Mem0RelevanceDay {
+  day: string;
+  calls: number;
+  weak_calls: number;
+  avg_top_score: number | null;
+}
+
+export interface Mem0RelevanceSummary {
+  days: Mem0RelevanceDay[];
+  total_calls: number;
+  total_weak_calls: number;
+}
+
 export interface UsageSummary {
   activity: DailyAgentActivity[];
   issues: DailyIssueActivity[];
@@ -52,6 +65,7 @@ export interface UsageSummary {
   total_executions: number;
   total_seconds: number;
   mem0_tokens: Mem0TokenUsage;
+  mem0_relevance: Mem0RelevanceSummary;
 }
 
 export interface ReExtractResponse {
@@ -422,6 +436,80 @@ export function UsageSettingsSection() {
                 ))}
               </div>
             </>
+          )}
+        </div>
+      </section>
+
+      {/* mem0 recall relevance — memory_search top-score per day, since last
+          server restart (in-memory ledger; see ADR-030). */}
+      <section>
+        <h3 className="mb-2 text-sm font-medium text-high">
+          {t('settings.usage.mem0Relevance', 'mem0 recall relevance')}
+        </h3>
+        <div className="rounded-sm border border-border bg-panel p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-2xl font-semibold text-high">
+              {(summary?.mem0_relevance.total_calls ?? 0).toLocaleString()}
+            </span>
+            <span className="text-xs text-low">
+              {t('settings.usage.recallCalls', 'memory_search calls')}
+              {(summary?.mem0_relevance.total_weak_calls ?? 0) > 0 && (
+                <>
+                  {' · '}
+                  <span className="text-warning">
+                    {(
+                      summary?.mem0_relevance.total_weak_calls ?? 0
+                    ).toLocaleString()}{' '}
+                    {t('settings.usage.weak', 'weak')}
+                  </span>
+                </>
+              )}
+            </span>
+          </div>
+          {(summary?.mem0_relevance.days ?? []).length === 0 ? (
+            <div className="text-sm text-low">
+              {t(
+                'settings.usage.noRelevanceData',
+                'No recall calls recorded yet this server run (in-memory only — resets on restart).'
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {(summary?.mem0_relevance.days ?? []).map((d) => {
+                const score = d.avg_top_score;
+                const widthPct =
+                  score != null ? Math.max(4, Math.round(score * 100)) : 0;
+                const barColor =
+                  score == null
+                    ? 'bg-secondary'
+                    : score < 0.3
+                      ? 'bg-red-500/80'
+                      : score < 0.6
+                        ? 'bg-amber-500/80'
+                        : 'bg-emerald-500/80';
+                return (
+                  <div key={d.day} className="flex items-center gap-3">
+                    <span className="w-24 shrink-0 text-xs text-low">
+                      {d.day}
+                    </span>
+                    <div className="h-5 flex-1 overflow-hidden rounded-sm bg-secondary">
+                      <div
+                        title={
+                          score != null
+                            ? `avg top score ${score.toFixed(3)} · ${d.calls} call(s), ${d.weak_calls} weak`
+                            : `no scored hits · ${d.calls} call(s), ${d.weak_calls} weak`
+                        }
+                        className={`h-full ${barColor}`}
+                        style={{ width: `${widthPct}%` }}
+                      />
+                    </div>
+                    <span className="w-20 shrink-0 text-right text-xs text-low">
+                      {score != null ? score.toFixed(2) : '—'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </div>
       </section>

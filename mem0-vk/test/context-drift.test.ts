@@ -74,18 +74,20 @@ async function main() {
 
   const stub = await startStub(STUB_PORT);
   const { proc, stop } = startApp({ appPort: APP_PORT, stubPort: STUB_PORT, collection: COLLECTION });
-  const cleanup = () => {
+  // Async on purpose — see test.ts for why `process.on('exit', ...)` can't
+  // run the DELETE reliably; every call site below awaits cleanup() itself.
+  const cleanup = async () => {
     stop();
     stub.close();
-    fetch(`${QDRANT_URL}/collections/${COLLECTION}`, { method: "DELETE" }).catch(() => {});
+    await fetch(`${QDRANT_URL}/collections/${COLLECTION}`, { method: "DELETE" }).catch(() => {});
   };
-  process.on("exit", cleanup);
+  process.on("exit", () => stop());
 
   try {
     await waitUp(`${BASE}/health`);
   } catch (e: any) {
     console.error(`\nApp failed to start: ${e.message}`);
-    stop();
+    await cleanup();
     process.exit(2);
   }
 
@@ -173,7 +175,7 @@ async function main() {
     console.log("Failed:");
     for (const f of failures) console.log(`  - ${f}`);
   }
-  cleanup();
+  await cleanup();
   process.exit(failed === 0 ? 0 : 1);
 }
 

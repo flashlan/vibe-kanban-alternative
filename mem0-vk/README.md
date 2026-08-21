@@ -214,16 +214,33 @@ docker compose ps             # status
 ```
 mem0-vk/
 ├── src/
-│   └── index.ts         # endpoint: MCP + REST + resolvers + proxy de grafos
+│   └── index.ts                    # endpoint: MCP + REST + resolvers + proxy de grafos
 ├── test/
-│   └── test.ts
-├── embeddings/          # (futuro) container Python sentence-transformers + NetworkX
+│   ├── harness.ts                  # boot/teardown compartilhado (stub e embedding real)
+│   ├── test.ts                     # smoke test HTTP (REST + MCP), embedding stub
+│   ├── context-drift.test.ts       # perda/drift de contexto no handoff, embedding stub
+│   ├── semantic-recall.test.ts     # recall semântico real (embedding real, sem custo)
+│   └── extraction-quality.test.ts  # qualidade da extração LLM real (localhost:8000, groq/etc.)
+├── embeddings/          # container Python sentence-transformers (CPU) + grafo NetworkX
 ├── Dockerfile           # Node 20 slim, EXPOSE 8000
-├── docker-compose.yml   # qdrant + mem0-vk (+ embeddings comentado)
+├── docker-compose.yml   # qdrant + mem0-vk + embeddings
 ├── package.json
 ├── tsconfig.json
 └── README.md
 ```
+
+## Testes
+
+```bash
+npm run build
+
+npm test              # smoke test HTTP+MCP (stub — sem custo, sem chaves)
+npm run test:drift    # mecanismo de ranking/dedup/cap sob ruído sintético (stub)
+npm run test:semantic # recall real (embeddings/ sidecar — grátis, CPU local)
+npm run test:extraction # qualidade da extração de entidades/relações (LLM real — precisa de chave configurada)
+```
+
+`test`, `test:drift` e `test:semantic` são auto-contidos (sobem seu próprio processo isolado) e não precisam de chaves de API. `test:extraction` bate direto no container já rodando em `localhost:8000` — pula (não falha) se o container não estiver de pé ou sem provedor de extração configurado.
 
 ## Licença
 

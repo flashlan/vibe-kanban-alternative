@@ -112,11 +112,31 @@ class UpsertRequest(BaseModel):
     user_id: str
     entities: list[Entity] = Field(default_factory=list)
     relations: list[Relation] = Field(default_factory=list)
+    # Calling workspace's HEAD commit when this upsert happened (best-effort,
+    # resolved by the VK API — mem0-vk/embeddings has no git access itself).
+    # Stored as last-write-wins on every node/edge touched by this upsert, so
+    # a later staleness check can ask "is this still the code as of the
+    # commit this fact was true for" — see
+    # docs/ADR/ADR-030-mem0-context-drift-measurement.md.
+    commit_sha: str | None = None
 
 
 class QueryRequest(BaseModel):
     user_id: str
     query: str = ""
+
+
+class TraverseRequest(BaseModel):
+    user_id: str
+    # Substring match (same rule as /graph/neighbors) against node name or
+    # description, to find the starting node(s) for the BFS below.
+    start: str
+    hops: int = 2
+    # "out" = follow subject->object edges only (what depends ON start);
+    # "in" = follow object->subject edges only (what start depends on);
+    # "both" = either direction. The graph is directed (subject->object per
+    # relation), so "out"/"in" are NOT symmetric — pick deliberately.
+    direction: str = "both"
 
 
 class RemoveNodeRequest(BaseModel):
@@ -176,6 +196,12 @@ class GraphStore:
         import networkx as nx
 
         g = self.get(user_id)
+        # Last-write-wins: every node/edge touched by THIS upsert call is
+        # stamped with req.commit_sha (if given), overwriting whatever was
+        # there before — a node accumulated across many calls at different
+        # commits keeps only the most recent one it was reinforced at. A
+        # missing commit_sha (best-effort on the caller's side) leaves any
+        # existing stamp untouched rather than clearing it to None.
         added_nodes = 0
         for e in req.entities:
             name = _norm(e.name)
@@ -188,6 +214,8 @@ class GraphStore:
             else:
                 g.add_node(name, type=e.type, description=e.description)
                 added_nodes += 1
+            if req.commit_sha:
+                g.nodes[name]["commit_sha"] = req.commit_sha
         added_edges = 0
         for r in req.relations:
             s, o = _norm(r.subject), _norm(r.object)
@@ -197,11 +225,16 @@ class GraphStore:
                 g.add_node(s, type="other", description="")
             if not g.has_node(o):
                 g.add_node(o, type="other", description="")
+            if req.commit_sha:
+                g.nodes[s]["commit_sha"] = req.commit_sha
+                g.nodes[o]["commit_sha"] = req.commit_sha
             if not g.has_edge(s, o):
                 g.add_edge(s, o, predicate=r.predicate)
                 added_edges += 1
             else:
                 g[s][o]["predicate"] = r.predicate
+            if req.commit_sha:
+                g[s][o]["commit_sha"] = req.commit_sha
         self._persist(user_id)
         return {"ok": True, "user_id": user_id, "nodes_added": added_nodes, "edges_added": added_edges}
 
@@ -266,6 +299,87 @@ def graph_neighbors(req: QueryRequest):
                 a = g.nodes[nb]
                 out.append({"id": nb, "name": nb, "type": a.get("type", "other"), "description": a.get("description", "")})
     return {"user_id": req.user_id, "neighbors": out}
+
+
+@app.post("/graph/traverse")
+def graph_traverse(req: TraverseRequest):
+    """Real multi-hop BFS from a matched starting node, unlike /graph/neighbors
+    (substring match + one hop of successors only, no depth/direction
+    control). Caps at MAX_HOPS and MAX_NODES so a broad `start` match can't
+    flood the caller's context — mirrors the DEFAULT_SEARCH_LIMIT rationale
+    in crates/mcp/src/task_server/tools/mem0.rs (ADR-028)."""
+    MAX_HOPS = 3
+    MAX_NODES = 40
+
+    g = graph.get(req.user_id)
+    hops = max(1, min(req.hops, MAX_HOPS))
+    q = _norm(req.start).lower()
+    start_nodes = [
+        n
+        for n, attrs in g.nodes(data=True)
+        if q and (q in n.lower() or q in (attrs.get("description") or "").lower())
+    ]
+    if not start_nodes:
+        return {
+            "user_id": req.user_id,
+            "start": req.start,
+            "matched_start_nodes": [],
+            "hops": hops,
+            "nodes": [],
+            "edges": [],
+            "truncated": False,
+        }
+
+    visited: set[str] = set(start_nodes)
+    frontier: set[str] = set(start_nodes)
+    for _ in range(hops):
+        next_frontier: set[str] = set()
+        for n in frontier:
+            if req.direction in ("out", "both"):
+                next_frontier.update(g.successors(n))
+            if req.direction in ("in", "both"):
+                next_frontier.update(g.predecessors(n))
+        next_frontier -= visited
+        if not next_frontier:
+            break
+        visited |= next_frontier
+        frontier = next_frontier
+
+    truncated = len(visited) > MAX_NODES
+    node_list = list(visited)[:MAX_NODES]
+    node_set = set(node_list)
+    nodes_out = [
+        {
+            "id": n,
+            "type": g.nodes[n].get("type", "other"),
+            "description": g.nodes[n].get("description", ""),
+            # Last commit this node was reinforced/created at, if the caller
+            # supplied one at upsert time — a staleness check's raw input,
+            # not yet acted on by this endpoint. May be absent for older
+            # facts saved before commit_sha tracking existed.
+            "commit_sha": g.nodes[n].get("commit_sha"),
+        }
+        for n in node_list
+    ]
+    edges_out = [
+        {
+            "subject": s,
+            "predicate": attrs.get("predicate", "related_to"),
+            "object": o,
+            "commit_sha": attrs.get("commit_sha"),
+        }
+        for s, o, attrs in g.edges(data=True)
+        if s in node_set and o in node_set
+    ]
+    return {
+        "user_id": req.user_id,
+        "start": req.start,
+        "matched_start_nodes": start_nodes,
+        "hops": hops,
+        "nodes": nodes_out,
+        "edges": edges_out,
+        "truncated": truncated,
+    }
 
 
 @app.post("/graph/relations")

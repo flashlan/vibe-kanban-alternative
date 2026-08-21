@@ -59,20 +59,25 @@ async function main() {
 
   const stub = await startStub(STUB_PORT);
   const { proc, stop } = startApp({ appPort: APP_PORT, stubPort: STUB_PORT, collection: COLLECTION });
-  const cleanup = () => {
+  // Async on purpose: dropping the test collection is an HTTP DELETE, and
+  // `process.exit()` tears the process down before any in-flight promise
+  // started inside a synchronous `process.on('exit', ...)` handler can
+  // complete — every call site below MUST `await cleanup()` before exiting.
+  // The 'exit' listener stays registered only as a sync-only fallback (kills
+  // the spawned child) for paths that terminate without reaching an await
+  // (e.g. an uncaught throw); it deliberately does not re-attempt the DELETE.
+  const cleanup = async () => {
     stop();
     stub.close();
-    // drop the test collection (fire-and-forget on exit)
-    fetch(`${QDRANT_URL}/collections/${COLLECTION}`, { method: "DELETE" }).catch(() => {});
+    await fetch(`${QDRANT_URL}/collections/${COLLECTION}`, { method: "DELETE" }).catch(() => {});
   };
-  process.on("exit", cleanup);
+  process.on("exit", () => stop());
 
   try {
     await waitUp(`${BASE}/health`);
   } catch (e: any) {
     console.error(`\nApp failed to start: ${e.message}`);
-    stop();
-    console.error(proc.stderr ? "" : "");
+    await cleanup();
     process.exit(2);
   }
 
@@ -221,7 +226,7 @@ async function main() {
     console.log("Failed:");
     for (const f of failures) console.log(`  - ${f}`);
   }
-  cleanup();
+  await cleanup();
   process.exit(failed === 0 ? 0 : 1);
 }
 

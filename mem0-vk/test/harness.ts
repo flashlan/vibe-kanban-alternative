@@ -1,7 +1,8 @@
 /**
  * mem0-vk test harness — shared boot/teardown for the server + stub
- * LLM/embedding backend. Used by both test.ts (smoke test) and
- * context-drift.test.ts (recall/drift regression test).
+ * LLM/embedding backend. Used by test.ts (smoke test), context-drift.test.ts
+ * (recall/drift regression test, deterministic stub embedding), and
+ * semantic-recall.test.ts (same shape, real embedding backend).
  */
 import http from "http";
 import { spawn, ChildProcess } from "child_process";
@@ -9,6 +10,14 @@ import { setTimeout as sleep } from "timers/promises";
 
 export const QDRANT_URL = process.env.QDRANT_URL || "http://localhost:6333";
 export const DIM = 768;
+
+// The real sentence-transformers sidecar (docker-compose's `embeddings`
+// service — local CPU inference, no API key/cost). Its model is
+// all-MiniLM-L6-v2, dim=384, distinct from the stub's DIM=768: callers using
+// real embedding must pass 384 as the app's EMBED_DIM.
+export const REAL_EMBED_URL =
+  process.env.REAL_EMBED_URL || "http://127.0.0.1:8001/v1";
+export const REAL_EMBED_DIM = 384;
 
 // Deterministic bag-of-words embedding: each lowercased word hashes to a
 // fixed bucket, so texts sharing words end up with higher cosine similarity
@@ -91,7 +100,31 @@ export function startApp(opts: {
   stubPort: number;
   collection: string;
   graphUrl?: string;
+  /**
+   * Use the real sentence-transformers sidecar for embeddings instead of the
+   * deterministic stub, and leave extraction unconfigured (no
+   * MEM0_LLM_PROVIDER/MEM0_LLAMA_URL). `extractStructure`'s fallback path
+   * (src/index.ts) then stores the raw input text verbatim, with zero LLM
+   * calls — so stored content stays exactly as written by the test while
+   * embeddings — and therefore ranking — are the real thing. `stubPort` is
+   * unused in this mode (no stub server is needed).
+   */
+  realEmbedding?: boolean;
 }): { proc: ChildProcess; stop: () => void } {
+  const embedEnv = opts.realEmbedding
+    ? {
+        EMBED_DIM: String(REAL_EMBED_DIM),
+        EMBED_LOCAL_URL: REAL_EMBED_URL,
+        EMBED_LOCAL_MODEL: "sentence-transformers",
+      }
+    : {
+        EMBED_DIM: String(DIM),
+        EMBED_LOCAL_URL: `http://127.0.0.1:${opts.stubPort}/v1`,
+        EMBED_LOCAL_MODEL: "stub",
+        MEM0_LLM_PROVIDER: "llama",
+        MEM0_LLAMA_URL: `http://127.0.0.1:${opts.stubPort}/v1`,
+        MEM0_LLAMA_MODEL: "stub",
+      };
   const proc = spawn("node", ["dist/index.js"], {
     cwd: new URL("..", import.meta.url).pathname,
     env: {
@@ -100,13 +133,8 @@ export function startApp(opts: {
       HOST: "127.0.0.1",
       QDRANT_URL,
       MEM0_COLLECTION: opts.collection,
-      EMBED_DIM: String(DIM),
-      EMBED_LOCAL_URL: `http://127.0.0.1:${opts.stubPort}/v1`,
-      EMBED_LOCAL_MODEL: "stub",
-      MEM0_LLM_PROVIDER: "llama",
-      MEM0_LLAMA_URL: `http://127.0.0.1:${opts.stubPort}/v1`,
-      MEM0_LLAMA_MODEL: "stub",
       GRAPH_URL: opts.graphUrl ?? "",
+      ...embedEnv,
     },
     stdio: ["ignore", "pipe", "pipe"],
   });
@@ -120,6 +148,21 @@ export function startApp(opts: {
       } catch {}
     },
   };
+}
+
+/** Reachability check for an arbitrary URL — used for both Qdrant and the
+ * real embeddings sidecar, which the caller must have running for
+ * realEmbedding tests (`docker compose up -d embeddings` in mem0-vk/). */
+export async function isReachable(url: string, timeoutMs = 3000): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    const r = await fetch(url, { signal: controller.signal });
+    clearTimeout(t);
+    return r.ok;
+  } catch {
+    return false;
+  }
 }
 
 export async function waitUp(url: string, timeoutMs = 15000): Promise<void> {

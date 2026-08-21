@@ -13,6 +13,7 @@ use axum::{
 };
 use deployment::Deployment;
 use serde::{Deserialize, Serialize};
+use services::services::mem0_relevance::Mem0RelevanceSummary;
 use sqlx::FromRow;
 use ts_rs::TS;
 use utils::response::ApiResponse;
@@ -67,6 +68,13 @@ pub struct UsageSummary {
     pub total_seconds: i64,
     /// mem0 extraction-model token usage (best-effort; empty when mem0 is down).
     pub mem0_tokens: Mem0TokenUsage,
+    /// `memory_search` recall relevance, day-bucketed — reported live by the
+    /// `vibe_kanban_mcp` process via `POST /api/usage/mem0-relevance` (a
+    /// separate process from this server, so this can't be read from a
+    /// shared in-process struct the way the rest of `UsageSummary` is; see
+    /// docs/ADR/ADR-030-mem0-context-drift-measurement.md). In-memory only —
+    /// resets on server restart.
+    pub mem0_relevance: Mem0RelevanceSummary,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -158,6 +166,28 @@ pub fn router() -> Router<DeploymentImpl> {
             "/usage/mem0-config",
             get(get_mem0_config).post(put_mem0_config),
         )
+        .route("/usage/mem0-relevance", post(report_mem0_relevance))
+}
+
+/// Body posted by the `vibe_kanban_mcp` process (a separate process from
+/// this server) after each `memory_search` call, once per call — see
+/// `crates/mcp/src/task_server/tools/mem0.rs`.
+#[derive(Debug, Deserialize)]
+struct ReportMem0RelevanceBody {
+    /// Highest-ranked hit's score, or `None` when the call returned zero
+    /// hits.
+    top_score: Option<f64>,
+}
+
+/// Best-effort sink: always returns success, even if nothing was recorded,
+/// so a malformed/late report from the MCP process never surfaces as an
+/// error to it — this is an observability aid, not a critical write path.
+async fn report_mem0_relevance(
+    State(deployment): State<DeploymentImpl>,
+    Json(body): Json<ReportMem0RelevanceBody>,
+) -> ResponseJson<ApiResponse<()>> {
+    deployment.mem0_relevance_service().record(body.top_score);
+    ResponseJson(ApiResponse::success(()))
 }
 
 async fn get_mem0_config(
@@ -349,6 +379,7 @@ async fn usage_summary(
     .unwrap_or((0, 0));
 
     let mem0_tokens = fetch_mem0_tokens().await;
+    let mem0_relevance = deployment.mem0_relevance_service().summary();
 
     ResponseJson(ApiResponse::success(UsageSummary {
         activity,
@@ -357,6 +388,7 @@ async fn usage_summary(
         total_executions,
         total_seconds,
         mem0_tokens,
+        mem0_relevance,
     }))
 }
 

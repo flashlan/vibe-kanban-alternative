@@ -15,6 +15,7 @@ use services::services::{
     file::FileService,
     file_search::FileSearchCache,
     filesystem::FilesystemService,
+    mem0_relevance::Mem0RelevanceService,
     orchestrator_compactor::OrchestratorCompactor,
     pr_monitor::PrMonitorService,
     queued_message::QueuedMessageService,
@@ -48,6 +49,7 @@ pub struct LocalDeployment {
     file_search_cache: Arc<FileSearchCache>,
     approvals: Approvals,
     queued_message_service: QueuedMessageService,
+    mem0_relevance_service: Mem0RelevanceService,
     client_info: ClientInfo,
     preview_proxy: PreviewProxyService,
     pty: PtyService,
@@ -141,6 +143,7 @@ impl Deployment for LocalDeployment {
 
         let approvals = Approvals::new();
         let queued_message_service = QueuedMessageService::new();
+        let mem0_relevance_service = Mem0RelevanceService::new();
 
         let client_info = ClientInfo::new();
         let preview_proxy = PreviewProxyService::new();
@@ -195,6 +198,7 @@ impl Deployment for LocalDeployment {
             file_search_cache,
             approvals,
             queued_message_service,
+            mem0_relevance_service,
             client_info,
             preview_proxy,
             pty,
@@ -246,6 +250,10 @@ impl Deployment for LocalDeployment {
 
     fn queued_message_service(&self) -> &QueuedMessageService {
         &self.queued_message_service
+    }
+
+    fn mem0_relevance_service(&self) -> &Mem0RelevanceService {
+        &self.mem0_relevance_service
     }
 
     fn client_info(&self) -> &ClientInfo {

@@ -469,7 +469,21 @@ Rules:
 - Relations: only if clearly stated or strongly implied.
 - Output ONLY the JSON object. No code fences. No commentary. No reasoning blocks. No <think> tags.`;
 
-async function llmChat(system: string, user: string, maxTokens = 700): Promise<string> {
+async function llmChat(
+  system: string,
+  user: string,
+  maxTokens = 700,
+  // Extra acceptability check beyond "did I get parseable JSON at all" — e.g.
+  // extractStructure passes one that also requires a non-empty graph when
+  // graph mode is on. A candidate whose response fails this is treated the
+  // same as a non-JSON response: failed over to the next candidate, not
+  // returned. Without this, a provider that returns syntactically valid but
+  // schema-empty JSON (e.g. `{"facts":[...],"entities":[],"relations":[]}`)
+  // was silently accepted as "success" — observed in practice with groq's
+  // qwen3.6-27b, which does this often enough to be a real reliability gap;
+  // see docs/ADR/ADR-030-mem0-context-drift-measurement.md.
+  isAcceptable?: (content: string) => boolean
+): Promise<string> {
   const candidates = llmCandidates();
   if (candidates.length === 0) return "";
 
@@ -536,6 +550,13 @@ async function llmChat(system: string, user: string, maxTokens = 700): Promise<s
       if (parseLastJsonObject(content) === null) {
         console.warn(
           `[llm] ${cand.provider} returned no JSON object, failing over to next provider`
+        );
+        exhausted = true;
+        break;
+      }
+      if (isAcceptable && !isAcceptable(content)) {
+        console.warn(
+          `[llm] ${cand.provider} returned JSON but failed the acceptability check (e.g. empty graph), failing over to next provider`
         );
         exhausted = true;
         break;
@@ -710,12 +731,33 @@ function parseLastJsonObject(text: string): any | null {
   return null;
 }
 
+/** Same cleaning + last-JSON-object scan `extractStructure` does below, reused
+ * so `llmChat`'s acceptability check sees content the same way the real
+ * parse will. Returns true iff the response has at least one entity or
+ * relation — used only when graph mode is on, to reject a candidate's
+ * syntactically valid but graph-empty response and fail over to the next
+ * one instead of silently accepting a facts-only extraction. */
+function hasGraphContent(content: string): boolean {
+  const cleaned = content
+    .replace(/```json\n?/gi, "")
+    .replace(/```/gi, "")
+    .trim();
+  const parsed = parseLastJsonObject(cleaned);
+  if (!parsed) return false;
+  return normalizeEntities(parsed.entities).length > 0 || normalizeRelations(parsed.relations).length > 0;
+}
+
 async function extractStructure(text: string): Promise<Extracted> {
   const fallback: Extracted = { facts: [text], entities: [], relations: [] };
   const llm = activeLlm();
   if (!llm.url || !llm.model) return fallback;
   try {
-    const raw = await llmChat(EXTRACT_SYSTEM, text, 1500);
+    const raw = await llmChat(
+      EXTRACT_SYSTEM,
+      text,
+      1500,
+      graphEnabled() ? hasGraphContent : undefined
+    );
     if (!raw) return fallback;
     // Some models (qwen3, gpt-oss) emit `<think>…</think>` reasoning blocks
     // (occasionally unclosed) containing their own `{...}` fragments before
@@ -824,13 +866,15 @@ async function graphProxy(method: string, path: string, body?: unknown): Promise
 async function pushToGraph(
   userId: string,
   entities: Extracted["entities"],
-  relations: Extracted["relations"]
+  relations: Extracted["relations"],
+  commitSha?: string
 ): Promise<void> {
   if (!config.graphUrl || (entities.length === 0 && relations.length === 0)) return;
   await graphProxy("POST", `/graph/upsert`, {
     user_id: userId,
     entities,
     relations,
+    ...(commitSha ? { commit_sha: commitSha } : {}),
   });
 }
 
@@ -859,9 +903,64 @@ async function queryGraphNeighbors(
   }
 }
 
+/** Real multi-hop BFS from a matched starting node — unlike
+ * `queryGraphNeighbors` (substring match + one hop of successors only, no
+ * depth/direction control). Proxies to the embeddings container's
+ * `/graph/traverse` (see embeddings/app.py), which caps hops and node count
+ * itself. Returns `undefined` when the graph isn't configured or the
+ * request fails — same graceful-degradation contract as the rest of this
+ * file's graph functions. */
+async function graphTraverse(
+  userId: string,
+  start: string,
+  hops: number,
+  direction: "out" | "in" | "both"
+): Promise<
+  | {
+      matched_start_nodes: string[];
+      nodes: { id: string; type: string; description: string }[];
+      edges: { subject: string; predicate: string; object: string }[];
+      truncated: boolean;
+    }
+  | undefined
+> {
+  if (!config.graphUrl) return undefined;
+  try {
+    const res = await graphProxy("POST", "/graph/traverse", {
+      user_id: userId,
+      start,
+      hops,
+      direction,
+    });
+    if (!res) return undefined;
+    return {
+      matched_start_nodes: res.matched_start_nodes || [],
+      nodes: res.nodes || [],
+      edges: res.edges || [],
+      truncated: Boolean(res.truncated),
+    };
+  } catch (err) {
+    console.error(`[graph] traverse failed: ${(err as Error).message}`);
+    return undefined;
+  }
+}
+
 // ── Core memory operations (shared by MCP + REST) ────────────────────────────
 
-async function memoryStore(content: string, userId: string): Promise<{
+/**
+ * `commitSha`: the calling workspace's HEAD commit at the time this fact was
+ * saved (best-effort — the caller resolves it, e.g. via the VK API; `memory
+ * -vk` itself has no git access). Stored on both the vector point payload
+ * and the graph node/edge, so a later staleness check can ask "is this
+ * still the code as of the commit this fact was true for" instead of
+ * assuming every fact is permanently valid. Optional and additive — nothing
+ * downstream requires it; see docs/ADR/ADR-030-mem0-context-drift-measurement.md.
+ */
+async function memoryStore(
+  content: string,
+  userId: string,
+  commitSha?: string
+): Promise<{
   stored: string[];
   ids: string[];
   entities: number;
@@ -880,6 +979,7 @@ async function memoryStore(content: string, userId: string): Promise<{
     await upsertPoint(id, fact, uid, embedding, {
       entities: entities.map((e) => e.name),
       relations: relations.map((r) => `${r.subject} -[${r.predicate}]-> ${r.object}`),
+      ...(commitSha ? { commit_sha: commitSha } : {}),
     });
     stored.push(fact);
     ids.push(id);
@@ -887,7 +987,7 @@ async function memoryStore(content: string, userId: string): Promise<{
 
   let pushed = false;
   try {
-    await pushToGraph(uid, entities, relations);
+    await pushToGraph(uid, entities, relations, commitSha);
     pushed = Boolean(config.graphUrl);
   } catch (err) {
     console.error(`[graph] push failed: ${(err as Error).message}`);
@@ -1269,10 +1369,12 @@ app.post("/api/memories", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const content: string = body?.content;
   const user_id: string | undefined = body?.user_id;
+  const commit_sha: string | undefined =
+    typeof body?.commit_sha === "string" && body.commit_sha ? body.commit_sha : undefined;
   if (!content || typeof content !== "string") {
     return c.json({ error: "missing string field 'content'" }, 400);
   }
-  const res = await memoryStore(content, user_id || "");
+  const res = await memoryStore(content, user_id || "", commit_sha);
   return c.json({ ok: true, ...res }, 201);
 });
 
@@ -1286,6 +1388,20 @@ app.post("/api/search", async (c) => {
   }
   const res = await memorySearch(query, user_id || "", limit || 5);
   return c.json(res);
+});
+
+app.post("/api/graph/traverse", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const start: string = body?.start;
+  const user_id: string | undefined = body?.user_id;
+  const hops: number | undefined = body?.hops;
+  const direction: "out" | "in" | "both" | undefined = body?.direction;
+  if (!start || typeof start !== "string") {
+    return c.json({ error: "missing string field 'start'" }, 400);
+  }
+  const res = await graphTraverse(user_id || "", start, hops ?? 2, direction ?? "both");
+  if (!res) return c.json({ error: "graph not configured or traverse failed" }, 503);
+  return c.json({ ok: true, ...res });
 });
 
 app.post("/api/re-extract/:user_id", async (c) => {

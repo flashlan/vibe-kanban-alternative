@@ -13,6 +13,8 @@
     "dev": "tsx src/index.ts",
     "test": "npx tsx test/test.ts",
     "test:drift": "npx tsx test/context-drift.test.ts",
+    "test:semantic": "npx tsx test/semantic-recall.test.ts",
+    "test:extraction": "npx tsx test/extraction-quality.test.ts",
     "docker:build": "docker compose build",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down"
