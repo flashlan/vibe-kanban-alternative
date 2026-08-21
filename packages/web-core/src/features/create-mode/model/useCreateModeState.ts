@@ -470,6 +470,10 @@ export function useCreateModeState({
       seedProjectIdRef.current;
     if (!remoteProjectId) return;
     if (state.repos.length > 0) return;
+    // Wait for the last-workspace lookup (used below as a final branch
+    // fallback) to resolve, so it isn't racing this effect and missing data
+    // that's already available.
+    if (!hasResolvedPreferredRepos) return;
     if (scratchDefaultsProjectRef.current === remoteProjectId) return;
 
     scratchDefaultsProjectRef.current = remoteProjectId;
@@ -496,15 +500,28 @@ export function useCreateModeState({
         const selectedRepos = scratchDefaults.flatMap((d) => {
           const repo = reposById.get(d.repo_id);
           if (!repo) return [];
-          // Same fallback as the workspace-defaults path above: the project
-          // scratch default only ever carries a repo (never a branch — see
-          // ProjectRepoSection), so fall back to the repo's own configured
-          // default branch instead of leaving it unselected.
+          // The project scratch default only ever carries a repo (never a
+          // branch — see ProjectRepoSection), so fall back to the repo's own
+          // configured default branch (Settings > Repositories) — the
+          // deliberate, explicit trunk setting, which should always win when
+          // present. Only if that's ALSO unset, fall further back to the
+          // branch actually used on this project's most recent workspace
+          // (already resolved by the effect above): a best-effort guess, and
+          // deliberately the last resort, because it could be a feature
+          // branch rather than trunk — better than leaving Create blocked on
+          // an easy-to-miss validation error, but not a substitute for an
+          // explicit default.
+          const lastUsedBranch = preferredRepos.find(
+            (r) => r.id === repo.id
+          )?.target_branch;
           return [
             {
               repo,
               targetBranch:
-                d.target_branch || repo.default_target_branch || null,
+                d.target_branch ||
+                repo.default_target_branch ||
+                lastUsedBranch ||
+                null,
             },
           ];
         });
@@ -527,7 +544,12 @@ export function useCreateModeState({
     return () => {
       cancelled = true;
     };
-  }, [state.linkedIssue?.remoteProjectId, state.repos.length]);
+  }, [
+    state.linkedIssue?.remoteProjectId,
+    state.repos.length,
+    hasResolvedPreferredRepos,
+    preferredRepos,
+  ]);
 
   // ============================================================================
   // Persistence to scratch (debounced)

@@ -284,7 +284,7 @@ export function CreateChatBoxContainer({
     hasAttemptedSubmit && repos.length === 0
       ? 'Add at least one repository to create a workspace'
       : hasAttemptedSubmit && !hasSelectedBranchesForAllRepos
-        ? 'Select a branch for every repository before creating a workspace'
+        ? 'Select a branch for every repository before creating a workspace. Tip: set a Default Target Branch per repo in Settings → Repositories so this fills in automatically next time.'
         : createWorkspace.error
           ? createWorkspace.error instanceof Error
             ? createWorkspace.error.message
