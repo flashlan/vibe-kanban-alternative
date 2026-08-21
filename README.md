@@ -45,19 +45,19 @@ Following the [shutdown of Bloop's hosted servers](https://vibekanban.com/blog/s
 
 ## What This Fork Adds
 
-| Capability | Upstream / Indie Baseline | This Fork |
+| Capability | Upstream / Indie Baseline | **This Fork** |
 | :--- | :--- | :--- |
-| Server infrastructure | Upstream is sunsetting; Indie runs locally | Fully offline, self-hosted runtime |
-| Cross-session memory | Ephemeral, or none | Native `mem0` with Qdrant and a NetworkX graph |
-| Prompt cache-hit architecture | Not present | Deterministic memory-prefix injection preserves cache hits |
-| Telemetry and observability | None, or minimal | `Settings → Usage` dashboard: tokens, activity heatmaps, per-agent breakdown |
-| Coding agent support | Legacy CLI subset | 10+ agents, including Claude Code, Antigravity, Codex, Gemini CLI |
-| Antigravity (AGY) agent | Not supported, or basic text mode | Full `stream-json` parsing, tool-use cards, reasoning-effort control |
-| Chat input and history | Basic textarea | Terminal-style prompt history, configurable send shortcuts |
-| Self-hosted git remotes | GitHub only, or basic Gitea | Auto-routes between Gitea/Forgejo REST API and the GitHub CLI |
-| Remote control | Web UI only | Terminal TUI and a send-only Telegram bridge |
-| Backup and recovery | None, or basic | Full export/import of the database, settings, and mem0 state |
-| Chat and UI streaming | Latency issues on long diffs | Optimized canvas/chat rendering and worktree panel fixes |
+| Server infrastructure | Upstream is sunsetting; Indie runs locally | **Fully offline, self-hosted runtime** |
+| Cross-session memory | Ephemeral, or none | **Native `mem0` with Qdrant and a NetworkX graph** |
+| Prompt cache-hit architecture | Not present | **Deterministic memory-prefix injection preserves cache hits** |
+| Telemetry and observability | None, or minimal | **`Settings → Usage` dashboard: tokens, activity heatmaps, per-agent breakdown** |
+| Coding agent support | Legacy CLI subset | **10+ agents, including Claude Code, Antigravity, Codex, Gemini CLI** |
+| Antigravity (AGY) agent | Not supported, or basic text mode | **Full `stream-json` parsing, tool-use cards, reasoning-effort control** |
+| Chat input and history | Basic textarea | **Terminal-style prompt history, configurable send shortcuts** |
+| Self-hosted git remotes | GitHub only, or basic Gitea | **Auto-routes between Gitea/Forgejo REST API and the GitHub CLI** |
+| Remote control | Web UI only | **Terminal TUI and a send-only Telegram bridge** |
+| Backup and recovery | None, or basic | **Full export/import of the database, settings, and mem0 state** |
+| Chat and UI streaming | Latency issues on long diffs | **Optimized canvas/chat rendering and worktree panel fixes** |
 
 ## Overview
 
