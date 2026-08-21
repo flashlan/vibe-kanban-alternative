@@ -181,18 +181,45 @@ impl McpServer {
         });
 
         let mut seen = std::collections::HashSet::new();
+        // Scores of the hits that actually made it into `memories`, in rank
+        // order — used below to log a drift/relevance signal alongside the
+        // hit count (see docs/ADR/ADR-029-mem0-vk-real-implementation.md).
+        let mut scores: Vec<f64> = Vec::new();
         let memories: Vec<String> = hits
             .into_iter()
-            .filter_map(|hit| hit.payload?.content)
-            .filter(|content| seen.insert(content.clone()))
+            .filter_map(|hit| {
+                let content = hit.payload?.content?;
+                Some((content, hit.score))
+            })
+            .filter(|(content, _)| seen.insert(content.clone()))
             .take(limit)
+            .map(|(content, score)| {
+                if let Some(s) = score {
+                    scores.push(s);
+                }
+                content
+            })
             .collect();
+
+        // Highest-ranked hit's score and the mean over all returned hits —
+        // a cheap proxy for how relevant this batch actually was. A low
+        // top_score means the agent's next stage is working from weakly
+        // related (or no) memory: the raw signal for measuring context
+        // drift across a stage handoff.
+        let top_score = scores.first().copied();
+        let avg_score = if scores.is_empty() {
+            None
+        } else {
+            Some(scores.iter().sum::<f64>() / scores.len() as f64)
+        };
 
         tracing::info!(
             target: "mem0",
             user_id = %user_id,
             query = %query,
             hits = memories.len(),
+            top_score = ?top_score,
+            avg_score = ?avg_score,
             "memory_search ok"
         );
 

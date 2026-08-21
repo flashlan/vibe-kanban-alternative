@@ -9,147 +9,16 @@
  *
  * Run:  npm run build && npm test
  */
-import http from "http";
-import { spawn, ChildProcess } from "child_process";
-import { setTimeout as sleep } from "timers/promises";
+import { QDRANT_URL, DIM, startStub, startApp, waitUp, makeChecker } from "./harness.js";
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const QDRANT_URL = process.env.QDRANT_URL || "http://localhost:6333";
 const APP_PORT = 18123;
 const STUB_PORT = 18124;
 const BASE = `http://127.0.0.1:${APP_PORT}`;
 const COLLECTION = `test-${Date.now()}`;
 const USER = "test-http";
-const DIM = 768;
 
-let passed = 0;
-let failed = 0;
-const failures: string[] = [];
-
-function check(name: string, ok: boolean, detail?: string) {
-  if (ok) {
-    passed++;
-    console.log(`  ✓ ${name}`);
-  } else {
-    failed++;
-    failures.push(name);
-    console.log(`  ✗ ${name}${detail ? `\n      ${detail}` : ""}`);
-  }
-}
-
-// ── Stub LLM/embedding server (OpenAI-format) ─────────────────────────────────
-// Deterministic embedding: hash-derived fixed vector, so the same text always
-// returns the same vector and search ordering is stable.
-function stubEmbedding(text: string): number[] {
-  const v = new Array(DIM).fill(0);
-  for (let i = 0; i < text.length; i++) v[i % DIM] += text.charCodeAt(i) % 97;
-  const norm = Math.sqrt(v.reduce((s, x) => s + x * x, 0)) || 1;
-  return v.map((x) => x / norm);
-}
-
-function startStub(): Promise<ChildProcess & { port: number }> {
-  const server = http.createServer((req, res) => {
-    if (req.method === "POST" && req.url === "/v1/embeddings") {
-      let body = "";
-      req.on("data", (c) => (body += c));
-      req.on("end", () => {
-        const { input } = JSON.parse(body);
-        const texts = Array.isArray(input) ? input : [input];
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(
-          JSON.stringify({
-            object: "list",
-            data: texts.map((t: string, i: number) => ({
-              object: "embedding",
-              index: i,
-              embedding: stubEmbedding(t),
-            })),
-            model: "stub",
-          })
-        );
-      });
-      return;
-    }
-    if (req.method === "POST" && req.url === "/v1/chat/completions") {
-      let body = "";
-      req.on("data", (c) => (body += c));
-      req.on("end", () => {
-        const { messages } = JSON.parse(body);
-        const user = messages?.[1]?.content || "";
-        // Extract 2 facts + 2 entities + 1 relation; keep them self-contained.
-        const payload = {
-          facts: [`stub fact one for: ${user.slice(0, 40)}`, `stub fact two for: ${user.slice(0, 40)}`],
-          entities: [
-            { name: "Mem0VK", type: "project", description: "memory server under test" },
-            { name: "Qdrant", type: "tech", description: "vector store" },
-          ],
-          relations: [
-            { subject: "Mem0VK", predicate: "uses", object: "Qdrant" },
-          ],
-        };
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(
-          JSON.stringify({
-            id: "stub",
-            object: "chat.completion",
-            choices: [{ index: 0, message: { role: "assistant", content: JSON.stringify(payload) }, finish_reason: "stop" }],
-          })
-        );
-      });
-      return;
-    }
-    res.writeHead(404, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "not found" }));
-  });
-
-  return new Promise((resolve, reject) => {
-    server.listen(STUB_PORT, "127.0.0.1", () => resolve({ ...server, port: STUB_PORT } as any));
-    server.on("error", reject);
-  });
-}
-
-// ── App server ────────────────────────────────────────────────────────────────
-function startApp(): { proc: ChildProcess; stop: () => void } {
-  const proc = spawn("node", ["dist/index.js"], {
-    cwd: new URL("..", import.meta.url).pathname,
-    env: {
-      ...process.env,
-      PORT: String(APP_PORT),
-      HOST: "127.0.0.1",
-      QDRANT_URL,
-      MEM0_COLLECTION: COLLECTION,
-      EMBED_DIM: String(DIM),
-      EMBED_LOCAL_URL: `http://127.0.0.1:${STUB_PORT}/v1`,
-      EMBED_LOCAL_MODEL: "stub",
-      MEM0_LLM_PROVIDER: "llama",
-      MEM0_LLAMA_URL: `http://127.0.0.1:${STUB_PORT}/v1`,
-      MEM0_LLAMA_MODEL: "stub",
-      GRAPH_URL: "",
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
-  let stderr = "";
-  proc.stderr?.on("data", (d) => (stderr += d.toString()));
-  proc.stdout?.on("data", () => {});
-  return {
-    proc,
-    stop: () => {
-      try { proc.kill("SIGTERM"); } catch {}
-    },
-  };
-}
-
-async function waitUp(url: string, timeoutMs = 15000): Promise<void> {
-  const t0 = Date.now();
-  while (Date.now() - t0 < timeoutMs) {
-    try {
-      const r = await fetch(url);
-      if (r.ok) return;
-    } catch {}
-    await sleep(200);
-  }
-  throw new Error(`timeout waiting for ${url}`);
-}
+const { check, summary } = makeChecker();
 
 // ── MCP client (stateless — one request per round-trip) ──────────────────────
 class McpClient {
@@ -188,11 +57,11 @@ async function main() {
     process.exit(2);
   }
 
-  const stub = await startStub();
-  const { proc, stop } = startApp();
+  const stub = await startStub(STUB_PORT);
+  const { proc, stop } = startApp({ appPort: APP_PORT, stubPort: STUB_PORT, collection: COLLECTION });
   const cleanup = () => {
     stop();
-    (stub as any).close?.();
+    stub.close();
     // drop the test collection (fire-and-forget on exit)
     fetch(`${QDRANT_URL}/collections/${COLLECTION}`, { method: "DELETE" }).catch(() => {});
   };
@@ -346,6 +215,7 @@ async function main() {
   check("MCP memory_forget (user)", (mForgetAll.result?.content?.[0]?.text || "").includes("deleted"), (mForgetAll.result?.content?.[0]?.text || "").slice(0, 120));
 
   // ── Summary ─────────────────────────────────────────────────────────────────
+  const { passed, failed, failures } = summary();
   console.log(`\n${passed}/${passed + failed} checks passed`);
   if (failures.length) {
     console.log("Failed:");
