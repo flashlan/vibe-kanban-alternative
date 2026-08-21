@@ -6,12 +6,51 @@
   <a href="https://github.com/flashlan/vibe-kanban-alternative/issues"><img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" /></a>
 </p>
 
-<h1 align="center"><strong>vibe-kanban-alternative</strong></h1>
+<h1 align="center"><strong>vibe-kanban-alternative
+Multi-agent development with Kanban board with semantic and vector memory context managment between stages. </strong></h1>
 
 <p align="center">
   <strong>The resilient, 100% self-hosted cockpit for single-developer AI orchestration.</strong><br>
   Persistent Graph Memory (mem0) • 10+ Coding Agents (inc. Antigravity/AGY) • Gitea/Forgejo PRs • TUI Cockpit • Telegram Daemon • Usage Observability
 </p>
+
+```mermaid
+flowchart TB
+    Mem0["🧠 Mem0 · Context<br/>Vector and semantic memory"]
+
+    Worktree["Worktree<br/>Input"]
+    A1["Agent 1<br/>Gemini<br/>Research"]
+    A2["Agent 2<br/>Opus<br/>Planner"]
+    A3["Agent 3<br/>Qwen3.8 Local<br/>Coding"]
+    A4["Agent 4<br/>Opencode<br/>Review"]
+    Merge["Merge<br/>Output"]
+
+    Worktree --> A1
+    A1 --> A2
+    A2 --> A3
+    A3 --> A4
+    A4 --> Merge
+
+    A1 -.->|write| Mem0
+    Mem0 -.->|fetch| A1
+
+    A2 -.->|write| Mem0
+    Mem0 -.->|fetch| A2
+
+    A3 -.->|write| Mem0
+    Mem0 -.->|fetch| A3
+
+    A4 -.->|write| Mem0
+    Mem0 -.->|fetch| A4
+
+    style Mem0 fill:#7d6608,stroke:#f9e79f,stroke-width:2px,color:#ffffff
+    style Worktree fill:#424949,stroke:#d5dbdb,stroke-width:2px,color:#ffffff
+    style A1 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
+    style A2 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
+    style A3 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
+    style A4 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
+    style Merge fill:#1b4f3d,stroke:#a9dfbf,stroke-width:2px,color:#ffffff
+```
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> •
