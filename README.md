@@ -6,144 +6,14 @@
   <a href="https://github.com/flashlan/vibe-kanban-alternative/issues"><img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" /></a>
 </p>
 
-<h1 align="center"><strong>vibe-kanban-alternative
-Multi-agent development with Kanban board with semantic and vector memory context managment between stages. </strong></h1>
+<h1 align="center"><strong>vibe-kanban-alternative</strong></h1>
+
+<h1 align="center"><strongMulti-agent development with Kanban board with semantic and vector memory context managment between stages. </strong></h1>
 
 <p align="center">
   <strong>The resilient, 100% self-hosted cockpit for single-developer AI orchestration.</strong><br>
   Persistent Graph Memory (mem0) • 10+ Coding Agents (inc. Antigravity/AGY) • Gitea/Forgejo PRs • TUI Cockpit • Telegram Daemon • Usage Observability
 </p>
-
-```mermaid
-flowchart TB
-    Mem0["🧠 Mem0 · Context<br/>Vector and semantic memory"]
-
-    Worktree["Worktree<br/>Input"]
-    A1["Agent 1<br/>Gemini<br/>Research"]
-    A2["Agent 2<br/>Opus<br/>Planner"]
-    A3["Agent 3<br/>Qwen3.8 Local<br/>Coding"]
-    A4["Agent 4<br/>Opencode<br/>Review"]
-    Merge["Merge<br/>Output"]
-
-    Worktree --> A1
-    A1 --> A2
-    A2 --> A3
-    A3 --> A4
-    A4 --> Merge
-
-    A1 -.->|write| Mem0
-    Mem0 -.->|fetch| A1
-
-    A2 -.->|write| Mem0
-    Mem0 -.->|fetch| A2
-
-    A3 -.->|write| Mem0
-    Mem0 -.->|fetch| A3
-
-    A4 -.->|write| Mem0
-    Mem0 -.->|fetch| A4
-
-    style Mem0 fill:#7d6608,stroke:#f9e79f,stroke-width:2px,color:#ffffff
-    style Worktree fill:#424949,stroke:#d5dbdb,stroke-width:2px,color:#ffffff
-    style A1 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
-    style A2 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
-    style A3 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
-    style A4 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
-    style Merge fill:#1b4f3d,stroke:#a9dfbf,stroke-width:2px,color:#ffffff
-```
-
-<p align="center">
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#overview">Overview</a> •
-  <a href="#whats-different-in-this-fork">What's Different</a> •
-  <a href="#project-memory-mem0">Project Memory (mem0)</a> •
-  <a href="#supported-coding-agents">Supported Agents</a> •
-  <a href="#chat--terminal-interaction">Chat & Controls</a> •
-  <a href="#usage--observability-dashboard">Usage Dashboard</a> •
-  <a href="#terminal-ui-tui">TUI Cockpit</a> •
-  <a href="#telegram-orchestration">Telegram Bridge</a> •
-  <a href="#development--self-hosting">Development</a>
-</p>
-
----
-
-## ⚡ Quick Start (Instant Run)
-
-Launch the entire cockpit with a single command — no install, no accounts, no cloud setup:
-
-```bash
-npx vibe-kanban-alternative
-```
-
-> 💡 **Zero Setup Required**: Downloads prebuilt binaries and launches the local web cockpit directly at **`http://localhost:3001`** (with backend on `:3002`).
-
----
-
-### ⚙️ Full Setup & Environment Configuration
-
-For development, custom ports, local mem0 vector stores, and custom agent configurations:
-
-#### 1. Clone & Install
-```bash
-git clone https://github.com/flashlan/vibe-kanban-alternative.git
-cd vibe-kanban-alternative
-pnpm i
-```
-
-#### 2. Configure Environment Variables
-Duplicate the template configuration file:
-```bash
-cp .env.example .env
-```
-
-Open `.env` in your editor and configure your environment:
-
-```env
-# ==========================================
-# 🌐 CORE SERVER CONFIGURATION
-# ==========================================
-PORT=3000
-HOST=localhost
-NODE_ENV=development
-
-# ==========================================
-# 🧠 MEM0 LONG-TERM MEMORY SETTINGS
-# ==========================================
-MEM0_ENABLED=true
-MEM0_API_KEY=your_mem0_api_key_here
-# If running local embeddings/vector store:
-# MEM0_VECTOR_STORE=qdrant
-# MEM0_HOST=http://localhost:6333
-
-# ==========================================
-# 🤖 AGENT API KEYS & RUNTIMES
-# ==========================================
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
-GEMINI_API_KEY=...
-
-# Antigravity (AGY) Specific Settings
-AGY_CLI_PATH=/usr/local/bin/agy
-AGY_DEFAULT_TEMPERATURE=0.2
-
-# ==========================================
-# 📊 METRICS & TELEMETRY
-# ==========================================
-ENABLE_METRICS_DASHBOARD=true
-METRICS_STORAGE_PATH=./data/metrics.sqlite
-
-# ==========================================
-# 💾 BACKUP CONFIGURATION
-# ==========================================
-BACKUP_ENABLED=true
-BACKUP_INTERVAL_MINUTES=30
-BACKUP_STORAGE_PATH=./backups
-```
-
-#### 3. Start Development Cockpit
-```bash
-./restart.sh
-```
 
 ---
 
@@ -314,6 +184,139 @@ Full REST API integration alongside GitHub:
 - Unified comments and PR lifecycle management.
 
 ---
+
+
+```mermaid
+flowchart TB
+    Mem0["🧠 Mem0 · Context<br/>Vector and semantic memory"]
+
+    Worktree["Worktree<br/>Input"]
+    A1["Agent 1<br/>Gemini<br/>Research"]
+    A2["Agent 2<br/>Opus<br/>Planner"]
+    A3["Agent 3<br/>Qwen3.8 Local<br/>Coding"]
+    A4["Agent 4<br/>Opencode<br/>Review"]
+    Merge["Merge<br/>Output"]
+
+    Worktree --> A1
+    A1 --> A2
+    A2 --> A3
+    A3 --> A4
+    A4 --> Merge
+
+    A1 -.->|write| Mem0
+    Mem0 -.->|fetch| A1
+
+    A2 -.->|write| Mem0
+    Mem0 -.->|fetch| A2
+
+    A3 -.->|write| Mem0
+    Mem0 -.->|fetch| A3
+
+    A4 -.->|write| Mem0
+    Mem0 -.->|fetch| A4
+
+    style Mem0 fill:#7d6608,stroke:#f9e79f,stroke-width:2px,color:#ffffff
+    style Worktree fill:#424949,stroke:#d5dbdb,stroke-width:2px,color:#ffffff
+    style A1 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
+    style A2 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
+    style A3 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
+    style A4 fill:#154360,stroke:#d6eaf8,stroke-width:2px,color:#ffffff
+    style Merge fill:#1b4f3d,stroke:#a9dfbf,stroke-width:2px,color:#ffffff
+```
+
+<p align="center">
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#overview">Overview</a> •
+  <a href="#whats-different-in-this-fork">What's Different</a> •
+  <a href="#project-memory-mem0">Project Memory (mem0)</a> •
+  <a href="#supported-coding-agents">Supported Agents</a> •
+  <a href="#chat--terminal-interaction">Chat & Controls</a> •
+  <a href="#usage--observability-dashboard">Usage Dashboard</a> •
+  <a href="#terminal-ui-tui">TUI Cockpit</a> •
+  <a href="#telegram-orchestration">Telegram Bridge</a> •
+  <a href="#development--self-hosting">Development</a>
+</p>
+
+---
+
+## ⚡ Quick Start (Instant Run)
+
+Launch the entire cockpit with a single command — no install, no accounts, no cloud setup:
+
+```bash
+npx vibe-kanban-alternative
+```
+
+> 💡 **Zero Setup Required**: Downloads prebuilt binaries and launches the local web cockpit directly at **`http://localhost:3001`** (with backend on `:3002`).
+
+---
+
+### ⚙️ Full Setup & Environment Configuration
+
+For development, custom ports, local mem0 vector stores, and custom agent configurations:
+
+#### 1. Clone & Install
+```bash
+git clone https://github.com/flashlan/vibe-kanban-alternative.git
+cd vibe-kanban-alternative
+pnpm i
+```
+
+#### 2. Configure Environment Variables
+Duplicate the template configuration file:
+```bash
+cp .env.example .env
+```
+
+Open `.env` in your editor and configure your environment:
+
+```env
+# ==========================================
+# 🌐 CORE SERVER CONFIGURATION
+# ==========================================
+PORT=3000
+HOST=localhost
+NODE_ENV=development
+
+# ==========================================
+# 🧠 MEM0 LONG-TERM MEMORY SETTINGS
+# ==========================================
+MEM0_ENABLED=true
+MEM0_API_KEY=your_mem0_api_key_here
+# If running local embeddings/vector store:
+# MEM0_VECTOR_STORE=qdrant
+# MEM0_HOST=http://localhost:6333
+
+# ==========================================
+# 🤖 AGENT API KEYS & RUNTIMES
+# ==========================================
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GEMINI_API_KEY=...
+
+# Antigravity (AGY) Specific Settings
+AGY_CLI_PATH=/usr/local/bin/agy
+AGY_DEFAULT_TEMPERATURE=0.2
+
+# ==========================================
+# 📊 METRICS & TELEMETRY
+# ==========================================
+ENABLE_METRICS_DASHBOARD=true
+METRICS_STORAGE_PATH=./data/metrics.sqlite
+
+# ==========================================
+# 💾 BACKUP CONFIGURATION
+# ==========================================
+BACKUP_ENABLED=true
+BACKUP_INTERVAL_MINUTES=30
+BACKUP_STORAGE_PATH=./backups
+```
+
+#### 3. Start Development Cockpit
+```bash
+./restart.sh
+```
+ ---
 
 ## 🛠️ Quick Start & Development
 
