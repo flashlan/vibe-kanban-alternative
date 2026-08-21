@@ -1,0 +1,33 @@
+{
+  "name": "mem0-vk",
+  "version": "1.0.0",
+  "description": "Universal MCP server for graph memory — Docker-based with Qdrant",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mem0-vk": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "npx tsx test/test.ts",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "keywords": ["mcp", "memory", "mem0", "graph", "qdrant", "docker"],
+  "author": "evertonekacy",
+  "license": "MIT",
+  "dependencies": {
+    "@hono/node-server": "^2.0.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "hono": "^4.13.2",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0"
+  }
+}

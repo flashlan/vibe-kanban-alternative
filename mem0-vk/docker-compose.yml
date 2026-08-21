@@ -1,49 +1,104 @@
 services:
-  vibe-kanban:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    container_name: vibe-kanban
-    restart: unless-stopped
-    ports:
-      - "3001:3001"
-      - "3002:3002"
-      - "3003:3003"
-    volumes:
-      - ~/projects:/repos
-      - ~/.ssh:/home/appuser/.ssh:ro
-      - ~/.gitconfig:/home/appuser/.gitconfig:ro
-    environment:
-      - HOST=0.0.0.0
-      - PORT=3000
-      - MEM0_URL=http://mem0:8000
-    depends_on:
-      - mem0
-
   qdrant:
     image: qdrant/qdrant:latest
-    container_name: mem0-qdrant
-    restart: unless-stopped
     ports:
       - "6333:6333"
+      - "6334:6334"
     volumes:
-      - qdrant-data:/qdrant/storage
-
-  mem0:
-    build: .
-    container_name: mem0-vk
+      - qdrant_data:/qdrant/storage
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bash", "-c", "curl -sf http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  mem0-vk:
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
+    environment:
+      # ── Server ─────────────────────────────────────────────
+      - PORT=8000
+      - HOST=0.0.0.0
+
+      # ── Qdrant ─────────────────────────────────────────────
+      - QDRANT_URL=http://qdrant:6333
+      - MEM0_COLLECTION=${MEM0_COLLECTION:-mem0-vk}
+      - MEM0_DEFAULT_USER=${MEM0_DEFAULT_USER:-default}
+
+      # ── Vector dimension (MUST match the winning embedding backend) ─────────
+      # all-MiniLM-L6-v2 → 384 | text-embedding-3-small → 1536 | your llama-server model → its dim
+      - EMBED_DIM=${EMBED_DIM:-384}
+
+      # ── Embedding backends (first success wins; first failure falls through) ─
+      # 1. local  (sentence-transformers container, CPU) — set EMBED_LOCAL_URL
+      - EMBED_LOCAL_URL=${EMBED_LOCAL_URL:-http://embeddings:8001/v1}
+      - EMBED_LOCAL_MODEL=${EMBED_LOCAL_MODEL:-sentence-transformers}
+      # 2. llama-server (OpenAI-format /v1/embeddings)
+      - EMBED_LLAMA_URL=${EMBED_LLAMA_URL:-}
+      - EMBED_LLAMA_MODEL=${EMBED_LLAMA_MODEL:-}
+      - EMBED_LLAMA_KEY=${EMBED_LLAMA_KEY:-}
+      # 3. OpenAI
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - EMBED_OPENAI_MODEL=${EMBED_OPENAI_MODEL:-text-embedding-3-small}
+      # 4. OpenRouter
+      - EMBED_OPENROUTER_KEY=${EMBED_OPENROUTER_KEY:-}
+      - EMBED_OPENROUTER_MODEL=${EMBED_OPENROUTER_MODEL:-nvidia/llama-3.2-nv-embed:free}
+
+      # ── Extraction LLM (one active at a time) ─────────────────────────────
+      # provider: groq | openrouter | llama
+      - MEM0_LLM_PROVIDER=${MEM0_LLM_PROVIDER:-groq}
+      # groq
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      # openrouter
+      - MEM0_OPENROUTER_KEY=${MEM0_OPENROUTER_KEY:-}
+      - MEM0_OPENROUTER_MODEL=${MEM0_OPENROUTER_MODEL:-openai/gpt-oss-20b:free}
+      # llama-server (OpenAI /v1 base)
+      - MEM0_LLAMA_URL=${MEM0_LLAMA_URL:-}
+      - MEM0_LLAMA_KEY=${MEM0_LLAMA_KEY:-}
+      - MEM0_LLAMA_MODEL=${MEM0_LLAMA_MODEL:-}
+
+      # ── Graph (Python container) ─────────────────────────────
+      # The embeddings service also hosts the NetworkX graph.
+      # Set GRAPH_URL="" (env) to disable graph (vector-only).
+      - GRAPH_URL=${GRAPH_URL:-http://embeddings:8001}
+
     depends_on:
       - qdrant
-    environment:
-      - QDRANT_URL=http://qdrant:6333
-    env_file:
-      - .env
+      - embeddings
+    restart: unless-stopped
     volumes:
-      - mem0-data:/app/data
+      - graph_data:/data
+
+  # ── Python container: sentence-transformers (CPU) + NetworkX graph ──
+  # Default model all-MiniLM-L6-v2 is 384-dim → matches EMBED_DIM=384.
+  # The model is pre-downloaded into the image at build time.
+  # To switch models, BOTH must change and the Qdrant collection must be
+  # recreated (delete the qdrant_data volume):
+  #   EMBED_DIM=384  → ST_MODEL=sentence-transformers/all-MiniLM-L6-v2
+  #   EMBED_DIM=768  → ST_MODEL=nomic-ai/nomic-embed-text-v1.5
+  # Example:  ST_MODEL=... EMBED_DIM=384 docker compose up -d --build
+  embeddings:
+    build:
+      context: ./embeddings
+      dockerfile: Dockerfile
+    environment:
+      - ST_MODEL=${ST_MODEL:-sentence-transformers/all-MiniLM-L6-v2}
+      - GRAPH_DIR=/data/graphs
+    volumes:
+      - graph_data:/data
+    ports:
+      - "${EMBEDDINGS_PORT:-8001}:8001"
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+    restart: unless-stopped
 
 volumes:
-  qdrant-data:
-  mem0-data:
+  qdrant_data:
+  graph_data:
