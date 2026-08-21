@@ -1748,20 +1748,23 @@ impl LocalContainerService {
             );
         }
 
-        // Lifecycle-only tracking (liveness poller finalizes the execution when
-        // the session ends). Output mirroring via the embedded-server SSE stream
-        // is a follow-up; for now the operator watches via the opened terminal.
-        self.attach_detached_tracking_opencode(exec_id, cfg).await;
+        // Start tracking and stream live events via OpenCode's embedded SSE server.
+        self.attach_detached_tracking_opencode(exec_id, cfg, current_dir, port)
+            .await;
 
         Ok(())
     }
 
     /// OpenCode-headed equivalent of [`Self::attach_detached_tracking`]: records
-    /// the forced session id and starts the liveness poller, but skips Claude's
-    /// transcript tail (opencode has no analogous on-disk JSONL). The `MsgStore`
-    /// is left empty for now, so viewers show the spinner until the session
-    /// ends; full SSE/pane mirroring is a follow-up.
-    async fn attach_detached_tracking_opencode(&self, exec_id: Uuid, cfg: &InteractiveTmuxConfig) {
+    /// the forced session id, starts the liveness poller, and mirrors events from
+    /// OpenCode's embedded HTTP server SSE stream (`/event`) into `MsgStore`.
+    async fn attach_detached_tracking_opencode(
+        &self,
+        exec_id: Uuid,
+        cfg: &InteractiveTmuxConfig,
+        current_dir: &Path,
+        port: u16,
+    ) {
         let tmux_session = interactive::tmux_session_name(exec_id);
         let store = {
             let map = self.msg_stores.read().await;
@@ -1774,10 +1777,17 @@ impl LocalContainerService {
         store.push_session_id(cfg.session_uuid.to_string());
 
         let cancel = CancellationToken::new();
-        // No transcript to tail; keep a no-op handle so DetachedHandle's contract holds.
         let cancel_for_tail = cancel.clone();
+        let store_for_tail = store.clone();
+        let dir_for_tail = current_dir.to_path_buf();
         let tail_handle = tokio::spawn(async move {
-            cancel_for_tail.cancelled().await;
+            executors::executors::opencode::mirror_opencode_events_to_store(
+                port,
+                dir_for_tail,
+                store_for_tail,
+                cancel_for_tail,
+            )
+            .await;
         });
         let poll_handle = self.spawn_liveness_poller(exec_id, tmux_session.clone(), cancel.clone());
 
@@ -2049,7 +2059,8 @@ impl LocalContainerService {
             // route them to the lifecycle-only tracker. Claude-headed (and any
             // other headed variant) keeps the transcript-tail path.
             if profile_id.executor == executors::executors::BaseCodingAgent::OpencodeHeaded {
-                self.attach_detached_tracking_opencode(exec_id, cfg).await;
+                self.attach_detached_tracking_opencode(exec_id, cfg, &effective_dir, 4096)
+                    .await;
             } else {
                 // Resume the transcript tail after the lines already mirrored
                 // (= count of persisted Stdout lines).

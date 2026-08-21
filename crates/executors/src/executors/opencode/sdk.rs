@@ -1787,3 +1787,72 @@ fn answers_to_opencode_format(questions: &[Value], answers: &[QuestionAnswer]) -
         })
         .collect()
 }
+
+/// Connect to OpenCode's embedded server SSE endpoint (`http://127.0.0.1:{port}/event?directory=...`)
+/// and mirror incoming events into `MsgStore` so the UI renders them in real time during headed sessions.
+pub async fn mirror_opencode_events_to_store(
+    port: u16,
+    directory: std::path::PathBuf,
+    store: Arc<workspace_utils::msg_store::MsgStore>,
+    cancel: CancellationToken,
+) {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .build()
+        .unwrap_or_default();
+
+    let base_url = format!("http://127.0.0.1:{port}");
+    let dir_str = directory.to_string_lossy().to_string();
+
+    // Wait for the OpenCode embedded server to come up (retry loop)
+    let mut resp = None;
+    for _ in 0..60 {
+        if cancel.is_cancelled() {
+            return;
+        }
+        match client
+            .get(format!("{base_url}/event"))
+            .header(reqwest::header::ACCEPT, "text/event-stream")
+            .query(&[("directory", &dir_str)])
+            .send()
+            .await
+        {
+            Ok(r) if r.status().is_success() => {
+                resp = Some(r);
+                break;
+            }
+            _ => {
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+        }
+    }
+
+    let Some(resp) = resp else {
+        tracing::debug!("OpenCode SSE stream did not respond within timeout on port {port}");
+        return;
+    };
+
+    let mut stream = resp.bytes_stream().eventsource();
+
+    loop {
+        let evt = tokio::select! {
+            _ = cancel.cancelled() => return,
+            item = stream.next() => match item {
+                Some(Ok(evt)) => evt,
+                _ => break,
+            }
+        };
+
+        let trimmed = evt.data.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        if let Ok(data) = serde_json::from_str::<serde_json::Value>(trimmed) {
+            let event = OpencodeExecutorEvent::SdkEvent { event: data };
+            if let Ok(serialized) = serde_json::to_string(&event) {
+                store.push_stdout(format!("{serialized}\n"));
+            }
+        }
+    }
+}

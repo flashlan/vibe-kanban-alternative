@@ -33,6 +33,7 @@ pub(crate) mod sdk;
 mod slash_commands;
 pub(crate) mod types;
 
+pub use sdk::mirror_opencode_events_to_store;
 use sdk::{
     AgentInfo as SDKAgentInfo, LogWriter, RunConfig, build_authenticated_client,
     generate_server_password, list_agents, list_commands, list_providers, run_session,
