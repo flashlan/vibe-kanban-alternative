@@ -199,6 +199,59 @@ impl McpGraphTraverseResult {
     }
 }
 
+/// Cap on how many matching removed-diff lines `memory_check_staleness`
+/// returns as evidence — enough to judge relevance without flooding the
+/// agent's context (same "cap, don't dump" philosophy as `DEFAULT_SEARCH_
+/// LIMIT`/`MAX_TRAVERSE_HOPS` above).
+const MAX_STALENESS_EVIDENCE_LINES: usize = 5;
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct McpCheckStalenessRequest {
+    #[schemars(
+        description = "Repo slug (e.g. 'vibe-kanban-alternative') to scope the check to that project's shared memory"
+    )]
+    user_id: String,
+    #[schemars(
+        description = "Entity name to check — e.g. one you saw in a memory_graph_traverse or memory_search result that looks old, vague, or unrelated to the code you're actually looking at."
+    )]
+    entity: String,
+}
+
+#[derive(Debug, Serialize, schemars::JsonSchema)]
+struct McpCheckStalenessResult {
+    /// False if the check itself couldn't run at all (mem0/graph down, no
+    /// provenance recorded for this entity, VK API unreachable). Treat as
+    /// "unknown," never as "confirmed fresh."
+    checked: bool,
+    /// The commit this entity was last reinforced at, if known.
+    commit_sha: Option<String>,
+    /// True if `commit_sha` still resolves in the current worktree. False
+    /// (with `checked: true`) means history was rewritten since it was
+    /// saved — freshness is unknown, not confirmed either way.
+    commit_found: bool,
+    /// True if text matching `entity` was found in REMOVED lines of the
+    /// diff from `commit_sha` to HEAD — a strong signal, not proof (the
+    /// same text could have been removed in one place and still exist
+    /// elsewhere). False does not prove freshness — it only means this
+    /// specific check found no removal evidence.
+    likely_stale: bool,
+    /// Matching removed-diff lines that triggered `likely_stale` (capped
+    /// at `MAX_STALENESS_EVIDENCE_LINES`).
+    evidence: Vec<String>,
+}
+
+impl McpCheckStalenessResult {
+    fn not_checked() -> Self {
+        Self {
+            checked: false,
+            commit_sha: None,
+            commit_found: false,
+            likely_stale: false,
+            evidence: vec![],
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct Mem0SearchResponse {
     #[serde(default)]
@@ -227,6 +280,18 @@ struct WorkspaceRepoGitStatus {
     head_oid: Option<String>,
 }
 
+/// Just the fields this file needs from the VK API's
+/// `GET /api/workspaces/{id}/git/diff-since` response — the full
+/// `DiffSinceResponse` type lives in the `server` crate; see
+/// `WorkspaceRepoGitStatus` above for why this mirrors rather than imports.
+#[derive(Debug, Deserialize)]
+struct DiffSinceResponse {
+    #[serde(default)]
+    removed_text: String,
+    #[serde(default)]
+    commit_found: bool,
+}
+
 #[derive(Debug, Deserialize)]
 struct Mem0TraverseNode {
     id: String,
@@ -234,6 +299,8 @@ struct Mem0TraverseNode {
     node_type: String,
     #[serde(default)]
     description: String,
+    #[serde(default)]
+    commit_sha: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -241,6 +308,8 @@ struct Mem0TraverseEdge {
     subject: String,
     predicate: String,
     object: String,
+    #[serde(default)]
+    commit_sha: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -270,21 +339,29 @@ impl McpServer {
     /// provenance rather than fail the tool call over this. See
     /// docs/ADR/ADR-030-mem0-context-drift-measurement.md.
     async fn resolve_commit_sha(&self, user_id: &str) -> Option<String> {
+        let (workspace_id, repo_id) = self.resolve_workspace_repo(user_id)?;
+        let url = self.url(&format!("/api/workspaces/{}/git/status", workspace_id));
+        let statuses: Vec<WorkspaceRepoGitStatus> =
+            self.send_json(self.client.get(&url)).await.ok()?;
+        statuses
+            .into_iter()
+            .find(|s| s.repo_id == repo_id)
+            .and_then(|s| s.head_oid)
+    }
+
+    /// Resolves `user_id` (a repo slug) to `(workspace_id, repo_id)` from
+    /// the current MCP session's context — shared by `resolve_commit_sha`
+    /// and `memory_check_staleness`. `None` if there's no context, or
+    /// `user_id` doesn't match any repo in this workspace (see ADR-028's
+    /// multi-repo scoping addendum — `user_id` is chosen per-call by the
+    /// agent, not fixed per-session).
+    fn resolve_workspace_repo(&self, user_id: &str) -> Option<(Uuid, Uuid)> {
         let context = self.context.as_ref()?;
         let repo = context
             .workspace_repos
             .iter()
             .find(|r| r.repo_name == user_id)?;
-        let url = self.url(&format!(
-            "/api/workspaces/{}/git/status",
-            context.workspace_id
-        ));
-        let statuses: Vec<WorkspaceRepoGitStatus> =
-            self.send_json(self.client.get(&url)).await.ok()?;
-        statuses
-            .into_iter()
-            .find(|s| s.repo_id == repo.repo_id)
-            .and_then(|s| s.head_oid)
+        Some((context.workspace_id, repo.repo_id))
     }
 }
 
@@ -593,19 +670,156 @@ impl McpServer {
                 .nodes
                 .into_iter()
                 .map(|n| {
+                    // Short commit prefix (7 chars, git's own convention) when
+                    // provenance is known — pass this to memory_check_staleness
+                    // as `commit_sha` if a node here looks suspicious (old,
+                    // vague, unrelated to your current task).
+                    let commit_suffix = n
+                        .commit_sha
+                        .as_deref()
+                        .map(|c| format!(" [commit {}]", &c[..c.len().min(7)]))
+                        .unwrap_or_default();
                     if n.description.is_empty() {
-                        format!("{} ({})", n.id, n.node_type)
+                        format!("{} ({}){}", n.id, n.node_type, commit_suffix)
                     } else {
-                        format!("{} ({}): {}", n.id, n.node_type, n.description)
+                        format!(
+                            "{} ({}){}: {}",
+                            n.id, n.node_type, commit_suffix, n.description
+                        )
                     }
                 })
                 .collect(),
             relations: parsed
                 .edges
                 .into_iter()
-                .map(|e| format!("{} -[{}]-> {}", e.subject, e.predicate, e.object))
+                .map(|e| {
+                    let commit_suffix = e
+                        .commit_sha
+                        .as_deref()
+                        .map(|c| format!(" [commit {}]", &c[..c.len().min(7)]))
+                        .unwrap_or_default();
+                    format!(
+                        "{} -[{}]-> {}{}",
+                        e.subject, e.predicate, e.object, commit_suffix
+                    )
+                })
                 .collect(),
             truncated: parsed.truncated,
+        })
+    }
+
+    /// Checks whether a named graph entity is likely stale — i.e. the code
+    /// it refers to was removed since the fact/entity was saved. Uses the
+    /// entity's own stored `commit_sha` (provenance captured at
+    /// `memory_save` time) and the VK API's `git/diff-since` route to look
+    /// for the entity's name in text REMOVED between that commit and HEAD.
+    /// This is what would have caught the `VK-MEMORY`/`LazyLock`/`Regex`
+    /// nodes still present in this repo's own project memory after
+    /// ADR-028 removed the mechanism they describe — see
+    /// docs/ADR/ADR-030-mem0-context-drift-measurement.md.
+    #[tool(
+        description = "Check whether a graph entity (from a prior memory_graph_traverse or memory_search result) is likely STALE — the code it refers to may have been removed since the fact was saved. Looks up the entity's stored commit_sha (provenance captured at memory_save time), diffs the repo from that commit to HEAD, and checks whether text matching the entity name appears in REMOVED lines. checked=false means the check itself couldn't run (no provenance recorded, mem0/graph down, VK API unreachable) — treat that as 'unknown,' never as 'confirmed fresh.' Use this before relying on an old-looking or suspicious node surfaced by memory_graph_traverse."
+    )]
+    async fn memory_check_staleness(
+        &self,
+        Parameters(McpCheckStalenessRequest { user_id, entity }): Parameters<
+            McpCheckStalenessRequest,
+        >,
+    ) -> Result<CallToolResult, ErrorData> {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+
+        // 1. Look up the entity's own stored commit_sha via a 1-hop
+        //    traverse — the start node itself is always included in the
+        //    result, so hops=1 is just the cheapest valid call.
+        let traverse_url = format!("{}/api/graph/traverse", mem0_url());
+        let traverse_body = serde_json::json!({
+            "start": entity,
+            "user_id": user_id,
+            "hops": 1,
+            "direction": "out",
+        });
+        let traverse_resp = match client.post(&traverse_url).json(&traverse_body).send().await {
+            Ok(r) if r.status().is_success() => r,
+            Ok(r) => {
+                tracing::warn!(
+                    target: "mem0",
+                    user_id = %user_id,
+                    entity = %entity,
+                    status = %r.status(),
+                    "memory_check_staleness: graph traverse lookup failed; degrading to checked=false"
+                );
+                return McpServer::success(&McpCheckStalenessResult::not_checked());
+            }
+            Err(e) => {
+                note_mem0_unreachable("memory_check_staleness", &user_id, &e.to_string());
+                return McpServer::success(&McpCheckStalenessResult::not_checked());
+            }
+        };
+        let traverse: Mem0TraverseResponse = match traverse_resp.json().await {
+            Ok(t) => t,
+            Err(_) => return McpServer::success(&McpCheckStalenessResult::not_checked()),
+        };
+        let Some(commit_sha) = traverse
+            .nodes
+            .iter()
+            .find(|n| traverse.matched_start_nodes.contains(&n.id))
+            .and_then(|n| n.commit_sha.clone())
+        else {
+            // No matching node, or it has no recorded provenance (saved
+            // before commit_sha tracking existed) — genuinely can't check.
+            return McpServer::success(&McpCheckStalenessResult::not_checked());
+        };
+
+        // 2. Diff the repo from that commit to HEAD.
+        let Some((workspace_id, repo_id)) = self.resolve_workspace_repo(&user_id) else {
+            return McpServer::success(&McpCheckStalenessResult::not_checked());
+        };
+        let diff_url = self.url(&format!(
+            "/api/workspaces/{workspace_id}/git/diff-since?repo_id={repo_id}&commit_sha={commit_sha}"
+        ));
+        let diff: DiffSinceResponse = match self.send_json(self.client.get(&diff_url)).await {
+            Ok(d) => d,
+            Err(_) => return McpServer::success(&McpCheckStalenessResult::not_checked()),
+        };
+        if !diff.commit_found {
+            return McpServer::success(&McpCheckStalenessResult {
+                checked: true,
+                commit_sha: Some(commit_sha),
+                commit_found: false,
+                likely_stale: false,
+                evidence: vec![],
+            });
+        }
+
+        // 3. Search removed lines for the entity name.
+        let needle = entity.to_lowercase();
+        let evidence: Vec<String> = diff
+            .removed_text
+            .lines()
+            .filter(|l| l.to_lowercase().contains(&needle))
+            .take(MAX_STALENESS_EVIDENCE_LINES)
+            .map(|l| l.to_string())
+            .collect();
+        let likely_stale = !evidence.is_empty();
+
+        tracing::info!(
+            target: "mem0",
+            user_id = %user_id,
+            entity = %entity,
+            commit_sha = %commit_sha,
+            likely_stale,
+            "memory_check_staleness ok"
+        );
+
+        McpServer::success(&McpCheckStalenessResult {
+            checked: true,
+            commit_sha: Some(commit_sha),
+            commit_found: true,
+            likely_stale,
+            evidence,
         })
     }
 }

@@ -16,7 +16,7 @@ use db::models::{
     workspace_repo::WorkspaceRepo,
 };
 use deployment::Deployment;
-use git::{ConflictOp, GitCliError, GitServiceError};
+use git::{ConflictOp, GitCli, GitCliError, GitServiceError};
 use serde::{Deserialize, Serialize};
 use services::services::container::ContainerService;
 use ts_rs::TS;
@@ -149,6 +149,7 @@ pub enum RenameBranchError {
 pub fn router() -> Router<DeploymentImpl> {
     Router::new()
         .route("/status", get(get_workspace_branch_status))
+        .route("/diff-since", get(get_diff_since))
         .route("/diff/ws", get(stream_diff_ws))
         .route("/merge", post(merge_workspace))
         .route("/commit", post(commit_workspace))
@@ -521,6 +522,116 @@ pub async fn get_workspace_branch_status(
     }
 
     Ok(ResponseJson(ApiResponse::success(results)))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DiffSinceQuery {
+    pub repo_id: Uuid,
+    pub commit_sha: String,
+}
+
+#[derive(Debug, Serialize, TS)]
+pub struct DiffSinceResponse {
+    /// Concatenated removed-lines (`git diff` `-` lines, marker stripped)
+    /// from `commit_sha..HEAD` for this repo — best-effort staleness-check
+    /// input for mem0: a fact/graph node whose provenance commit's
+    /// referenced text shows up here was likely removed since that fact
+    /// was saved (see docs/ADR/ADR-030-mem0-context-drift-measurement.md).
+    /// This is NOT proof — text can be removed in one place and still
+    /// exist elsewhere — just a much sharper signal than grepping the
+    /// current repo state with no provenance at all.
+    pub removed_text: String,
+    pub files_changed: Vec<String>,
+    /// True if `removed_text` was cut off at the size cap.
+    pub truncated: bool,
+    /// False if `commit_sha` doesn't resolve in this worktree (e.g. history
+    /// was rewritten and it no longer exists) — the caller should treat
+    /// that as "can't determine," not "definitely not stale."
+    pub commit_found: bool,
+}
+
+/// Best-effort diff-since-commit for mem0 staleness checks — see
+/// `DiffSinceResponse`. Deliberately generic (not mem0-specific plumbing):
+/// it answers "what got removed in this repo since commit X," which mem0's
+/// `memory_check_staleness` MCP tool (`crates/mcp/src/task_server/tools/
+/// mem0.rs`) is the first, but need not be the only, consumer of.
+pub async fn get_diff_since(
+    Extension(workspace): Extension<Workspace>,
+    State(deployment): State<DeploymentImpl>,
+    axum::extract::Query(q): axum::extract::Query<DiffSinceQuery>,
+) -> Result<ResponseJson<ApiResponse<DiffSinceResponse>>, ApiError> {
+    const MAX_REMOVED_TEXT_BYTES: usize = 200_000;
+
+    let pool = &deployment.db().pool;
+    let repositories = WorkspaceRepo::find_repos_for_workspace(pool, workspace.id).await?;
+    let Some(repo) = repositories.into_iter().find(|r| r.id == q.repo_id) else {
+        return Ok(ResponseJson(ApiResponse::error(
+            "repo not found in this workspace",
+        )));
+    };
+
+    let container_ref = deployment
+        .container()
+        .ensure_container_exists(&workspace)
+        .await?;
+    let worktree_path = PathBuf::from(&container_ref).join(&repo.name);
+
+    let git_cli = GitCli::new();
+
+    // Validate the commit still resolves in THIS worktree before diffing —
+    // an unknown/rewritten-away commit_sha must degrade to "can't
+    // determine," never a crash or a silently-misleading empty diff.
+    let commit_found = git_cli
+        .git(
+            &worktree_path,
+            ["cat-file", "-e", &format!("{}^{{commit}}", q.commit_sha)],
+        )
+        .is_ok();
+    if !commit_found {
+        return Ok(ResponseJson(ApiResponse::success(DiffSinceResponse {
+            removed_text: String::new(),
+            files_changed: vec![],
+            truncated: false,
+            commit_found: false,
+        })));
+    }
+
+    let range = format!("{}..HEAD", q.commit_sha);
+
+    let files_changed: Vec<String> = git_cli
+        .git(&worktree_path, ["diff", "--name-only", &range])
+        .unwrap_or_default()
+        .lines()
+        .map(|s| s.to_string())
+        .collect();
+
+    let raw_diff = git_cli
+        .git(&worktree_path, ["diff", "--unified=0", &range])
+        .unwrap_or_default();
+
+    let mut removed_text = String::new();
+    let mut truncated = false;
+    for line in raw_diff.lines() {
+        // Only single-`-` removed CONTENT lines — not the `---` file
+        // header, which also starts with `-`.
+        if line.starts_with("---") || !line.starts_with('-') {
+            continue;
+        }
+        let rest = &line[1..];
+        if removed_text.len() + rest.len() + 1 > MAX_REMOVED_TEXT_BYTES {
+            truncated = true;
+            break;
+        }
+        removed_text.push_str(rest);
+        removed_text.push('\n');
+    }
+
+    Ok(ResponseJson(ApiResponse::success(DiffSinceResponse {
+        removed_text,
+        files_changed,
+        truncated,
+        commit_found: true,
+    })))
 }
 
 #[axum::debug_handler]
