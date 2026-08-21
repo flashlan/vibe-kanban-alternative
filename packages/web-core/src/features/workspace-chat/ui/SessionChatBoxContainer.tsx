@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useDropzone } from 'react-dropzone';
 import {
@@ -63,7 +63,7 @@ import { useActionVisibilityContext } from '@/shared/hooks/useActionVisibilityCo
 import { PrCommentsDialog } from '@/shared/dialogs/tasks/PrCommentsDialog';
 import type { NormalizedComment } from '@vibe/ui/components/pr-comment-node';
 import { useAppNavigation } from '@/shared/hooks/useAppNavigation';
-import { sessionsApi, executionProcessesApi } from '@/shared/lib/api';
+import { sessionsApi } from '@/shared/lib/api';
 import { getInteractiveConfig } from '@/shared/lib/interactive';
 import { RenameSessionDialog } from '@vibe/ui/components/RenameSessionDialog';
 import type { TurnNavigationItem } from '@vibe/ui/components/TurnNavigationPopup';
@@ -83,7 +83,18 @@ function computeExecutionStatus(params: {
   if (params.isStopping) return 'stopping';
   if (params.isQueueLoading) return 'queue-loading';
   if (params.isSendingFollowUp) return 'sending';
-  if (params.isQueued) return 'queued';
+  // isQueued alone isn't enough: the process the message was queued behind
+  // can finish (isAttemptRunning flips false) before the backend actually
+  // flushes the queue into a new execution (crates/local-deployment/src/
+  // container.rs's post-completion handler, which runs off the process-exit
+  // event, not synchronously with it). In that gap the server still reports
+  // the message as queued, but there is nothing running for Stop to act on
+  // — plain 'queued' would render an interactive-looking Stop button that's
+  // actually a no-op (Cancel Queue still works either way). Use
+  // 'queued-idle' for that gap: Cancel Queue only, no dead Stop button. It
+  // flips to plain 'queued' once the flushed follow-up's process appears.
+  if (params.isQueued)
+    return params.isAttemptRunning ? 'queued' : 'queued-idle';
   if (params.isAttemptRunning) return 'running';
   return 'idle';
 }
@@ -536,12 +547,24 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
     reviewContext,
   ]);
 
-  // --- Headed (interactive tmux) live input ---------------------------------
-  // A headed session stays `running` across turns, so queueing never flushes.
-  // When it is idle between turns, Send types the message straight into the live
-  // agent via send-input; while mid-turn, Send is disabled. Headless is unchanged.
-  const [liveSendError, setLiveSendError] = useState<string | null>(null);
-  const [isSendingLiveInput, setIsSendingLiveInput] = useState(false);
+  // --- Headed (interactive tmux) live status ---------------------------------
+  // A headed session stays `running` across turns (the tmux/agent process
+  // never exits between turns), so the headless "queue, flush when the
+  // process stops" mechanism never flushes for it. Send is NOT specially
+  // routed here anymore, though: it always goes through the normal
+  // follow-up flow (`handleSend` -> POST /follow-up), which already detects
+  // a live headed tmux session server-side and injects the prompt directly
+  // into it via `send_interactive_message` (bracketed-paste + Enter) whether
+  // the agent is idle or mid-turn, falling back to a fresh `--resume`
+  // execution if the tmux session died in the meantime — see
+  // `should_deliver_to_live_session` in
+  // crates/server/src/routes/sessions/mod.rs and
+  // docs/ADR/ADR-031-headed-send-always-live-delivery.md. This block only
+  // tracks whether there's a live headed process and whether it looks busy,
+  // to pick the 'headed-busy' status (working-pulse animation) below —
+  // `executionProcessesApi.sendInput`/`send_interactive_input` (single-line,
+  // no newlines) remains reserved for short operator keystrokes elsewhere
+  // (e.g. approvals), not for composing full messages.
 
   // Latest running coding-agent process that is headed (`processes` is sorted
   // created_at ascending, so take the last match).
@@ -569,41 +592,6 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
       ),
     [entries, headedLiveProcess]
   );
-
-  // Hand off the local "pending" guard to the real loading signal once it lands.
-  useEffect(() => {
-    if (headedLoadingPresent) setIsSendingLiveInput(false);
-  }, [headedLoadingPresent]);
-
-  const headedLive = headedLiveProcess
-    ? {
-        processId: headedLiveProcess.id,
-        idle: !(headedLoadingPresent || isSendingLiveInput),
-      }
-    : null;
-
-  const handleSendLive = useCallback(async () => {
-    const text = localMessage.trim();
-    if (!text || isSendingLiveInput || !headedLiveProcess) return;
-    setIsSendingLiveInput(true);
-    setLiveSendError(null);
-    try {
-      await executionProcessesApi.sendInput(headedLiveProcess.id, text);
-      cancelDebouncedSave();
-      setLocalMessage('');
-      requestAnimationFrame(() => onScrollToBottom('auto'));
-    } catch (err) {
-      setLiveSendError(err instanceof Error ? err.message : String(err));
-      setIsSendingLiveInput(false);
-    }
-  }, [
-    localMessage,
-    isSendingLiveInput,
-    headedLiveProcess,
-    cancelDebouncedSave,
-    setLocalMessage,
-    onScrollToBottom,
-  ]);
 
   // Track previous process count for queue refresh
   const prevProcessCountRef = useRef(processes.length);
@@ -959,12 +947,17 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
     isAttemptRunning,
   });
 
-  // Headed-live overrides: idle -> normal Send compose (routed to send-input via
-  // onSend below); mid-turn -> a disabled "Agent is working…" Send.
-  const effectiveStatus: ExecutionStatus = headedLive
-    ? headedLive.idle
-      ? 'idle'
-      : 'headed-busy'
+  // A live headed session overrides `status` entirely: `isAttemptRunning`
+  // stays true continuously for it (the tmux/agent process never exits
+  // between turns), so the base `status` would otherwise be stuck on
+  // 'running' (Queue+Stop, no Send) even between turns. 'headed-busy' vs.
+  // 'idle' only drives the working-pulse animation now (see
+  // SessionChatBox.tsx — both render the same enabled Send). Send itself is
+  // never gated on this: it's always the normal `handleSend`.
+  const effectiveStatus: ExecutionStatus = headedLiveProcess
+    ? headedLoadingPresent
+      ? 'headed-busy'
+      : 'idle'
     : status;
 
   // During loading, render with empty editor to preserve container UI
@@ -1083,7 +1076,7 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
     <SessionChatBox<BaseCodingAgent>
       status={effectiveStatus}
       animateRunningOutline={animateRunningOutline}
-      disableContentInsert={!!headedLive}
+      disableContentInsert={!!headedLiveProcess}
       onViewCode={disableViewCode ? undefined : handleViewCode}
       onOpenWorkspace={
         showOpenWorkspaceButton && workspaceId ? handleOpenWorkspace : undefined
@@ -1113,9 +1106,10 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
         onChange: handleEditorChange,
       }}
       actions={{
-        // Headed-live: Send types into the live tmux session (idle only); files
-        // are not uploadable for live input, so onPasteFiles is a no-op.
-        onSend: headedLive ? handleSendLive : handleSend,
+        // Always the normal follow-up send, headed or not — see the
+        // headed-live status block above for why. Files are not uploadable
+        // into a live tmux session, so onPasteFiles is a no-op there.
+        onSend: handleSend,
         onQueue: handleQueueMessage,
         onCancelQueue: handleCancelQueue,
         onStop: stopExecution,
@@ -1123,7 +1117,7 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
           setLocalMessage('');
           clearDraft();
         },
-        onPasteFiles: headedLive ? () => {} : uploadFiles,
+        onPasteFiles: headedLiveProcess ? () => {} : uploadFiles,
       }}
       session={{
         sessions,
@@ -1137,7 +1131,7 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
         items: toolbarActionItems,
       }}
       onPrCommentClick={
-        headedLive
+        headedLiveProcess
           ? undefined
           : actionCtx.hasOpenPR
             ? handleInsertPrComments
@@ -1151,7 +1145,7 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
         conflictedFilesCount,
         onResolveConflicts: handleResolveConflicts,
       }}
-      error={liveSendError ?? sendError}
+      error={sendError}
       agent={effectiveExecutor}
       todos={todos}
       inProgressTodo={inProgressTodo}
@@ -1209,7 +1203,7 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
       reviewComments={
         // Not supported in headed-live mode (would feed hasContent / banner and
         // could be re-sent or left staged); gated off there.
-        headedLive
+        headedLiveProcess
           ? undefined
           : hasReviewComments && reviewContext
             ? {

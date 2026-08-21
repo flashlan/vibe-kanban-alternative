@@ -45,15 +45,21 @@ export type ExecutionStatus =
   | 'sending'
   | 'running'
   | 'queued'
+  // Message queued, but the process it was queued behind has already
+  // finished and the backend hasn't flushed the queue into a new execution
+  // yet — a brief gap, not a stuck state. Cancel Queue only; no Stop button,
+  // since nothing is currently running for it to act on.
+  | 'queued-idle'
   | 'stopping'
   | 'queue-loading'
   | 'feedback'
   | 'edit'
-  // A headed (interactive tmux) session that is running but mid-turn: the
-  // editor stays usable but Send is disabled until the turn settles. It is NOT
-  // a "running" state for animation/stop purposes (the live agent is driven via
-  // send-input, not stopped here). Headed-idle reuses 'idle' with onSend routed
-  // to the live send-input endpoint.
+  // A headed (interactive tmux) session that is running but mid-turn. Renders
+  // an enabled Send identical to 'idle' — see the 'idle'/'headed-busy'
+  // fallthrough below — this value only exists to drive the working-pulse
+  // animation. It is NOT a "running" state for stop-button purposes (the
+  // live agent is neither queued nor stopped here; onSend delivers straight
+  // into the live tmux session server-side regardless of busy/idle).
   | 'headed-busy';
 
 interface ActionsProps {
@@ -312,7 +318,8 @@ export function SessionChatBox<TExecutor extends string = string>({
     editor.value.trim().length > 0 || (reviewComments?.count ?? 0) > 0;
   const canSend =
     hasContent && !['sending', 'stopping', 'queue-loading'].includes(status);
-  const isQueued = status === 'queued';
+  const isQueued = status === 'queued' || status === 'queued-idle';
+  // 'queued-idle' deliberately excluded: nothing is currently running.
   const isRunning = status === 'running' || status === 'queued';
   const areContentInsertActionsDisabled =
     isDisabled || isQueued || disableContentInsert;
@@ -537,8 +544,23 @@ export function SessionChatBox<TExecutor extends string = string>({
       );
     }
 
+    // A headed session mid-turn ('headed-busy', falls through to 'idle'
+    // below) still gets a normal, always-enabled Send — the follow-up
+    // endpoint detects the live tmux session server-side and delivers
+    // directly into it (bracketed-paste + Enter) whether the agent is idle
+    // or busy, instead of this component gating on busy/idle itself. See
+    // docs/ADR/ADR-031-headed-send-always-live-delivery.md.
+    // KNOWN RISK, not yet verified either way: if the underlying CLI's own
+    // native TUI is showing a numbered/y-n menu (not vibe-kanban's tracked
+    // `approvalMode`/`askQuestionMode` banner — a prompt the agent's CLI
+    // draws itself) when this Enter lands, bracketed-paste text may have
+    // nowhere to insert into, and the trailing Enter could confirm whatever
+    // option the menu currently has selected instead of doing nothing —
+    // silently answering a permission prompt the user never looked at,
+    // rather than merely losing the typed text.
     switch (status) {
       case 'idle':
+      case 'headed-busy':
         return (
           <PrimaryButton
             onClick={actions.onSend}
@@ -590,6 +612,17 @@ export function SessionChatBox<TExecutor extends string = string>({
           </>
         );
 
+      case 'queued-idle':
+        // No Stop button: the process this was queued behind already
+        // finished, so there is nothing running for Stop to act on.
+        return (
+          <PrimaryButton
+            onClick={actions.onCancelQueue}
+            value={t('conversation.actions.cancelQueue')}
+            actionIcon={XIcon}
+          />
+        );
+
       case 'stopping':
         return (
           <PrimaryButton
@@ -604,15 +637,6 @@ export function SessionChatBox<TExecutor extends string = string>({
             disabled
             value={t('conversation.actions.loading')}
             actionIcon="spinner"
-          />
-        );
-      case 'headed-busy':
-        // Headed session mid-turn: editor stays usable, Send disabled until the
-        // turn settles (the live agent is driven via send-input on idle).
-        return (
-          <PrimaryButton
-            disabled
-            value={t('conversation.actions.agentWorking')}
           />
         );
       case 'feedback':
