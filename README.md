@@ -10,7 +10,7 @@
   <a href="https://github.com/flashlan/vibe-kanban-alternative/issues"><img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" /></a>
 </p>
 
-<h1 align="center">vibe-kanban-alternative</h1>
+<h1 align="center">VIBE KANBAN ALTERNATIVE</h1>
 
 <p align="center">
   Multi-agent development on a Kanban board, with semantic and vector memory shared across agent stages.

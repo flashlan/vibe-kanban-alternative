@@ -65,6 +65,56 @@ open-state gives the same result deterministically without vendoring 300KB
 of library code. Fork only becomes worth it if we also need custom DnD /
 virtualization inside the tree.
 
+## Dual data-channel refactor (indie fork)
+
+### Problem
+
+In the local fork, data flows through two channels with different latency:
+
+1. **Electric/fallback shape** (`useShape` → `createShapeCollection` → HTTP
+   fallback poll every 30s) — issues, workspaces, issue↔workspace links,
+   PRs, tags.
+2. **WS stream** `/api/workspaces/streams/ws` — live status: `is_running`,
+   process state. Real-time.
+
+Electric was dropped in the fork (local SQLite), but the channel split is a
+leftover from the cloud architecture. Both channels read the same SQLite at
+different latencies, causing a class of bugs ("indicator on the wrong
+card" — a dispatch relink shows up after 30s, but `isRunning` is instant).
+The current fix is a targeted `refreshShapeSource()` call after mutations.
+
+### Task
+
+Remove the channel duplication: route all data from the local backend
+through a single channel (WS/SSE push) with immediate collection updates,
+or move status onto the same channel as entities.
+
+### Subtasks
+
+- [ ] Design a single channel: WS/SSE across all shape tables (or
+      incremental push on top of the existing WS stream).
+- [ ] Remove `FALLBACK_REFRESH_INTERVAL_MS` (30s poll) from
+      `packages/web-core/src/shared/lib/electric/collections.ts` — replaced
+      by push updates.
+- [ ] Move `is_running`/process status onto the same channel (currently
+      `/api/workspaces/streams/ws`, a separate bus).
+- [ ] `useShape`/`createShapeCollection` should receive live updates from
+      the unified channel (currently `applySnapshot` + interval).
+- [ ] Remove the `refreshShapeSource()` workarounds once the channel is
+      unified. Currently present in: `KanbanContainer` (dispatch),
+      `IssueWorkspacesSectionContainer` (dispatch/unlink/delete),
+      `useCreateWorkspace` (linkToIssue on create-and-start).
+- [ ] Decide the fate of `useJsonPatchWsStream` and
+      `/workspaces/streams/ws` after the migration.
+- [ ] Confirm the TUI and MCP don't depend on the old two-channel model.
+
+### Notes
+
+- For a single-user local fork, Electric's conflict-resolution/op-log isn't
+  needed — a push model is enough.
+- Large refactor: project context (`ProjectProvider`, `UserProvider`,
+  `useShape`) is tied to the collections.
+
 ## Conventions to remember
 
 - Migrations are frozen after apply — the checksum guard bricks the server

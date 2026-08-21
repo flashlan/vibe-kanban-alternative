@@ -1,6 +1,6 @@
-# Vibe Kanban Indie — Documentation
+# vibe-kanban-alternative — Documentation
 
-The documentation site for [Vibe Kanban Indie](https://github.com/dexloom/vibe-kanban-indie),
+The documentation site for [vibe-kanban-alternative](https://github.com/flashlan/vibe-kanban-alternative),
 built with [Mintlify](https://mintlify.com). Source lives in this `docs/` folder;
 `docs.json` defines navigation, theme, and settings.
 
