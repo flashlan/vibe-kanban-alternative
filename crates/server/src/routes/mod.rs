@@ -32,6 +32,7 @@ pub mod approvals;
 pub mod attachments;
 pub mod backup;
 pub mod config;
+pub mod containers;
 pub mod events;
 pub mod execution_processes;
 pub mod filesystem;
@@ -58,6 +59,7 @@ pub fn router(deployment: DeploymentImpl) -> IntoMakeService<Router> {
     let api_routes = Router::new()
         .route("/health", get(health::health_check))
         .merge(config::router())
+        .merge(containers::router(&deployment))
         .merge(pipelines::router())
         .merge(recurrent::router())
         .merge(kanban::router(&deployment))
