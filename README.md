@@ -1,10 +1,16 @@
 <p align="center">
+  <img src="vka-logo.png" alt="vibe-kanban-alternative logo" width="280" />
+</p>
+
+<p align="center">
   <a href="https://www.npmjs.com/package/vibe-kanban-alternative"><img alt="npm" src="https://img.shields.io/npm/v/vibe-kanban-alternative?style=flat-square" /></a>
   <a href="https://github.com/flashlan/vibe-kanban-alternative/actions"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/flashlan/vibe-kanban-alternative/main.yml" /></a>
   <a href="https://deepwiki.com/BloopAI/vibe-kanban"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
   <a href="https://opensource.org/licenses/Apache-2.0"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg?style=flat-square" /></a>
   <a href="https://github.com/flashlan/vibe-kanban-alternative/issues"><img alt="PRs Welcome" src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square" /></a>
 </p>
+
+
 
 <h1 align="center"><strong>vibe-kanban-alternative</strong></h1>
 
