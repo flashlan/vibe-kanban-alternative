@@ -118,13 +118,6 @@ async fn main() -> Result<(), VibeKanbanError> {
         }
     }
 
-    // Inject the vibe_kanban MCP server into all installed agent configs so
-    // agents have access to get_context, update_issue, memory_save, etc.
-    // without requiring manual Settings → Agent → MCP setup.
-    tokio::spawn(async {
-        executors::mcp_config::inject_vibe_kanban_for_all_agents().await;
-    });
-
     // Preload global executor options cache for all executors with DEFAULT presets
     tokio::spawn(async move {
         executors::executors::utils::preload_global_executor_options_cache().await;
