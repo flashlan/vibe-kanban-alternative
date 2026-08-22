@@ -96,6 +96,8 @@ const issue: Issue = {
   parent_issue_id: null,
   parent_issue_sort_order: null,
   extension_metadata: {},
+  archived: false,
+  archived_at: null,
   created_at: '2026-08-03T00:00:00.000Z',
   updated_at: '2026-08-03T00:00:00.000Z',
 };
