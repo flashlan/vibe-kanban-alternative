@@ -1646,12 +1646,15 @@ pub trait ContainerService {
             return Err(e.into());
         }
 
-        // Reset the reported pipeline stage only when a *new coding-agent*
-        // execution begins (not for setup/cleanup/archive/dev-server runs,
-        // which would otherwise wrongly wipe a live stage). The tracker
-        // spawned below will repopulate it as the fresh execution reports
-        // markers.
+        // Reset the reported pipeline stage only when a *fresh* coding-agent
+        // initial request begins (not for setup/cleanup/archive/dev-server runs,
+        // and not for follow-up requests — user replies to workspace chat must
+        // not wipe the progress already reported by a prior pipeline run).
         if *run_reason == ExecutionProcessRunReason::CodingAgent
+            && matches!(
+                executor_action.typ(),
+                ExecutorActionType::CodingAgentInitialRequest(_)
+            )
             && let Err(e) =
                 Workspace::set_current_pipeline_stage(&self.db().pool, workspace.id, None).await
         {
