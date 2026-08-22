@@ -456,18 +456,28 @@ pub async fn inject_vibe_kanban_for_all_agents() {
     // cadence and prevents memories from silently breaking across updates.
     let wrapper_path = home.join(".vibe-kanban").join("vk-mcp.sh");
     let bin_dir = home.join(".vibe-kanban").join("bin");
+    // Priority: VIBE_KANBAN_MCP_BIN env override → dev repo CLI (always in
+    // sync with the source) → installed desktop-app binary → npx fallback.
     let wrapper_content = format!(
         "#!/bin/bash\n\
-         # Vibe Kanban MCP launcher — prefers the locally installed binary.\n\
+         # Vibe Kanban MCP launcher\n\
+         # Priority: VIBE_KANBAN_MCP_BIN > dev build CLI > installed binary > npx\n\
          ARCH=$(uname -m)\n\
          [ \"$ARCH\" = \"x86_64\" ] && PLATFORM=\"macos-amd64\" || PLATFORM=\"macos-arm64\"\n\
          BIN_DIR=\"{bin_dir}\"\n\
+         if [ -n \"$VIBE_KANBAN_MCP_BIN\" ] && [ -x \"$VIBE_KANBAN_MCP_BIN\" ]; then\n\
+             exec \"$VIBE_KANBAN_MCP_BIN\" \"$@\"\n\
+         fi\n\
+         REPO=\"${{VIBE_KANBAN_REPO:-$HOME/Desktop/Kiky/vibe-kanban-alternative}}\"\n\
+         DEV_CLI=\"$REPO/npx-cli/bin/cli.js\"\n\
+         if [ -f \"$DEV_CLI\" ]; then\n\
+             exec node \"$DEV_CLI\" \"$@\"\n\
+         fi\n\
          LATEST=$(ls \"$BIN_DIR\" 2>/dev/null | sort -V | tail -1)\n\
          if [ -n \"$LATEST\" ] && [ -x \"$BIN_DIR/$LATEST/$PLATFORM/vibe-kanban-mcp\" ]; then\n\
              exec \"$BIN_DIR/$LATEST/$PLATFORM/vibe-kanban-mcp\" \"$@\"\n\
-         else\n\
-             exec npx -y vibe-kanban@latest \"$@\"\n\
-         fi\n",
+         fi\n\
+         exec npx -y vibe-kanban@latest \"$@\"\n",
         bin_dir = bin_dir.display()
     );
 
