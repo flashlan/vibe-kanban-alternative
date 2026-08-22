@@ -1,9 +1,8 @@
 //! Aggregated usage data for the Settings → Usage dashboard.
 //!
 //! Builds per-day activity from `execution_processes` joined with `sessions`
-//! (agent breakdown), plus issue progress (created/completed) and a per-project
-//! summary. Token usage is not persisted yet, so this endpoint reports
-//! executions, duration, and issue activity rather than token counts.
+//! (agent breakdown), plus issue progress (created/completed), a per-project
+//! summary, and in-memory LLM token + KV-cache telemetry.
 
 use axum::{
     Json, Router,
@@ -14,6 +13,7 @@ use axum::{
 use deployment::Deployment;
 use serde::{Deserialize, Serialize};
 use services::services::mem0_relevance::Mem0RelevanceSummary;
+use services::services::token_telemetry::TokenTelemetrySummary;
 use sqlx::FromRow;
 use ts_rs::TS;
 use utils::response::ApiResponse;
@@ -75,6 +75,10 @@ pub struct UsageSummary {
     /// docs/ADR/ADR-030-mem0-context-drift-measurement.md). In-memory only —
     /// resets on server restart.
     pub mem0_relevance: Mem0RelevanceSummary,
+    /// LLM token + KV-cache telemetry, day-bucketed per agent — reported
+    /// via `POST /api/usage/token-telemetry`. In-memory only — resets on
+    /// server restart.
+    pub token_telemetry: TokenTelemetrySummary,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -167,6 +171,7 @@ pub fn router() -> Router<DeploymentImpl> {
             get(get_mem0_config).post(put_mem0_config),
         )
         .route("/usage/mem0-relevance", post(report_mem0_relevance))
+        .route("/usage/token-telemetry", post(report_token_telemetry))
 }
 
 /// Body posted by the `vibe_kanban_mcp` process (a separate process from
@@ -187,6 +192,37 @@ async fn report_mem0_relevance(
     Json(body): Json<ReportMem0RelevanceBody>,
 ) -> ResponseJson<ApiResponse<()>> {
     deployment.mem0_relevance_service().record(body.top_score);
+    ResponseJson(ApiResponse::success(()))
+}
+
+/// Body posted by the frontend (or any caller) when a session accumulates
+/// token usage — typically on execution completion or periodic flush.
+#[derive(Debug, Deserialize)]
+struct ReportTokenTelemetryBody {
+    agent: String,
+    #[serde(default)]
+    input_tokens: u32,
+    #[serde(default)]
+    output_tokens: u32,
+    #[serde(default)]
+    cache_read_tokens: u32,
+    #[serde(default)]
+    cache_creation_tokens: u32,
+}
+
+/// Best-effort sink: always returns success — same pattern as
+/// [`report_mem0_relevance`]. An observability aid, not a critical path.
+async fn report_token_telemetry(
+    State(deployment): State<DeploymentImpl>,
+    Json(body): Json<ReportTokenTelemetryBody>,
+) -> ResponseJson<ApiResponse<()>> {
+    deployment.token_telemetry_service().record(
+        &body.agent,
+        body.input_tokens,
+        body.output_tokens,
+        body.cache_read_tokens,
+        body.cache_creation_tokens,
+    );
     ResponseJson(ApiResponse::success(()))
 }
 
@@ -380,6 +416,7 @@ async fn usage_summary(
 
     let mem0_tokens = fetch_mem0_tokens().await;
     let mem0_relevance = deployment.mem0_relevance_service().summary();
+    let token_telemetry = deployment.token_telemetry_service().summary();
 
     ResponseJson(ApiResponse::success(UsageSummary {
         activity,
@@ -389,6 +426,7 @@ async fn usage_summary(
         total_seconds,
         mem0_tokens,
         mem0_relevance,
+        token_telemetry,
     }))
 }
 

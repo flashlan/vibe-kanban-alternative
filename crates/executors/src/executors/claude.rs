@@ -1086,6 +1086,10 @@ pub struct ClaudeLogProcessor {
     main_model_name: Option<String>,
     main_model_context_window: u32,
     context_tokens_used: u32,
+    latest_input_tokens: Option<u32>,
+    latest_output_tokens: Option<u32>,
+    latest_cache_read_tokens: Option<u32>,
+    latest_cache_creation_tokens: Option<u32>,
 }
 
 impl ClaudeLogProcessor {
@@ -1105,6 +1109,10 @@ impl ClaudeLogProcessor {
             last_assistant_message: None,
             main_model_context_window: DEFAULT_CLAUDE_CONTEXT_WINDOW,
             context_tokens_used: 0,
+            latest_input_tokens: None,
+            latest_output_tokens: None,
+            latest_cache_read_tokens: None,
+            latest_cache_creation_tokens: None,
         }
     }
 
@@ -2148,12 +2156,17 @@ impl ClaudeLogProcessor {
                     if parent_tool_use_id.is_none()
                         && let Some(usage) = usage
                     {
-                        let input_tokens = usage.input_tokens.unwrap_or(0)
-                            + usage.cache_creation_input_tokens.unwrap_or(0)
-                            + usage.cache_read_input_tokens.unwrap_or(0);
-                        let output_tokens = usage.output_tokens.unwrap_or(0);
-                        let total_tokens = input_tokens + output_tokens;
+                        let input_raw = usage.input_tokens.unwrap_or(0);
+                        let cache_creation = usage.cache_creation_input_tokens.unwrap_or(0);
+                        let cache_read = usage.cache_read_input_tokens.unwrap_or(0);
+                        let output_raw = usage.output_tokens.unwrap_or(0);
+                        let input_tokens = input_raw + cache_creation + cache_read;
+                        let total_tokens = input_tokens + output_raw;
                         self.context_tokens_used = total_tokens as u32;
+                        self.latest_input_tokens = Some(input_raw as u32);
+                        self.latest_output_tokens = Some(output_raw as u32);
+                        self.latest_cache_read_tokens = Some(cache_read as u32);
+                        self.latest_cache_creation_tokens = Some(cache_creation as u32);
 
                         patches.push(self.add_token_usage_entry(entry_index_provider));
                     }
@@ -2450,6 +2463,10 @@ impl ClaudeLogProcessor {
             entry_type: NormalizedEntryType::TokenUsageInfo(crate::logs::TokenUsageInfo {
                 total_tokens: self.context_tokens_used,
                 model_context_window: self.main_model_context_window,
+                input_tokens: self.latest_input_tokens,
+                output_tokens: self.latest_output_tokens,
+                cache_read_tokens: self.latest_cache_read_tokens,
+                cache_creation_tokens: self.latest_cache_creation_tokens,
             }),
             content: format!(
                 "Tokens used: {} / Context window: {}",

@@ -21,6 +21,7 @@ use services::services::{
     mem0_relevance::Mem0RelevanceService,
     queued_message::QueuedMessageService,
     repo::RepoService,
+    token_telemetry::TokenTelemetryService,
 };
 use sqlx::Error as SqlxError;
 use thiserror::Error;
@@ -85,6 +86,8 @@ pub trait Deployment: Clone + Send + Sync + 'static {
     fn queued_message_service(&self) -> &QueuedMessageService;
 
     fn mem0_relevance_service(&self) -> &Mem0RelevanceService;
+
+    fn token_telemetry_service(&self) -> &TokenTelemetryService;
 
     fn client_info(&self) -> &ClientInfo;
 

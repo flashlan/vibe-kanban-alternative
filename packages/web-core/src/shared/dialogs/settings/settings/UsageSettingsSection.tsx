@@ -58,6 +58,32 @@ export interface Mem0RelevanceSummary {
   total_weak_calls: number;
 }
 
+export interface TokenTelemetryAgent {
+  agent: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+}
+
+export interface TokenTelemetryDay {
+  day: string;
+  agents: TokenTelemetryAgent[];
+  total_input: number;
+  total_output: number;
+  total_cache_read: number;
+  total_cache_creation: number;
+}
+
+export interface TokenTelemetrySummary {
+  days: TokenTelemetryDay[];
+  total_input: number;
+  total_output: number;
+  total_cache_read: number;
+  total_cache_creation: number;
+  cache_hit_pct: number | null;
+}
+
 export interface UsageSummary {
   activity: DailyAgentActivity[];
   issues: DailyIssueActivity[];
@@ -66,6 +92,7 @@ export interface UsageSummary {
   total_seconds: number;
   mem0_tokens: Mem0TokenUsage;
   mem0_relevance: Mem0RelevanceSummary;
+  token_telemetry: TokenTelemetrySummary;
 }
 
 export interface ReExtractResponse {
@@ -92,6 +119,25 @@ export async function triggerReExtract(
     { method: 'POST', cache: 'no-store' }
   );
   return handleApiResponse<ReExtractResponse>(response);
+}
+
+/** Report accumulated token usage for a given agent. Best-effort, fire-and-forget. */
+export async function reportTokenTelemetry(data: {
+  agent: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+}): Promise<void> {
+  try {
+    await makeRequest('/api/usage/token-telemetry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  } catch {
+    // Best-effort: silently ignore failures.
+  }
 }
 
 function formatDuration(totalSeconds: number): string {
@@ -127,6 +173,25 @@ function providerColor(provider: string): string {
   if (p.includes('llama') || p.includes('ollama')) return 'bg-emerald-500/80';
   if (p.includes('openai')) return 'bg-amber-500/80';
   return 'bg-purple-500/80';
+}
+
+/** Stable color for coding agents in token telemetry. */
+function agentColor(agent: string): string {
+  const a = agent.toLowerCase();
+  if (a.includes('claude')) return 'bg-amber-500/80';
+  if (a.includes('antigravity') || a.includes('gemini')) return 'bg-sky-500/80';
+  if (a.includes('codex') || a.includes('openai')) return 'bg-emerald-500/80';
+  if (a.includes('opencode')) return 'bg-violet-500/80';
+  if (a.includes('cursor')) return 'bg-rose-500/80';
+  if (a.includes('copilot')) return 'bg-teal-500/80';
+  return 'bg-purple-500/80';
+}
+
+/** Format large token counts: 1.2M, 45.3K, or raw number. */
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 10_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
 }
 
 export function UsageSettingsSection() {
@@ -359,6 +424,167 @@ export function UsageSettingsSection() {
                 );
               })}
             </div>
+          )}
+        </div>
+      </section>
+
+      {/* ⚡ LLM Token & KV-Cache Telemetry — in-memory, resets on restart */}
+      <section>
+        <h3 className="mb-2 text-sm font-medium text-high">
+          {t(
+            'settings.usage.tokenTelemetry',
+            '⚡ LLM token & KV-cache telemetry'
+          )}
+        </h3>
+        <div className="rounded-sm border border-border bg-panel p-3">
+          {/* KPI cards row */}
+          <div className="mb-3 grid grid-cols-4 gap-3">
+            <div className="rounded-sm bg-secondary p-2">
+              <div className="text-lg font-semibold text-high">
+                {formatTokens(
+                  (summary?.token_telemetry.total_input ?? 0) +
+                    (summary?.token_telemetry.total_output ?? 0)
+                )}
+              </div>
+              <div className="text-[10px] text-low">
+                {t('settings.usage.totalProcessed', 'Total tokens')}
+              </div>
+            </div>
+            <div className="rounded-sm bg-secondary p-2">
+              <div className="text-lg font-semibold text-emerald-500">
+                {formatTokens(summary?.token_telemetry.total_cache_read ?? 0)}
+              </div>
+              <div className="text-[10px] text-low">
+                {t('settings.usage.cacheRead', 'Cache read')}
+              </div>
+            </div>
+            <div className="rounded-sm bg-secondary p-2">
+              <div className="text-lg font-semibold text-high">
+                {summary?.token_telemetry.cache_hit_pct != null
+                  ? `${Math.round(summary.token_telemetry.cache_hit_pct * 100)}%`
+                  : '—'}
+              </div>
+              <div className="text-[10px] text-low">
+                {t('settings.usage.cacheHit', 'Cache hit %')}
+              </div>
+            </div>
+            <div className="rounded-sm bg-secondary p-2">
+              <div className="text-lg font-semibold text-amber-500">
+                {formatTokens(
+                  summary?.token_telemetry.total_cache_creation ?? 0
+                )}
+              </div>
+              <div className="text-[10px] text-low">
+                {t('settings.usage.cacheCreation', 'Cache creation')}
+              </div>
+            </div>
+          </div>
+
+          {/* Per-day segmented bars by agent */}
+          {(summary?.token_telemetry.days ?? []).length === 0 ? (
+            <div className="text-sm text-low">
+              {t(
+                'settings.usage.noTokenTelemetry',
+                'No token telemetry recorded yet this server run (in-memory only — resets on restart).'
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-col gap-3">
+                {(summary?.token_telemetry.days ?? []).map((d) => {
+                  const dayTotal =
+                    d.total_input + d.total_cache_read + d.total_cache_creation;
+                  const dayHit =
+                    dayTotal > 0
+                      ? Math.round((d.total_cache_read / dayTotal) * 100)
+                      : 0;
+                  return (
+                    <div key={d.day} className="flex items-center gap-3">
+                      <span className="w-24 shrink-0 text-xs text-low">
+                        {d.day}
+                      </span>
+                      <div className="flex h-5 flex-1 overflow-hidden rounded-sm bg-secondary">
+                        {d.agents.map((a) => {
+                          const agentTotal =
+                            a.input_tokens +
+                            a.cache_read_tokens +
+                            a.cache_creation_tokens;
+                          const share =
+                            dayTotal > 0
+                              ? Math.max(
+                                  1,
+                                  Math.round((agentTotal / dayTotal) * 100)
+                                )
+                              : 0;
+                          return (
+                            <div
+                              key={a.agent}
+                              title={`${a.agent}: ${formatTokens(a.input_tokens)} in · ${formatTokens(a.output_tokens)} out · ${formatTokens(a.cache_read_tokens)} cache read · ${formatTokens(a.cache_creation_tokens)} cache create`}
+                              className={agentColor(a.agent)}
+                              style={{ width: `${share}%` }}
+                            />
+                          );
+                        })}
+                      </div>
+                      <span
+                        className="w-16 shrink-0 text-right text-xs text-low"
+                        title={`${dayHit}% cache hit`}
+                      >
+                        {dayHit}% hit
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Agent legend */}
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t border-border pt-2">
+                {(() => {
+                  const agentMap = new Map<
+                    string,
+                    {
+                      input: number;
+                      output: number;
+                      read: number;
+                      create: number;
+                    }
+                  >();
+                  for (const d of summary?.token_telemetry.days ?? []) {
+                    for (const a of d.agents) {
+                      const prev = agentMap.get(a.agent) ?? {
+                        input: 0,
+                        output: 0,
+                        read: 0,
+                        create: 0,
+                      };
+                      agentMap.set(a.agent, {
+                        input: prev.input + a.input_tokens,
+                        output: prev.output + a.output_tokens,
+                        read: prev.read + a.cache_read_tokens,
+                        create: prev.create + a.cache_creation_tokens,
+                      });
+                    }
+                  }
+                  return [...agentMap.entries()].map(([agent, totals]) => {
+                    const denom = totals.input + totals.read + totals.create;
+                    const hitPct =
+                      denom > 0 ? Math.round((totals.read / denom) * 100) : 0;
+                    return (
+                      <span
+                        key={agent}
+                        className="flex items-center gap-1.5 text-xs text-low"
+                      >
+                        <span
+                          className={`h-2.5 w-2.5 rounded-sm ${agentColor(agent)}`}
+                        />
+                        {agent} · {formatTokens(totals.input + totals.output)}{' '}
+                        tok · {hitPct}% hit
+                      </span>
+                    );
+                  });
+                })()}
+              </div>
+            </>
           )}
         </div>
       </section>

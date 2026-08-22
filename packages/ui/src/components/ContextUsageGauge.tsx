@@ -6,10 +6,23 @@ import { Tooltip } from './Tooltip';
 export interface ContextUsageInfo {
   total_tokens: number;
   model_context_window: number;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cache_read_tokens?: number | null;
+  cache_creation_tokens?: number | null;
 }
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
+}
+
+function formatTokens(n: number) {
+  if (n >= 1_000_000) {
+    const m = n / 1_000_000;
+    return m % 1 === 0 ? `${m}M` : `${m.toFixed(1)}M`;
+  }
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
+  return n.toString();
 }
 
 export interface ContextUsageGaugeProps {
@@ -22,54 +35,69 @@ export function ContextUsageGauge({
   className,
 }: ContextUsageGaugeProps) {
   const { t } = useTranslation('common');
-  const { percentage, formattedUsed, formattedTotal, status } = useMemo(() => {
-    if (!tokenUsageInfo || tokenUsageInfo.model_context_window === 0) {
-      return {
-        percentage: 0,
-        formattedUsed: '0',
-        formattedTotal: '0',
-        status: 'empty' as const,
-      };
-    }
-
-    const pct = Math.min(
-      100,
-      (tokenUsageInfo.total_tokens / tokenUsageInfo.model_context_window) * 100
-    );
-
-    const formatTokens = (n: number) => {
-      if (n >= 1_000_000) {
-        const m = n / 1_000_000;
-        return m % 1 === 0 ? `${m}M` : `${m.toFixed(1)}M`;
+  const { percentage, formattedUsed, formattedTotal, status, cacheInfo } =
+    useMemo(() => {
+      if (!tokenUsageInfo || tokenUsageInfo.model_context_window === 0) {
+        return {
+          percentage: 0,
+          formattedUsed: '0',
+          formattedTotal: '0',
+          status: 'empty' as const,
+          cacheInfo: null,
+        };
       }
-      if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
-      return n.toString();
-    };
 
-    let statusValue: 'low' | 'medium' | 'high' | 'critical' | 'empty';
-    if (pct < 50) statusValue = 'low';
-    else if (pct < 75) statusValue = 'medium';
-    else if (pct < 90) statusValue = 'high';
-    else statusValue = 'critical';
+      const pct = Math.min(
+        100,
+        (tokenUsageInfo.total_tokens / tokenUsageInfo.model_context_window) *
+          100
+      );
 
-    return {
-      percentage: pct,
-      formattedUsed: formatTokens(tokenUsageInfo.total_tokens),
-      formattedTotal: formatTokens(tokenUsageInfo.model_context_window),
-      status: statusValue,
-    };
-  }, [tokenUsageInfo]);
+      let statusValue: 'low' | 'medium' | 'high' | 'critical' | 'empty';
+      if (pct < 50) statusValue = 'low';
+      else if (pct < 75) statusValue = 'medium';
+      else if (pct < 90) statusValue = 'high';
+      else statusValue = 'critical';
+
+      const cacheRead = tokenUsageInfo.cache_read_tokens ?? 0;
+      const inputTokens = tokenUsageInfo.input_tokens ?? 0;
+      const cacheCreation = tokenUsageInfo.cache_creation_tokens ?? 0;
+      const totalInput = inputTokens + cacheRead + cacheCreation;
+
+      let cacheHitPct: number | null = null;
+      if (totalInput > 0 && cacheRead > 0) {
+        cacheHitPct = Math.round((cacheRead / totalInput) * 100);
+      }
+
+      return {
+        percentage: pct,
+        formattedUsed: formatTokens(tokenUsageInfo.total_tokens),
+        formattedTotal: formatTokens(tokenUsageInfo.model_context_window),
+        status: statusValue,
+        cacheInfo:
+          cacheHitPct !== null
+            ? {
+                hitPct: cacheHitPct,
+                cached: formatTokens(cacheRead),
+              }
+            : null,
+      };
+    }, [tokenUsageInfo]);
 
   const progress = clamp(percentage / 100, 0, 1);
 
-  const tooltip =
-    status === 'empty'
-      ? t('contextUsage.emptyTooltip')
-      : t('contextUsage.tooltip', {
-          percentage: Math.round(percentage),
-          used: formattedUsed,
-          total: formattedTotal,
-        });
+  const tooltip = useMemo(() => {
+    if (status === 'empty') return t('contextUsage.emptyTooltip');
+    const baseText = t('contextUsage.tooltip', {
+      percentage: Math.round(percentage),
+      used: formattedUsed,
+      total: formattedTotal,
+    });
+    if (cacheInfo) {
+      return `${baseText} · Cache Hit: ${cacheInfo.hitPct}% (${cacheInfo.cached} cached)`;
+    }
+    return baseText;
+  }, [status, percentage, formattedUsed, formattedTotal, cacheInfo, t]);
 
   const progressColor =
     status === 'empty'

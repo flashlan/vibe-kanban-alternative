@@ -21,6 +21,7 @@ use services::services::{
     queued_message::QueuedMessageService,
     recurrent::scheduler::RecurrentScheduler,
     repo::RepoService,
+    token_telemetry::TokenTelemetryService,
 };
 use tokio::sync::{Notify, RwLock};
 use tokio_util::sync::CancellationToken;
@@ -50,6 +51,7 @@ pub struct LocalDeployment {
     approvals: Approvals,
     queued_message_service: QueuedMessageService,
     mem0_relevance_service: Mem0RelevanceService,
+    token_telemetry_service: TokenTelemetryService,
     client_info: ClientInfo,
     preview_proxy: PreviewProxyService,
     pty: PtyService,
@@ -144,6 +146,7 @@ impl Deployment for LocalDeployment {
         let approvals = Approvals::new();
         let queued_message_service = QueuedMessageService::new();
         let mem0_relevance_service = Mem0RelevanceService::new();
+        let token_telemetry_service = TokenTelemetryService::new();
 
         let client_info = ClientInfo::new();
         let preview_proxy = PreviewProxyService::new();
@@ -199,6 +202,7 @@ impl Deployment for LocalDeployment {
             approvals,
             queued_message_service,
             mem0_relevance_service,
+            token_telemetry_service,
             client_info,
             preview_proxy,
             pty,
@@ -254,6 +258,10 @@ impl Deployment for LocalDeployment {
 
     fn mem0_relevance_service(&self) -> &Mem0RelevanceService {
         &self.mem0_relevance_service
+    }
+
+    fn token_telemetry_service(&self) -> &TokenTelemetryService {
+        &self.token_telemetry_service
     }
 
     fn client_info(&self) -> &ClientInfo {

@@ -92,6 +92,10 @@ pub(super) fn normalize_logs(
                             entry_type: NormalizedEntryType::TokenUsageInfo(TokenUsageInfo {
                                 total_tokens,
                                 model_context_window,
+                                input_tokens: None,
+                                output_tokens: None,
+                                cache_read_tokens: None,
+                                cache_creation_tokens: None,
                             }),
                             content: format!(
                                 "Tokens used: {} / Context window: {}",

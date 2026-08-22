@@ -526,6 +526,16 @@ impl StandardCodingAgentExecutor for Antigravity {
                                         TokenUsageInfo {
                                             total_tokens: total as u32,
                                             model_context_window: 1_000_000,
+                                            input_tokens: usage
+                                                .input_tokens
+                                                .map(|v| v.max(0) as u32),
+                                            output_tokens: usage
+                                                .output_tokens
+                                                .map(|v| v.max(0) as u32),
+                                            cache_read_tokens: usage
+                                                .cache_read_tokens
+                                                .map(|v| v.max(0) as u32),
+                                            cache_creation_tokens: None,
                                         },
                                     ),
                                     content: format!(
@@ -640,6 +650,16 @@ impl StandardCodingAgentExecutor for Antigravity {
                                         TokenUsageInfo {
                                             total_tokens: total as u32,
                                             model_context_window: 1_000_000,
+                                            input_tokens: usage
+                                                .input_tokens
+                                                .map(|v| v.max(0) as u32),
+                                            output_tokens: usage
+                                                .output_tokens
+                                                .map(|v| v.max(0) as u32),
+                                            cache_read_tokens: usage
+                                                .cache_read_tokens
+                                                .map(|v| v.max(0) as u32),
+                                            cache_creation_tokens: None,
                                         },
                                     ),
                                     content: format!(
