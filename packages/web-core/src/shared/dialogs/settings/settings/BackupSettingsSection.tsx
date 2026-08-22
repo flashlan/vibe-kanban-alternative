@@ -86,7 +86,7 @@ export function BackupSettingsSection() {
         <p className="mb-3 text-xs text-low">
           {t(
             'settings.backup.exportHint',
-            'Download a single zip with the local database, app settings, and the ~/.vibe-kanban folder (pipelines, routines, Gitea config). Keeps everything when reinstalling or moving machines.'
+            'Download a single zip with the local database, workspace conversation transcripts, app settings, and the ~/.vibe-kanban folder (pipelines, routines, Gitea config). Keeps everything when reinstalling or moving machines.'
           )}
         </p>
         <button
@@ -108,7 +108,7 @@ export function BackupSettingsSection() {
         <p className="mb-3 text-xs text-low">
           {t(
             'settings.backup.importHint',
-            'Restore from a backup zip. WARNING: this OVERWRITES the current database and settings. The previous database is kept as db.v2.sqlite.bak. A server restart is required afterwards.'
+            'Restore from a backup zip. WARNING: this OVERWRITES the current database, settings, and conversation transcripts. The previous database is kept as db.v2.sqlite.bak. A server restart is required afterwards.'
           )}
         </p>
         <input

@@ -1,10 +1,12 @@
 //! Export / import of the app's local data.
 //!
 //! Export builds a single `.zip` containing the SQLite database, the app
-//! config/profiles, and the `~/.vibe-kanban` home dir (pipelines, recurrent,
-//! gitea.toml). Import replaces the current files (after backing up the
-//! existing DB to `db.v2.sqlite.bak`) and reports that a restart is required —
-//! SQLite can't hot-swap a file the server still has open.
+//! config/profiles, the workspace conversation transcripts
+//! (`<asset_dir>/sessions/**`, the JSONL logs migrated out of SQLite), and the
+//! `~/.vibe-kanban` home dir (pipelines, recurrent, gitea.toml). Import
+//! replaces the current files (after backing up the existing DB to
+//! `db.v2.sqlite.bak`) and reports that a restart is required — SQLite can't
+//! hot-swap a file the server still has open.
 
 use std::io::Cursor;
 
@@ -99,6 +101,12 @@ async fn export_backup(State(deployment): State<DeploymentImpl>) -> Response {
     let profiles = profiles_path();
     add_file(&mut zip, "profiles.json", &profiles);
 
+    // Conversation transcripts (raw JSONL per execution process) live outside
+    // SQLite under `<asset_dir>/sessions/…` — see utils::execution_logs.
+    if zip.add_directory("sessions", opts).is_ok() {
+        add_tree(&mut zip, "sessions", &asset_dir().join("sessions"));
+    }
+
     let home = get_vibe_kanban_home_dir();
     if zip.add_directory("home", opts).is_ok() {
         add_tree(&mut zip, "home", &home);
@@ -136,6 +144,7 @@ async fn import_backup(
     let mut config_bytes: Option<Vec<u8>> = None;
     let mut profiles_bytes: Option<Vec<u8>> = None;
     let mut home_entries: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut session_entries: Vec<(String, Vec<u8>)> = Vec::new();
 
     for i in 0..archive.len() {
         let Ok(mut file) = archive.by_index(i) else {
@@ -152,6 +161,9 @@ async fn import_backup(
             "profiles.json" => profiles_bytes = Some(buf),
             n if n.starts_with("home/") => {
                 home_entries.push((n.trim_start_matches("home/").to_string(), buf))
+            }
+            n if n.starts_with("sessions/") => {
+                session_entries.push((n.trim_start_matches("sessions/").to_string(), buf))
             }
             _ => {}
         }
@@ -202,6 +214,17 @@ async fn import_backup(
             continue;
         }
         let path = get_vibe_kanban_home_dir().join(rel);
+        if let Err(e) = write(&path, bytes) {
+            write_err = Some(e);
+        }
+    }
+    // Restore conversation transcripts under `<asset_dir>/sessions/…`.
+    let sessions_root = asset_dir().join("sessions");
+    for (rel, bytes) in &session_entries {
+        if rel.is_empty() || rel.ends_with('/') || !rel.contains('/') {
+            continue;
+        }
+        let path = sessions_root.join(rel);
         if let Err(e) = write(&path, bytes) {
             write_err = Some(e);
         }
