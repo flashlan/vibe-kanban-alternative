@@ -1,5 +1,24 @@
 > **vibe-kanban-indie** — the independent, self-hosted fork of vibe-kanban, built for a **single-developer process** (no team, no cloud, no auth). The TUI cockpit (`crates/tui`, `vibe-tui`) and Telegram channel orchestration (`crates/telegram-bridge`) are the control surfaces a solo dev uses to drive a crew of agents.
 
+## Board Status (agent-maintained checklist)
+
+This file (`AGENTS.md` at the repo root) is read by **every** agent that works here — Claude Code, OpenCode, Codex, Cursor, and any other `agents.md`-compatible tool. Keep the checklist below as a shared, at-a-glance snapshot of active kanban work so any agent can see what is planned, in flight, in review, and done **without re-querying the board**.
+
+Update it as you move cards through their lifecycle. One line per active card:
+
+- [ ] **TODO** — <short card title> (`<branch>`)
+- [~] **In Progress** — <short card title> (`<branch>`)
+- [ ] **In Review** — <short card title> (`<branch>`)
+- [x] **Done** — <short card title> (`<branch>`)
+
+Rules:
+- Move a card `[ ]` → `[~]` → `[x]` as it advances (TODO → In Progress → In Review → Done).
+- Add a line when you start a card; archive/remove completed lines periodically so this stays short.
+- Use the branch name (e.g. `vk/xxxx-slug`) so another agent can `git switch` straight to the work.
+- This is a lightweight manual convention, not an automated sync — accuracy depends on agents keeping it current.
+
+- [x] **Done** — AGENTS.md board-status checklist (`vk/8dfb-o-agent-md-na-ra`)
+
 # Repository Guidelines
 
 ## Project Structure & Module Organization
