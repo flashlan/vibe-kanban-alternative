@@ -58,6 +58,33 @@ use crate::{
 
 const SUPPRESSED_STDERR_PATTERNS: &[&str] = &["[WARN] Fast mode requires the native binary"];
 
+/// stderr line prefix emitted by Claude Code when its stored credentials fail
+/// server-side validation (e.g. `Failed to authenticate. API Error: 401 OAuth
+/// access token has been revoked.`).
+const AUTH_FAILURE_MARKER: &str = "Failed to authenticate";
+
+/// Guidance appended to a Claude Code authentication failure so the operator
+/// knows the login lives outside the app and how to refresh it.
+const AUTH_FAILURE_GUIDANCE: &str = "Claude Code could not authenticate: your saved login has expired or been revoked. Run `claude` in your terminal, complete `/login`, then restart vibe-kanban and retry this task.";
+
+/// If a stderr line is a Claude Code authentication failure, append actionable
+/// recovery guidance to it; otherwise return it unchanged. Idempotent: an
+/// already-annotated line is returned as-is (the transform re-runs on every
+/// chunk while lines stay buffered).
+fn annotate_claude_auth_failure(line: &str) -> String {
+    if !line.contains(AUTH_FAILURE_MARKER) || line.contains(AUTH_FAILURE_GUIDANCE) {
+        return line.to_string();
+    }
+    let had_newline = line.ends_with('\n');
+    let mut annotated = line.trim_end_matches('\n').to_string();
+    annotated.push_str("\n\n");
+    annotated.push_str(AUTH_FAILURE_GUIDANCE);
+    if had_newline {
+        annotated.push('\n');
+    }
+    annotated
+}
+
 fn base_command(claude_code_router: bool) -> &'static str {
     if claude_code_router {
         "npx -y @musistudio/claude-code-router@1.0.66 code"
@@ -99,6 +126,9 @@ fn normalize_claude_stderr_logs(
                         .iter()
                         .any(|pattern| line.contains(pattern))
                 });
+                for line in lines.iter_mut() {
+                    *line = annotate_claude_auth_failure(line);
+                }
             }))
             .build();
 
@@ -3196,6 +3226,36 @@ mod tests {
             reasoning_id: None,
             permission_policy: None,
         }
+    }
+
+    #[test]
+    fn claude_auth_failure_stderr_gets_recovery_guidance() {
+        // The exact 401 revoked-token line the CLI prints on stderr.
+        let line = "Failed to authenticate. API Error: 401 OAuth access token has been revoked.\n";
+        let annotated = annotate_claude_auth_failure(line);
+
+        // Original error is preserved and the recovery guidance is appended.
+        assert!(annotated.starts_with(
+            "Failed to authenticate. API Error: 401 OAuth access token has been revoked."
+        ));
+        assert!(annotated.contains(AUTH_FAILURE_GUIDANCE));
+        // Trailing newline is preserved so line-based clustering keeps working.
+        assert!(annotated.ends_with('\n'));
+
+        // Idempotent: re-running the transform on an already-annotated line
+        // (lines stay buffered across chunks) must not duplicate the guidance.
+        assert_eq!(annotate_claude_auth_failure(&annotated), annotated);
+        assert_eq!(annotated.matches("could not authenticate").count(), 1);
+
+        // Non-auth stderr lines pass through byte-identical.
+        let unrelated = "some other warning\n";
+        assert_eq!(annotate_claude_auth_failure(unrelated), unrelated);
+
+        // Partial line without trailing newline is also handled.
+        let partial = "Failed to authenticate. API Error: 401";
+        let annotated_partial = annotate_claude_auth_failure(partial);
+        assert!(annotated_partial.contains(AUTH_FAILURE_GUIDANCE));
+        assert!(!annotated_partial.ends_with('\n'));
     }
 
     #[test]
