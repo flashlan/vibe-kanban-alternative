@@ -20,6 +20,7 @@ Rules:
 - [x] **Done** — AGENTS.md board-status checklist (`vk/8dfb-o-agent-md-na-ra`)
 - [x] **Done** — Add image attachment to create issue dialog description (`vk/5f5b-feature-adicioan`)
 - [x] **Done** — Add urgency and tags buttons to create-issue dialog (`vk/160b-feature-definir`)
+- [x] **Done** — Browser cache for workspace conversations to skip re-stream on switch (`vk/f804-poss-vel-cache-d`)
 
 # Repository Guidelines
 
