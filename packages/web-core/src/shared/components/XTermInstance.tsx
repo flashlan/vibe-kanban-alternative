@@ -66,6 +66,15 @@ export function XTermInstance({
     getTerminalConnection,
   } = useTerminal();
 
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const onCwdChangeRef = useRef(onCwdChange);
+  onCwdChangeRef.current = onCwdChange;
+  const onTitleChangeRef = useRef(onTitleChange);
+  onTitleChangeRef.current = onTitleChange;
+  const onSessionNameRef = useRef(onSessionName);
+  onSessionNameRef.current = onSessionName;
+
   const endpoint = useMemo(() => {
     const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
     const host = window.location.host;
@@ -90,6 +99,9 @@ export function XTermInstance({
     return `${protocol}//${host}/api/terminal/ws?${params.toString()}`;
   }, [workspaceId, repoPath, executionProcessId, tmuxSessionName, isTui]);
 
+  const endpointRef = useRef(endpoint);
+  endpointRef.current = endpoint;
+
   const fitTerminal = useCallback(() => {
     fitAddonRef.current?.fit();
     if (terminalRef.current) {
@@ -112,7 +124,7 @@ export function XTermInstance({
     if (existing) {
       terminal = existing.terminal;
       fitAddon = existing.fitAddon;
-      if (terminal.element) {
+      if (terminal.element && terminal.element.parentNode !== container) {
         container.appendChild(terminal.element);
       }
     } else {
@@ -160,10 +172,10 @@ export function XTermInstance({
       if (!getTerminalConnection(tabId)) {
         createTerminalConnection(
           tabId,
-          endpoint,
+          endpointRef.current,
           (data) => terminal.write(data),
-          onClose,
-          onSessionName
+          () => onCloseRef.current?.(),
+          (name) => onSessionNameRef.current?.(name)
         );
       }
 
@@ -176,18 +188,18 @@ export function XTermInstance({
 
       // Track CWD changes via OSC 7: \x1b]7;file://host/path\x07
       terminal.parser.registerOscHandler(7, (data) => {
-        if (onCwdChange && data.startsWith('file://')) {
+        if (data.startsWith('file://')) {
           const url = data.replace('file://', '');
           const path = decodeURIComponent(url.replace(/^[^/]+/, ''));
-          onCwdChange(path);
+          onCwdChangeRef.current?.(path);
         }
         return true;
       });
 
       // Track title changes via OSC 0 and OSC 2
       const handleTitle = (title: string) => {
-        if (onTitleChange && title) {
-          onTitleChange(title);
+        if (title) {
+          onTitleChangeRef.current?.(title);
         }
       };
       terminal.parser.registerOscHandler(0, (data) => {
@@ -212,6 +224,9 @@ export function XTermInstance({
       fitAddon.fit();
       terminal.refresh(0, Math.max(0, terminal.rows - 1));
       getTerminalConnection(tabId)?.resize(terminal.cols, terminal.rows);
+      if (isActive) {
+        terminal.focus();
+      }
     });
 
     return () => {
@@ -228,15 +243,11 @@ export function XTermInstance({
     };
   }, [
     tabId,
-    endpoint,
-    onClose,
+    isActive,
     getTerminalInstance,
     registerTerminalInstance,
     createTerminalConnection,
     getTerminalConnection,
-    onCwdChange,
-    onTitleChange,
-    onSessionName,
     prefs.fontSize,
     prefs.fontFamily,
     prefs.fontWeight,
@@ -380,7 +391,8 @@ export function XTermInstance({
   return (
     <div
       ref={resizeRef}
-      className="relative w-full h-full px-2 py-1"
+      className="relative w-full h-full px-2 py-1 cursor-text"
+      onClick={() => terminalRef.current?.focus()}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}

@@ -97,7 +97,8 @@ export function SequenceTrackerProvider({
       if (
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
-        target.isContentEditable
+        target.isContentEditable ||
+        Boolean(target.closest?.('.xterm'))
       ) {
         return;
       }
