@@ -441,12 +441,6 @@ struct InjectTarget {
 /// the server from booting.
 pub async fn inject_vibe_kanban_for_all_agents() {
     let preconfigured = PRECONFIGURED_MCP_SERVERS.clone();
-    let Some(vk_entry) = preconfigured.get("vibe_kanban").cloned() else {
-        tracing::warn!(
-            "vibe_kanban absent from PRECONFIGURED_MCP_SERVERS — skipping MCP auto-inject"
-        );
-        return;
-    };
 
     let home = match dirs::home_dir() {
         Some(h) => h,
@@ -455,6 +449,55 @@ pub async fn inject_vibe_kanban_for_all_agents() {
             return;
         }
     };
+
+    // Write a stable wrapper script so agents always run the locally installed
+    // binary instead of fetching vibe-kanban@latest from npm.  This ensures the
+    // MCP binary stays in sync with the running server regardless of npm publish
+    // cadence and prevents memories from silently breaking across updates.
+    let wrapper_path = home.join(".vibe-kanban").join("vk-mcp.sh");
+    let bin_dir = home.join(".vibe-kanban").join("bin");
+    let wrapper_content = format!(
+        "#!/bin/bash\n\
+         # Vibe Kanban MCP launcher — prefers the locally installed binary.\n\
+         ARCH=$(uname -m)\n\
+         [ \"$ARCH\" = \"x86_64\" ] && PLATFORM=\"macos-amd64\" || PLATFORM=\"macos-arm64\"\n\
+         BIN_DIR=\"{bin_dir}\"\n\
+         LATEST=$(ls \"$BIN_DIR\" 2>/dev/null | sort -V | tail -1)\n\
+         if [ -n \"$LATEST\" ] && [ -x \"$BIN_DIR/$LATEST/$PLATFORM/vibe-kanban-mcp\" ]; then\n\
+             exec \"$BIN_DIR/$LATEST/$PLATFORM/vibe-kanban-mcp\" \"$@\"\n\
+         else\n\
+             exec npx -y vibe-kanban@latest \"$@\"\n\
+         fi\n",
+        bin_dir = bin_dir.display()
+    );
+
+    match fs::write(&wrapper_path, &wrapper_content).await {
+        Ok(_) => {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if let Ok(meta) = std::fs::metadata(&wrapper_path) {
+                    let mut perms = meta.permissions();
+                    perms.set_mode(0o755);
+                    let _ = std::fs::set_permissions(&wrapper_path, perms);
+                }
+            }
+            tracing::info!("MCP auto-inject: wrote wrapper {}", wrapper_path.display());
+        }
+        Err(e) => {
+            tracing::warn!(
+                "MCP auto-inject: failed to write wrapper script {}: {}",
+                wrapper_path.display(),
+                e
+            );
+        }
+    }
+
+    let wrapper_str = wrapper_path.to_string_lossy().into_owned();
+    let vk_entry = serde_json::json!({
+        "command": "/bin/bash",
+        "args": [wrapper_str, "--mcp"]
+    });
 
     let mcp = |p: &str| vec![p.to_string()];
 
@@ -465,10 +508,10 @@ pub async fn inject_vibe_kanban_for_all_agents() {
             servers_path: mcp("mcpServers"),
             is_toml: false,
         },
-        // Amp
+        // Amp (nested: amp -> mcpServers)
         InjectTarget {
             path: home.join(".config").join("amp").join("settings.json"),
-            servers_path: mcp("amp.mcpServers"),
+            servers_path: vec!["amp".to_string(), "mcpServers".to_string()],
             is_toml: false,
         },
         // Gemini CLI
