@@ -9,7 +9,7 @@ import {
 } from '@vibe/ui/components/KeyboardDialog';
 import { Button } from '@vibe/ui/components/Button';
 import { ArchiveIcon, ArrowCounterClockwiseIcon, TrashIcon } from '@phosphor-icons/react';
-import { useModal } from '@ebay/nice-modal-react';
+import { create, useModal } from '@ebay/nice-modal-react';
 import { useTranslation } from 'react-i18next';
 import { defineModal } from '@/shared/lib/modals';
 import { ConfirmDialog } from '@vibe/ui/components/ConfirmDialog';
@@ -26,7 +26,8 @@ export interface ArchivedIssuesDialogProps {
   projectId: string;
 }
 
-function ArchivedIssuesDialogImpl({ projectId }: ArchivedIssuesDialogProps) {
+const ArchivedIssuesDialogImpl = create<ArchivedIssuesDialogProps>(
+  ({ projectId }: ArchivedIssuesDialogProps) => {
   const modal = useModal();
   const { t } = useTranslation('common');
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -150,7 +151,7 @@ function ArchivedIssuesDialogImpl({ projectId }: ArchivedIssuesDialogProps) {
       </DialogContent>
     </Dialog>
   );
-}
+});
 
 export const ArchivedIssuesDialog = defineModal<
   ArchivedIssuesDialogProps,
