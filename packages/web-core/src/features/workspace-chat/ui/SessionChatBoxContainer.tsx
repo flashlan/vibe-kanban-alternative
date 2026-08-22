@@ -14,7 +14,9 @@ import { workspaceSessionKeys } from '@/shared/hooks/workspaceSessionKeys';
 import { useWorkspaceExecution } from '@/shared/hooks/useWorkspaceExecution';
 import { useWorkspaceRepo } from '@/shared/hooks/useWorkspaceRepo';
 import { useUserSystem } from '@/shared/hooks/useUserSystem';
-import WYSIWYGEditor from '@/shared/components/WYSIWYGEditor';
+import WYSIWYGEditor, {
+  type WYSIWYGEditorRef,
+} from '@/shared/components/WYSIWYGEditor';
 import { useApprovalFeedbackOptional } from '../model/contexts/ApprovalFeedbackContext';
 import { useMessageEditContext } from '../model/contexts/MessageEditContext';
 import { useEntries, useTokenUsage } from '../model/contexts/EntriesContext';
@@ -422,6 +424,21 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
   useEffect(() => {
     localMessageRef.current = localMessage;
   }, [localMessage]);
+
+  // Ref to imperatively focus the message editor (drops the cursor into the
+  // chat when a workspace is opened, e.g. by clicking it on an issue card).
+  const editorRef = useRef<WYSIWYGEditorRef>(null);
+
+  // Focus the chat input whenever the active workspace/session opens (card
+  // click, sidebar selection, new-session), so the user can type immediately
+  // instead of having to click the box first.
+  useEffect(() => {
+    if (!workspaceId || isScratchLoading) return;
+    const raf = requestAnimationFrame(() => {
+      editorRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [workspaceId, sessionId, isScratchLoading, isNewSessionMode]);
 
   // Attachment handling - insert markdown when attachments are uploaded
   const handleInsertMarkdown = useCallback(
@@ -989,6 +1006,7 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
     }: SessionChatBoxEditorRenderProps<BaseCodingAgent>) => (
       <WYSIWYGEditor
         key={focusKey}
+        ref={editorRef}
         placeholder={placeholder}
         value={value}
         onChange={onChange}
