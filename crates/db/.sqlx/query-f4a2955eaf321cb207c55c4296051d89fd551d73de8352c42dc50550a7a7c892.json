@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "INSERT INTO issues (\n                   id, project_id, issue_number, simple_id, status_id, title,\n                   description, priority, start_date, target_date, completed_at,\n                   sort_order, parent_issue_id, parent_issue_sort_order,\n                   extension_metadata\n               ) VALUES (\n                   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15\n               )\n               RETURNING id as \"id!: Uuid\",\n                         project_id as \"project_id!: Uuid\",\n                         issue_number,\n                         simple_id,\n                         status_id as \"status_id!: Uuid\",\n                         title,\n                         description,\n                         priority,\n                         start_date as \"start_date: DateTime<Utc>\",\n                         target_date as \"target_date: DateTime<Utc>\",\n                         completed_at as \"completed_at: DateTime<Utc>\",\n                         sort_order as \"sort_order!: f64\",\n                         parent_issue_id as \"parent_issue_id: Uuid\",\n                         parent_issue_sort_order as \"parent_issue_sort_order: f64\",\n                         extension_metadata,\n                         created_at as \"created_at!: DateTime<Utc>\",\n                         updated_at as \"updated_at!: DateTime<Utc>\"",
+  "query": "SELECT id as \"id!: Uuid\",\n                      project_id as \"project_id!: Uuid\",\n                      issue_number,\n                      simple_id,\n                      status_id as \"status_id!: Uuid\",\n                      title,\n                      description,\n                      priority,\n                      start_date as \"start_date: DateTime<Utc>\",\n                      target_date as \"target_date: DateTime<Utc>\",\n                      completed_at as \"completed_at: DateTime<Utc>\",\n                      sort_order as \"sort_order!: f64\",\n                      parent_issue_id as \"parent_issue_id: Uuid\",\n                      parent_issue_sort_order as \"parent_issue_sort_order: f64\",\n                      extension_metadata,\n                      archived as \"archived!: bool\",\n                      archived_at as \"archived_at: DateTime<Utc>\",\n                      created_at as \"created_at!: DateTime<Utc>\",\n                      updated_at as \"updated_at!: DateTime<Utc>\"\n               FROM issues\n               WHERE project_id = $1 AND COALESCE(archived, 0) = 0\n               ORDER BY sort_order ASC",
   "describe": {
     "columns": [
       {
@@ -79,18 +79,28 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at!: DateTime<Utc>",
+        "name": "archived!: bool",
         "ordinal": 15,
+        "type_info": "Integer"
+      },
+      {
+        "name": "archived_at: DateTime<Utc>",
+        "ordinal": 16,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 17,
         "type_info": "Text"
       },
       {
         "name": "updated_at!: DateTime<Utc>",
-        "ordinal": 16,
+        "ordinal": 18,
         "type_info": "Text"
       }
     ],
     "parameters": {
-      "Right": 15
+      "Right": 1
     },
     "nullable": [
       true,
@@ -109,8 +119,10 @@
       true,
       false,
       false,
+      true,
+      false,
       false
     ]
   },
-  "hash": "c2a0205c1e8ddf30b440269dd9bff46161d826d77487953d2c8efa23e468803c"
+  "hash": "f4a2955eaf321cb207c55c4296051d89fd551d73de8352c42dc50550a7a7c892"
 }

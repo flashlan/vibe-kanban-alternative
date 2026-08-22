@@ -94,6 +94,48 @@ export async function deleteIssue(
   }
 }
 
+/** Soft-delete an issue: hide it from the active board but keep it in the
+ *  database so it can be recovered from the archive view. */
+export async function archiveIssue(id: string): Promise<void> {
+  const response = await makeRequest(`/v1/issues/${id}/archive`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to archive issue');
+  }
+}
+
+/** Restore a previously archived issue back to the active board. */
+export async function restoreIssue(id: string): Promise<void> {
+  const response = await makeRequest(`/v1/issues/${id}/restore`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to restore issue');
+  }
+}
+
+/** List archived issues for a project (for the archive recovery view). */
+export async function listArchivedIssues(
+  projectId: string
+): Promise<Array<{ id: string } & Record<string, unknown>>> {
+  const response = await makeRequest(
+    `/v1/issues/archived?project_id=${encodeURIComponent(projectId)}`,
+    { method: 'GET' }
+  );
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.message || 'Failed to list archived issues');
+  }
+  const body = (await response.json()) as {
+    success: boolean;
+    data: { issues: Array<{ id: string } & Record<string, unknown>> };
+  };
+  return body.data.issues;
+}
+
 export interface BulkUpdateProjectStatusItem {
   id: string;
   changes: Partial<UpdateProjectStatusRequest>;

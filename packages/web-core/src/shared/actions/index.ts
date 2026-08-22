@@ -51,7 +51,10 @@ import {
 } from '@/shared/stores/useUiPreferencesStore';
 
 import { workspacesApi, repoApi } from '@/shared/lib/api';
-import { bulkUpdateIssues } from '@/shared/lib/remoteApi';
+import { bulkUpdateIssues, archiveIssue } from '@/shared/lib/remoteApi';
+import { refreshShapeSource } from '@/shared/lib/electric/collections';
+import { PROJECT_ISSUES_SHAPE } from 'shared/remote-types';
+import { ArchivedIssuesDialog } from '@/shared/dialogs/kanban/ArchivedIssuesDialog';
 import { workspaceRecordKeys } from '@/shared/hooks/useWorkspaceRecord';
 import { workspaceRepoKeys } from '@/shared/hooks/useWorkspaceRepo';
 import { repoBranchKeys } from '@/shared/hooks/useRepoBranches';
@@ -1404,6 +1407,47 @@ export const Actions = {
           ctx.projectMutations?.removeIssue(issueId);
         }
       }
+    },
+  } satisfies IssueActionDefinition,
+
+  ArchiveIssue: {
+    id: 'archive-issue',
+    label: 'Archive Issue',
+    icon: ArchiveIcon,
+    shortcut: 'I A',
+    requiresTarget: ActionTargetType.ISSUE,
+    isVisible: (ctx) =>
+      ctx.layoutMode === 'kanban' && ctx.hasSelectedKanbanIssue,
+    execute: async (_ctx, projectId, issueIds) => {
+      const count = issueIds.length;
+      const result = await ConfirmDialog.show({
+        title: count === 1 ? 'Archive Issue' : `Archive ${count} Issues`,
+        message:
+          count === 1
+            ? 'Archive this issue? It will be hidden from the board and can be recovered later from the archive view.'
+            : `Archive these ${count} issues? They will be hidden from the board and can be recovered later from the archive view.`,
+        confirmText: 'Archive',
+        cancelText: 'Cancel',
+      });
+      if (result !== 'confirmed') return;
+
+      for (const issueId of issueIds) {
+        await archiveIssue(issueId);
+      }
+      // Immediately reflect the change on the board (the fallback shape polls).
+      refreshShapeSource(PROJECT_ISSUES_SHAPE, { project_id: projectId });
+    },
+  } satisfies IssueActionDefinition,
+
+  ArchivedIssues: {
+    id: 'archived-issues',
+    label: 'View Archived Issues',
+    icon: ArchiveIcon,
+    requiresTarget: ActionTargetType.ISSUE,
+    isVisible: (ctx) =>
+      ctx.layoutMode === 'kanban' && ctx.hasSelectedKanbanIssue,
+    execute: async (_ctx, projectId) => {
+      await ArchivedIssuesDialog.show({ projectId });
     },
   } satisfies IssueActionDefinition,
 

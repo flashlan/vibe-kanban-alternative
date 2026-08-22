@@ -104,14 +104,21 @@ export function ProjectProvider({ projectId, children }: ProjectProviderProps) {
     workspacesResult,
   ]);
 
+  // Active (non-archived) issues only — archived issues live in the archive
+  // recovery view, not on the board.
+  const activeIssues = useMemo(
+    () => issuesResult.data.filter((i) => !i.archived),
+    [issuesResult.data]
+  );
+
   // Computed Maps for O(1) lookup
   const issuesById = useMemo(() => {
     const map = new Map<string, Issue>();
-    for (const issue of issuesResult.data) {
+    for (const issue of activeIssues) {
       map.set(issue.id, issue);
     }
     return map;
-  }, [issuesResult.data]);
+  }, [activeIssues]);
 
   const statusesById = useMemo(() => {
     const map = new Map<string, ProjectStatus>();
@@ -137,8 +144,8 @@ export function ProjectProvider({ projectId, children }: ProjectProviderProps) {
 
   const getIssuesForStatus = useCallback(
     (statusId: string) =>
-      issuesResult.data.filter((i) => i.status_id === statusId),
-    [issuesResult.data]
+      activeIssues.filter((i) => i.status_id === statusId),
+    [activeIssues]
   );
 
   const getTagsForIssue = useCallback(
@@ -199,7 +206,7 @@ export function ProjectProvider({ projectId, children }: ProjectProviderProps) {
       projectId,
 
       // Data
-      issues: issuesResult.data,
+      issues: activeIssues,
       statuses: statusesResult.data,
       tags: tagsResult.data,
       issueTags: issueTagsResult.data,

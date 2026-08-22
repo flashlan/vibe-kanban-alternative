@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id as \"id!: Uuid\",\n                      project_id as \"project_id!: Uuid\",\n                      issue_number,\n                      simple_id,\n                      status_id as \"status_id!: Uuid\",\n                      title,\n                      description,\n                      priority,\n                      start_date as \"start_date: DateTime<Utc>\",\n                      target_date as \"target_date: DateTime<Utc>\",\n                      completed_at as \"completed_at: DateTime<Utc>\",\n                      sort_order as \"sort_order!: f64\",\n                      parent_issue_id as \"parent_issue_id: Uuid\",\n                      parent_issue_sort_order as \"parent_issue_sort_order: f64\",\n                      extension_metadata,\n                      created_at as \"created_at!: DateTime<Utc>\",\n                      updated_at as \"updated_at!: DateTime<Utc>\"\n               FROM issues\n               WHERE project_id = $1\n               ORDER BY sort_order ASC",
+  "query": "SELECT id as \"id!: Uuid\",\n                      project_id as \"project_id!: Uuid\",\n                      issue_number,\n                      simple_id,\n                      status_id as \"status_id!: Uuid\",\n                      title,\n                      description,\n                      priority,\n                      start_date as \"start_date: DateTime<Utc>\",\n                      target_date as \"target_date: DateTime<Utc>\",\n                      completed_at as \"completed_at: DateTime<Utc>\",\n                      sort_order as \"sort_order!: f64\",\n                      parent_issue_id as \"parent_issue_id: Uuid\",\n                      parent_issue_sort_order as \"parent_issue_sort_order: f64\",\n                      extension_metadata,\n                      archived as \"archived!: bool\",\n                      archived_at as \"archived_at: DateTime<Utc>\",\n                      created_at as \"created_at!: DateTime<Utc>\",\n                      updated_at as \"updated_at!: DateTime<Utc>\"\n               FROM issues\n               WHERE project_id = $1 AND archived = 1\n               ORDER BY archived_at DESC",
   "describe": {
     "columns": [
       {
@@ -79,13 +79,23 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at!: DateTime<Utc>",
+        "name": "archived!: bool",
         "ordinal": 15,
+        "type_info": "Integer"
+      },
+      {
+        "name": "archived_at: DateTime<Utc>",
+        "ordinal": 16,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 17,
         "type_info": "Text"
       },
       {
         "name": "updated_at!: DateTime<Utc>",
-        "ordinal": 16,
+        "ordinal": 18,
         "type_info": "Text"
       }
     ],
@@ -109,8 +119,10 @@
       true,
       false,
       false,
+      true,
+      false,
       false
     ]
   },
-  "hash": "259fd612d4b444d170401d682783186ab9b8d2b5797720f55298c7caf11f003d"
+  "hash": "017822063643f3cee0e86dc8ee5614845bd99d3335c65d6cc573bb2e55157d97"
 }

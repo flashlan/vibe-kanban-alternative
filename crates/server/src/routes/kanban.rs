@@ -190,6 +190,8 @@ fn to_api_issue(i: DbIssue) -> ApiIssue {
         parent_issue_id: i.parent_issue_id,
         parent_issue_sort_order: i.parent_issue_sort_order,
         extension_metadata: i.extension_metadata,
+        archived: i.archived,
+        archived_at: i.archived_at,
         created_at: i.created_at,
         updated_at: i.updated_at,
     }
@@ -619,6 +621,46 @@ async fn delete_issue(
     Ok(ok(()))
 }
 
+async fn archive_issue(
+    State(deployment): State<DeploymentImpl>,
+    Path(id): Path<Uuid>,
+) -> Result<ResponseJson<ApiResponse<()>>, ApiError> {
+    let affected = DbIssue::archive(&deployment.db().pool, id).await?;
+    if affected == 0 {
+        return Err(ApiError::BadRequest("issue not found".into()));
+    }
+    Ok(ok(()))
+}
+
+async fn restore_issue(
+    State(deployment): State<DeploymentImpl>,
+    Path(id): Path<Uuid>,
+) -> Result<ResponseJson<ApiResponse<()>>, ApiError> {
+    let affected = DbIssue::restore(&deployment.db().pool, id).await?;
+    if affected == 0 {
+        return Err(ApiError::BadRequest("issue not found".into()));
+    }
+    Ok(ok(()))
+}
+
+async fn list_archived_issues(
+    State(deployment): State<DeploymentImpl>,
+    Query(q): Query<ProjectScope>,
+) -> Result<ResponseJson<ApiResponse<ListIssuesResponse>>, ApiError> {
+    let issues: Vec<ApiIssue> = DbIssue::list_archived_by_project(&deployment.db().pool, q.project_id)
+        .await?
+        .into_iter()
+        .map(to_api_issue)
+        .collect();
+    let total_count = issues.len();
+    Ok(ok(ListIssuesResponse {
+        issues,
+        total_count,
+        limit: total_count,
+        offset: 0,
+    }))
+}
+
 async fn list_issue_pull_requests(
     State(deployment): State<DeploymentImpl>,
     Path(issue_id): Path<Uuid>,
@@ -955,6 +997,9 @@ pub fn router(_deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
             "/issues/{id}",
             get(get_issue).patch(update_issue).delete(delete_issue),
         )
+        .route("/issues/{id}/archive", post(archive_issue))
+        .route("/issues/{id}/restore", post(restore_issue))
+        .route("/issues/archived", get(list_archived_issues))
         .route("/issues/{id}/pull-requests", get(list_issue_pull_requests))
         .route(
             "/issues/{id}/dispatch-to-workspace",

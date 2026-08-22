@@ -24,6 +24,8 @@ pub struct Issue {
     pub parent_issue_id: Option<Uuid>,
     pub parent_issue_sort_order: Option<f64>,
     pub extension_metadata: Value,
+    pub archived: bool,
+    pub archived_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -45,6 +47,8 @@ struct IssueRow {
     parent_issue_id: Option<Uuid>,
     parent_issue_sort_order: Option<f64>,
     extension_metadata: String,
+    archived: bool,
+    archived_at: Option<DateTime<Utc>>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
 }
@@ -68,6 +72,8 @@ impl From<IssueRow> for Issue {
             parent_issue_sort_order: r.parent_issue_sort_order,
             extension_metadata: serde_json::from_str(&r.extension_metadata)
                 .unwrap_or(Value::Object(Default::default())),
+            archived: r.archived,
+            archived_at: r.archived_at,
             created_at: r.created_at,
             updated_at: r.updated_at,
         }
@@ -130,11 +136,50 @@ impl Issue {
                       parent_issue_id as "parent_issue_id: Uuid",
                       parent_issue_sort_order as "parent_issue_sort_order: f64",
                       extension_metadata,
+                      archived as "archived!: bool",
+                      archived_at as "archived_at: DateTime<Utc>",
                       created_at as "created_at!: DateTime<Utc>",
                       updated_at as "updated_at!: DateTime<Utc>"
                FROM issues
-               WHERE project_id = $1
+               WHERE project_id = $1 AND COALESCE(archived, 0) = 0
                ORDER BY sort_order ASC"#,
+            project_id
+        )
+        .fetch_all(pool)
+        .await?;
+        Ok(rows.into_iter().map(Issue::from).collect())
+    }
+
+    /// Archived issues for a project (hidden from the active board). Used by the
+    /// archive recovery view so they can be restored or permanently deleted.
+    pub async fn list_archived_by_project(
+        pool: &SqlitePool,
+        project_id: Uuid,
+    ) -> Result<Vec<Self>, sqlx::Error> {
+        let rows = sqlx::query_as!(
+            IssueRow,
+            r#"SELECT id as "id!: Uuid",
+                      project_id as "project_id!: Uuid",
+                      issue_number,
+                      simple_id,
+                      status_id as "status_id!: Uuid",
+                      title,
+                      description,
+                      priority,
+                      start_date as "start_date: DateTime<Utc>",
+                      target_date as "target_date: DateTime<Utc>",
+                      completed_at as "completed_at: DateTime<Utc>",
+                      sort_order as "sort_order!: f64",
+                      parent_issue_id as "parent_issue_id: Uuid",
+                      parent_issue_sort_order as "parent_issue_sort_order: f64",
+                      extension_metadata,
+                      archived as "archived!: bool",
+                      archived_at as "archived_at: DateTime<Utc>",
+                      created_at as "created_at!: DateTime<Utc>",
+                      updated_at as "updated_at!: DateTime<Utc>"
+               FROM issues
+               WHERE project_id = $1 AND archived = 1
+               ORDER BY archived_at DESC"#,
             project_id
         )
         .fetch_all(pool)
@@ -160,6 +205,8 @@ impl Issue {
                       parent_issue_id as "parent_issue_id: Uuid",
                       parent_issue_sort_order as "parent_issue_sort_order: f64",
                       extension_metadata,
+                      archived as "archived!: bool",
+                      archived_at as "archived_at: DateTime<Utc>",
                       created_at as "created_at!: DateTime<Utc>",
                       updated_at as "updated_at!: DateTime<Utc>"
                FROM issues
@@ -204,11 +251,13 @@ impl Issue {
                          target_date as "target_date: DateTime<Utc>",
                          completed_at as "completed_at: DateTime<Utc>",
                          sort_order as "sort_order!: f64",
-                         parent_issue_id as "parent_issue_id: Uuid",
-                         parent_issue_sort_order as "parent_issue_sort_order: f64",
-                         extension_metadata,
-                         created_at as "created_at!: DateTime<Utc>",
-                         updated_at as "updated_at!: DateTime<Utc>""#,
+                          parent_issue_id as "parent_issue_id: Uuid",
+                          parent_issue_sort_order as "parent_issue_sort_order: f64",
+                          extension_metadata,
+                          archived as "archived!: bool",
+                          archived_at as "archived_at: DateTime<Utc>",
+                          created_at as "created_at!: DateTime<Utc>",
+                          updated_at as "updated_at!: DateTime<Utc>""#,
             new.id,
             new.project_id,
             issue_number,
@@ -263,11 +312,13 @@ impl Issue {
                          target_date as "target_date: DateTime<Utc>",
                          completed_at as "completed_at: DateTime<Utc>",
                          sort_order as "sort_order!: f64",
-                         parent_issue_id as "parent_issue_id: Uuid",
-                         parent_issue_sort_order as "parent_issue_sort_order: f64",
-                         extension_metadata,
-                         created_at as "created_at!: DateTime<Utc>",
-                         updated_at as "updated_at!: DateTime<Utc>""#,
+                          parent_issue_id as "parent_issue_id: Uuid",
+                          parent_issue_sort_order as "parent_issue_sort_order: f64",
+                          extension_metadata,
+                          archived as "archived!: bool",
+                          archived_at as "archived_at: DateTime<Utc>",
+                          created_at as "created_at!: DateTime<Utc>",
+                          updated_at as "updated_at!: DateTime<Utc>""#,
             id,
             u.status_id,
             u.title,
@@ -290,6 +341,38 @@ impl Issue {
         let result = sqlx::query!("DELETE FROM issues WHERE id = $1", id)
             .execute(pool)
             .await?;
+        Ok(result.rows_affected())
+    }
+
+    /// Move an issue into the archive (soft delete). Sets `archived = 1` and
+    /// stamps `archived_at`; the active board no longer lists it.
+    pub async fn archive(pool: &SqlitePool, id: Uuid) -> Result<u64, sqlx::Error> {
+        let result = sqlx::query!(
+            r#"UPDATE issues
+               SET archived = 1,
+                   archived_at = datetime('now', 'subsec'),
+                   updated_at = datetime('now', 'subsec')
+               WHERE id = $1"#,
+            id
+        )
+        .execute(pool)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
+    /// Restore an archived issue back to the active board. Clears `archived`
+    /// and `archived_at`.
+    pub async fn restore(pool: &SqlitePool, id: Uuid) -> Result<u64, sqlx::Error> {
+        let result = sqlx::query!(
+            r#"UPDATE issues
+               SET archived = 0,
+                   archived_at = NULL,
+                   updated_at = datetime('now', 'subsec')
+               WHERE id = $1"#,
+            id
+        )
+        .execute(pool)
+        .await?;
         Ok(result.rows_affected())
     }
 }

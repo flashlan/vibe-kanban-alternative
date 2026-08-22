@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "UPDATE issues\n               SET status_id = $2,\n                   title = $3,\n                   description = $4,\n                   priority = $5,\n                   start_date = $6,\n                   target_date = $7,\n                   completed_at = $8,\n                   sort_order = $9,\n                   parent_issue_id = $10,\n                   parent_issue_sort_order = $11,\n                   extension_metadata = $12,\n                   updated_at = datetime('now', 'subsec')\n               WHERE id = $1\n               RETURNING id as \"id!: Uuid\",\n                         project_id as \"project_id!: Uuid\",\n                         issue_number,\n                         simple_id,\n                         status_id as \"status_id!: Uuid\",\n                         title,\n                         description,\n                         priority,\n                         start_date as \"start_date: DateTime<Utc>\",\n                         target_date as \"target_date: DateTime<Utc>\",\n                         completed_at as \"completed_at: DateTime<Utc>\",\n                         sort_order as \"sort_order!: f64\",\n                         parent_issue_id as \"parent_issue_id: Uuid\",\n                         parent_issue_sort_order as \"parent_issue_sort_order: f64\",\n                         extension_metadata,\n                         created_at as \"created_at!: DateTime<Utc>\",\n                         updated_at as \"updated_at!: DateTime<Utc>\"",
+  "query": "UPDATE issues\n               SET status_id = $2,\n                   title = $3,\n                   description = $4,\n                   priority = $5,\n                   start_date = $6,\n                   target_date = $7,\n                   completed_at = $8,\n                   sort_order = $9,\n                   parent_issue_id = $10,\n                   parent_issue_sort_order = $11,\n                   extension_metadata = $12,\n                   updated_at = datetime('now', 'subsec')\n               WHERE id = $1\n               RETURNING id as \"id!: Uuid\",\n                         project_id as \"project_id!: Uuid\",\n                         issue_number,\n                         simple_id,\n                         status_id as \"status_id!: Uuid\",\n                         title,\n                         description,\n                         priority,\n                         start_date as \"start_date: DateTime<Utc>\",\n                         target_date as \"target_date: DateTime<Utc>\",\n                         completed_at as \"completed_at: DateTime<Utc>\",\n                         sort_order as \"sort_order!: f64\",\n                          parent_issue_id as \"parent_issue_id: Uuid\",\n                          parent_issue_sort_order as \"parent_issue_sort_order: f64\",\n                          extension_metadata,\n                          archived as \"archived!: bool\",\n                          archived_at as \"archived_at: DateTime<Utc>\",\n                          created_at as \"created_at!: DateTime<Utc>\",\n                          updated_at as \"updated_at!: DateTime<Utc>\"",
   "describe": {
     "columns": [
       {
@@ -79,13 +79,23 @@
         "type_info": "Text"
       },
       {
-        "name": "created_at!: DateTime<Utc>",
+        "name": "archived!: bool",
         "ordinal": 15,
+        "type_info": "Integer"
+      },
+      {
+        "name": "archived_at: DateTime<Utc>",
+        "ordinal": 16,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 17,
         "type_info": "Text"
       },
       {
         "name": "updated_at!: DateTime<Utc>",
-        "ordinal": 16,
+        "ordinal": 18,
         "type_info": "Text"
       }
     ],
@@ -109,8 +119,10 @@
       true,
       false,
       false,
+      true,
+      false,
       false
     ]
   },
-  "hash": "8acc853f363078be0c297b478d4586fbd3b9074982a9e88ff2a24d4aa3363c4c"
+  "hash": "5bb3c94da27a8299be1eee877a4c944e5d5367f36be5ffa4095400bf6c6a70cb"
 }

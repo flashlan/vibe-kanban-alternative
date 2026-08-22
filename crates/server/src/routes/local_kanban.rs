@@ -167,6 +167,36 @@ async fn fb_issues(
     Ok(ResponseJson(json!({ "issues": rows })))
 }
 
+async fn archive_issue(
+    State(deployment): State<DeploymentImpl>,
+    Path(id): Path<Uuid>,
+) -> Result<ResponseJson<DeleteResponse>, ApiError> {
+    let affected = DbIssue::archive(&deployment.db().pool, id).await?;
+    if affected == 0 {
+        return Err(ApiError::BadRequest("issue not found".into()));
+    }
+    Ok(deleted())
+}
+
+async fn restore_issue(
+    State(deployment): State<DeploymentImpl>,
+    Path(id): Path<Uuid>,
+) -> Result<ResponseJson<DeleteResponse>, ApiError> {
+    let affected = DbIssue::restore(&deployment.db().pool, id).await?;
+    if affected == 0 {
+        return Err(ApiError::BadRequest("issue not found".into()));
+    }
+    Ok(deleted())
+}
+
+async fn list_archived_issues(
+    State(deployment): State<DeploymentImpl>,
+    Query(q): Query<ProjectScope>,
+) -> Result<ResponseJson<Value>, ApiError> {
+    let rows = DbIssue::list_archived_by_project(&deployment.db().pool, q.project_id).await?;
+    Ok(ResponseJson(json!({ "issues": rows })))
+}
+
 async fn fb_tags(
     State(deployment): State<DeploymentImpl>,
     Query(q): Query<ProjectScope>,
@@ -1295,6 +1325,9 @@ pub fn router() -> Router<DeploymentImpl> {
         .route("/v1/issues", post(create_issue))
         .route("/v1/issues/bulk", post(bulk_issues))
         .route("/v1/issues/{id}", patch(update_issue).delete(delete_issue))
+        .route("/v1/issues/{id}/archive", post(archive_issue))
+        .route("/v1/issues/{id}/restore", post(restore_issue))
+        .route("/v1/issues/archived", get(list_archived_issues))
         .route("/v1/tags", post(create_tag))
         .route("/v1/tags/{id}", patch(update_tag).delete(delete_tag))
         .route("/v1/issue_tags", post(create_issue_tag))
