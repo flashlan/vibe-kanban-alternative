@@ -135,6 +135,8 @@ enum Trigger {
 }
 
 /// Hook: workspace was created linked to `issue_id` (create_and_start). Move Todo -> In Progress.
+/// Only moves when card is still in the first column (Todo / pos 0) — prevents
+/// Todo -> In Review skip if this hook missed and pipeline hook fires next.
 pub async fn on_workspace_created(pool: &SqlitePool, issue_id: Uuid) {
     let Some(issue) = (match Issue::find_by_id(pool, issue_id).await {
         Ok(v) => v,
@@ -145,6 +147,23 @@ pub async fn on_workspace_created(pool: &SqlitePool, issue_id: Uuid) {
     }) else {
         return;
     };
+    // Strict gate: only from the first column. If user already moved it manually, respect it.
+    let statuses = match ProjectStatus::list_by_project(pool, issue.project_id).await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!("auto-move workspace_created list statuses failed: {e}");
+            return;
+        }
+    };
+    if let Some(pos) = statuses.iter().position(|s| s.id == issue.status_id) {
+        if pos != 0 {
+            tracing::info!(
+                "auto-move workspace_created skip: card {} not in first column (pos {pos})",
+                issue_id
+            );
+            return;
+        }
+    }
     let Some(target) =
         resolve_target_for_trigger(pool, issue.project_id, Trigger::WorkspaceCreated).await
     else {
@@ -156,6 +175,9 @@ pub async fn on_workspace_created(pool: &SqlitePool, issue_id: Uuid) {
 }
 
 /// Hook: pipeline/execution completed successfully for `workspace_id`. Move -> In Review.
+/// Only moves when card is in In Progress (pos 1) — prevents Todo -> In Review skip
+/// when workspace_created was missed. This is called only for the *final* coding-agent
+/// execution (see local-deployment finalization guard); intermediate turns must not fire.
 pub async fn on_pipeline_completed(pool: &SqlitePool, workspace_id: Uuid) {
     let issue_id =
         match IssueWorkspace::find_issue_and_project_by_workspace(pool, workspace_id).await {
@@ -175,6 +197,28 @@ pub async fn on_pipeline_completed(pool: &SqlitePool, workspace_id: Uuid) {
     }) else {
         return;
     };
+    // Strict gate: only from In Progress. If still Todo, the workspace hook was missed —
+    // we intentionally do NOT skip to In Review; let the user (or next workspace) move it.
+    let statuses = match ProjectStatus::list_by_project(pool, issue.project_id).await {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!("auto-move pipeline_completed list statuses failed: {e}");
+            return;
+        }
+    };
+    if let Some(pos) = statuses.iter().position(|s| s.id == issue.status_id) {
+        // Resolve expected pos of In Progress (prefer name match, else pos 1).
+        let expected_pos = find_status_by_name(&statuses, "progress")
+            .and_then(|s| statuses.iter().position(|x| x.id == s.id))
+            .unwrap_or(1.min(statuses.len().saturating_sub(1)));
+        if pos != expected_pos {
+            tracing::info!(
+                "auto-move pipeline_completed skip: card {} pos {pos} != expected In Progress pos {expected_pos}",
+                issue_id
+            );
+            return;
+        }
+    }
     let Some(target) =
         resolve_target_for_trigger(pool, issue.project_id, Trigger::PipelineCompleted).await
     else {

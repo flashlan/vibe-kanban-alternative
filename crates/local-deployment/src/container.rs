@@ -741,6 +741,18 @@ impl LocalContainerService {
                             e
                         );
                     }
+
+                    // Auto-move In Progress -> In Review ONLY on the final successful
+                    // coding-agent turn (no chained follow-up nor queued follow-up).
+                    // This prevents firing after the first model response when follow-ups remain.
+                    if success && should_mark_turn_unseen {
+                        let pool = db.pool.clone();
+                        let ws_id = ctx.workspace.id;
+                        tokio::spawn(async move {
+                            services::services::auto_move::on_pipeline_completed(&pool, ws_id)
+                                .await;
+                        });
+                    }
                 }
 
                 // When a parallel setup script finishes and no coding agent is running,
