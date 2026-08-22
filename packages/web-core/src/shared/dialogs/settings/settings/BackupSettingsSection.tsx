@@ -9,19 +9,84 @@ interface ImportResult {
   backup_of_previous?: string;
 }
 
+type PartKey = 'database' | 'transcripts' | 'settings' | 'home';
+
+const PARTS: { key: PartKey; labelKey: string; fallback: string }[] = [
+  {
+    key: 'database',
+    labelKey: 'settings.backup.parts.database',
+    fallback: 'Database (issues, tasks, history)',
+  },
+  {
+    key: 'transcripts',
+    labelKey: 'settings.backup.parts.transcripts',
+    fallback: 'Conversation transcripts',
+  },
+  {
+    key: 'settings',
+    labelKey: 'settings.backup.parts.settings',
+    fallback: 'App settings (config + profiles)',
+  },
+  {
+    key: 'home',
+    labelKey: 'settings.backup.parts.home',
+    fallback: '~/.vibe-kanban folder (pipelines, routines, Gitea)',
+  },
+];
+
+const ALL_PARTS: Record<PartKey, boolean> = {
+  database: true,
+  transcripts: true,
+  settings: true,
+  home: true,
+};
+
 export function BackupSettingsSection() {
   const { t } = useTranslation('settings');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [parts, setParts] = useState<Record<PartKey, boolean>>(ALL_PARTS);
+
+  const anyPart = Object.values(parts).some(Boolean);
+
+  const togglePart = (key: PartKey) => {
+    setParts((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const partsQuery = () => {
+    const params = new URLSearchParams();
+    for (const { key } of PARTS) params.set(key, String(parts[key]));
+    return params.toString();
+  };
+
+  const renderParts = () => (
+    <div className="mb-3 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+      {PARTS.map(({ key, labelKey, fallback }) => (
+        <label
+          key={key}
+          className="flex cursor-pointer items-center gap-2 text-xs text-low"
+        >
+          <input
+            type="checkbox"
+            checked={parts[key]}
+            onChange={() => togglePart(key)}
+            disabled={busy}
+            className="h-3.5 w-3.5 accent-brand"
+          />
+          {t(labelKey, fallback)}
+        </label>
+      ))}
+    </div>
+  );
 
   const handleExport = async () => {
     setBusy(true);
     setError(null);
     setMessage(null);
     try {
-      const response = await makeRequest('/api/backup/export', {
+      const response = await makeRequest(`/api/backup/export?${partsQuery()}`, {
         method: 'GET',
         cache: 'no-store',
       });
@@ -40,7 +105,7 @@ export function BackupSettingsSection() {
       setMessage(
         t(
           'settings.backup.exported',
-          'Backup downloaded. It contains the database, app config, and the ~/.vibe-kanban home folder.'
+          'Backup downloaded with the selected parts.'
         )
       );
     } catch (e) {
@@ -56,7 +121,7 @@ export function BackupSettingsSection() {
     setMessage(null);
     try {
       const bytes = await file.arrayBuffer();
-      const response = await fetch('/api/backup/import', {
+      const response = await fetch(`/api/backup/import?${partsQuery()}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/zip' },
         body: bytes,
@@ -86,13 +151,14 @@ export function BackupSettingsSection() {
         <p className="mb-3 text-xs text-low">
           {t(
             'settings.backup.exportHint',
-            'Download a single zip with the local database, workspace conversation transcripts, app settings, and the ~/.vibe-kanban folder (pipelines, routines, Gitea config). Keeps everything when reinstalling or moving machines.'
+            'Download a single zip. Pick what to include — everything is selected by default. Keeps everything when reinstalling or moving machines.'
           )}
         </p>
+        {renderParts()}
         <button
           type="button"
           onClick={() => void handleExport()}
-          disabled={busy}
+          disabled={busy || !anyPart}
           className="rounded-sm bg-brand px-4 py-1.5 text-sm font-medium text-white hover:bg-brand/90 disabled:opacity-50"
         >
           {busy
@@ -108,9 +174,10 @@ export function BackupSettingsSection() {
         <p className="mb-3 text-xs text-low">
           {t(
             'settings.backup.importHint',
-            'Restore from a backup zip. WARNING: this OVERWRITES the current database, settings, and conversation transcripts. The previous database is kept as db.v2.sqlite.bak. A server restart is required afterwards.'
+            'Restore from a backup zip. Pick what to restore — WARNING: this OVERWRITES the current data for the selected parts. The previous database is kept as db.v2.sqlite.bak. A server restart is required afterwards.'
           )}
         </p>
+        {renderParts()}
         <input
           ref={fileInputRef}
           type="file"
@@ -124,7 +191,7 @@ export function BackupSettingsSection() {
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          disabled={busy}
+          disabled={busy || !anyPart}
           className="rounded-sm bg-error px-4 py-1.5 text-sm font-medium text-white hover:bg-error/90 disabled:opacity-50"
         >
           {busy

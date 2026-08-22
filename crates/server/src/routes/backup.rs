@@ -1,23 +1,27 @@
 //! Export / import of the app's local data.
 //!
-//! Export builds a single `.zip` containing the SQLite database, the app
-//! config/profiles, the workspace conversation transcripts
+//! Export builds a single `.zip` with the selected parts: the SQLite database,
+//! app config/profiles, workspace conversation transcripts
 //! (`<asset_dir>/sessions/**`, the JSONL logs migrated out of SQLite), and the
 //! `~/.vibe-kanban` home dir (pipelines, recurrent, gitea.toml). Import
-//! replaces the current files (after backing up the existing DB to
-//! `db.v2.sqlite.bak`) and reports that a restart is required — SQLite can't
-//! hot-swap a file the server still has open.
+//! restores the selected parts found in the archive; when the database is
+//! restored the existing one is first backed up to `db.v2.sqlite.bak` and a
+//! restart is reported as required — SQLite can't hot-swap a file the server
+//! still has open.
+//!
+//! Both endpoints accept a `BackupParts` query (`database`, `transcripts`,
+//! `settings`, `home` — all defaulting to true).
 
 use std::io::Cursor;
 
 use axum::{
     Router,
     body::Bytes,
-    extract::State,
+    extract::{Query, State},
     response::{IntoResponse, Json as ResponseJson, Response},
     routing::{get, post},
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use utils::{
     assets::{asset_dir, config_path, profiles_path},
@@ -39,6 +43,31 @@ pub struct ImportBackupResponse {
     pub ok: bool,
     pub restart_required: bool,
     pub backup_of_previous: Option<String>,
+}
+
+/// Which parts of the local data to include in an export / restore on import.
+/// All default to `true` so calls without query params keep the full-backup
+/// behaviour.
+#[derive(Debug, Deserialize)]
+pub struct BackupParts {
+    #[serde(default = "default_true")]
+    pub database: bool,
+    #[serde(default = "default_true")]
+    pub transcripts: bool,
+    #[serde(default = "default_true")]
+    pub settings: bool,
+    #[serde(default = "default_true")]
+    pub home: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+impl BackupParts {
+    fn any(&self) -> bool {
+        self.database || self.transcripts || self.settings || self.home
+    }
 }
 
 fn db_path() -> std::path::PathBuf {
@@ -87,28 +116,35 @@ fn add_tree(zip: &mut ZipWriter<Cursor<Vec<u8>>>, prefix: &str, dir: &std::path:
     }
 }
 
-async fn export_backup(State(deployment): State<DeploymentImpl>) -> Response {
+async fn export_backup(
+    State(deployment): State<DeploymentImpl>,
+    Query(parts): Query<BackupParts>,
+) -> Response {
     let _ = deployment;
+    if !parts.any() {
+        return ResponseJson(ApiResponse::<()>::error("no backup parts selected")).into_response();
+    }
     let cursor = Cursor::new(Vec::new());
     let mut zip = ZipWriter::new(cursor);
     use zip::write::SimpleFileOptions;
     let opts = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
-    let db = db_path();
-    add_file(&mut zip, "db.v2.sqlite", &db);
-    let config = config_path();
-    add_file(&mut zip, "config.json", &config);
-    let profiles = profiles_path();
-    add_file(&mut zip, "profiles.json", &profiles);
+    if parts.database {
+        add_file(&mut zip, "db.v2.sqlite", &db_path());
+    }
+    if parts.settings {
+        add_file(&mut zip, "config.json", &config_path());
+        add_file(&mut zip, "profiles.json", &profiles_path());
+    }
 
     // Conversation transcripts (raw JSONL per execution process) live outside
     // SQLite under `<asset_dir>/sessions/…` — see utils::execution_logs.
-    if zip.add_directory("sessions", opts).is_ok() {
+    if parts.transcripts && zip.add_directory("sessions", opts).is_ok() {
         add_tree(&mut zip, "sessions", &asset_dir().join("sessions"));
     }
 
     let home = get_vibe_kanban_home_dir();
-    if zip.add_directory("home", opts).is_ok() {
+    if parts.home && zip.add_directory("home", opts).is_ok() {
         add_tree(&mut zip, "home", &home);
     }
 
@@ -130,9 +166,13 @@ async fn export_backup(State(deployment): State<DeploymentImpl>) -> Response {
 
 async fn import_backup(
     State(deployment): State<DeploymentImpl>,
+    Query(parts): Query<BackupParts>,
     body: Bytes,
 ) -> ResponseJson<ApiResponse<ImportBackupResponse>> {
     let _ = deployment;
+    if !parts.any() {
+        return ResponseJson(ApiResponse::error("no backup parts selected"));
+    }
     // Parse the zip in-memory; reject anything missing db.v2.sqlite.
     let reader = Cursor::new(body.to_vec());
     let mut archive = match zip::ZipArchive::new(reader) {
@@ -169,25 +209,8 @@ async fn import_backup(
         }
     }
 
-    let Some(db_bytes) = db_bytes else {
-        return ResponseJson(ApiResponse::error("backup archive is missing db.v2.sqlite"));
-    };
-
-    // Back up the current DB before overwriting.
-    let backup_name = {
-        let db = db_path();
-        let bak = db.with_extension("sqlite.bak");
-        let _ = std::fs::remove_file(&bak);
-        let _ = std::fs::copy(&db, &bak);
-        Some(
-            bak.file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string(),
-        )
-    };
-
     let mut write_err: Option<String> = None;
+    let mut written = 0usize;
     let write = |path: &std::path::Path, bytes: &[u8]| -> Result<(), String> {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
@@ -195,39 +218,77 @@ async fn import_backup(
         std::fs::write(path, bytes).map_err(|e| e.to_string())
     };
 
-    if let Err(e) = write(&db_path(), &db_bytes) {
-        write_err = Some(e);
-    }
-    if let Some(cfg) = &config_bytes
-        && let Err(e) = write(&config_path(), cfg)
-    {
-        write_err = Some(e);
-    }
-    if let Some(prof) = &profiles_bytes
-        && let Err(e) = write(&profiles_path(), prof)
-    {
-        write_err = Some(e);
-    }
-    // Restore home-dir files (pipelines, recurrent, gitea.toml, …).
-    for (rel, bytes) in &home_entries {
-        if rel.is_empty() || rel.ends_with('/') {
-            continue;
-        }
-        let path = get_vibe_kanban_home_dir().join(rel);
-        if let Err(e) = write(&path, bytes) {
+    let mut backup_name: Option<String> = None;
+    if parts.database {
+        let Some(db_bytes) = db_bytes else {
+            return ResponseJson(ApiResponse::error("backup archive is missing db.v2.sqlite"));
+        };
+        // Back up the current DB before overwriting.
+        let bak = {
+            let db = db_path();
+            let bak = db.with_extension("sqlite.bak");
+            let _ = std::fs::remove_file(&bak);
+            let _ = std::fs::copy(&db, &bak);
+            bak.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string()
+        };
+        if let Err(e) = write(&db_path(), &db_bytes) {
             write_err = Some(e);
         }
+        backup_name = Some(bak);
+        written += 1;
     }
+
+    if parts.settings {
+        if let Some(cfg) = &config_bytes {
+            if let Err(e) = write(&config_path(), cfg) {
+                write_err = Some(e);
+            }
+            written += 1;
+        }
+        if let Some(prof) = &profiles_bytes {
+            if let Err(e) = write(&profiles_path(), prof) {
+                write_err = Some(e);
+            }
+            written += 1;
+        }
+    }
+
     // Restore conversation transcripts under `<asset_dir>/sessions/…`.
-    let sessions_root = asset_dir().join("sessions");
-    for (rel, bytes) in &session_entries {
-        if rel.is_empty() || rel.ends_with('/') || !rel.contains('/') {
-            continue;
+    if parts.transcripts {
+        let sessions_root = asset_dir().join("sessions");
+        for (rel, bytes) in &session_entries {
+            if rel.is_empty() || rel.ends_with('/') || !rel.contains('/') {
+                continue;
+            }
+            let path = sessions_root.join(rel);
+            if let Err(e) = write(&path, bytes) {
+                write_err = Some(e);
+            }
+            written += 1;
         }
-        let path = sessions_root.join(rel);
-        if let Err(e) = write(&path, bytes) {
-            write_err = Some(e);
+    }
+
+    // Restore home-dir files (pipelines, recurrent, gitea.toml, …).
+    if parts.home {
+        for (rel, bytes) in &home_entries {
+            if rel.is_empty() || rel.ends_with('/') {
+                continue;
+            }
+            let path = get_vibe_kanban_home_dir().join(rel);
+            if let Err(e) = write(&path, bytes) {
+                write_err = Some(e);
+            }
+            written += 1;
         }
+    }
+
+    if written == 0 && write_err.is_none() {
+        return ResponseJson(ApiResponse::error(
+            "none of the selected parts were found in the backup archive",
+        ));
     }
 
     if let Some(e) = write_err {
@@ -238,7 +299,39 @@ async fn import_backup(
 
     ResponseJson(ApiResponse::success(ImportBackupResponse {
         ok: true,
-        restart_required: true,
+        restart_required: parts.database || parts.settings,
         backup_of_previous: backup_name,
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn backup_parts_default_to_all_true() {
+        let parts: BackupParts = serde_json::from_str("{}").unwrap();
+        assert!(parts.database);
+        assert!(parts.transcripts);
+        assert!(parts.settings);
+        assert!(parts.home);
+        assert!(parts.any());
+    }
+
+    #[test]
+    fn backup_parts_parse_query_style_flags() {
+        let parts: BackupParts =
+            serde_json::from_str(r#"{"database":false,"home":false}"#).unwrap();
+        assert!(!parts.database);
+        assert!(parts.transcripts);
+        assert!(parts.settings);
+        assert!(!parts.home);
+        assert!(parts.any());
+
+        let none: BackupParts = serde_json::from_str(
+            r#"{"database":false,"transcripts":false,"settings":false,"home":false}"#,
+        )
+        .unwrap();
+        assert!(!none.any());
+    }
 }
