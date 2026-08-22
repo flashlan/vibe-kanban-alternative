@@ -503,6 +503,20 @@ async fn handle_terminal_ws(
 
     let _ = deployment.pty().close_session(session_id).await;
 
+    // A TUI cockpit runs as its own detached `vk-tui-*` tmux session. Closing
+    // the terminal tab only detaches the WS/PTY viewer; without explicitly
+    // killing the tmux session the `vibe-tui` process keeps running in the
+    // background forever. Kill it so closing the tab actually stops the cockpit.
+    // Attach/resume sessions are intentionally persistent and never killed here.
+    if is_tui {
+        if let Some(name) = &session_name {
+            let _ = tokio::process::Command::new("tmux")
+                .args(["kill-session", "-t", name])
+                .output()
+                .await;
+        }
+    }
+
     // For an attach session, the PTY ending means the tmux session died / the
     // agent finished. Tell the client explicitly and close cleanly so it shows
     // the end instead of reconnect-looping against a gone `vk-<id>`.
