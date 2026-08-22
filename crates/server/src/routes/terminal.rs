@@ -46,10 +46,35 @@ struct TerminalQuery {
     /// persistent terminal sessions that survive page reloads).
     #[serde(default)]
     pub tmux_session: Option<String>,
+    /// When true, spawns the vibe-tui cockpit inside the terminal session.
+    #[serde(default)]
+    pub is_tui: Option<bool>,
     #[serde(default = "default_cols")]
     pub cols: u16,
     #[serde(default = "default_rows")]
     pub rows: u16,
+}
+
+/// Locate the `vibe-tui` binary next to the current server executable or
+/// fall back to `cargo run -p tui --`.
+fn resolve_tui_command() -> (String, Vec<String>) {
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(parent) = exe.parent() {
+            let tui_bin = parent.join("vibe-tui");
+            if tui_bin.exists() {
+                return (tui_bin.to_string_lossy().to_string(), vec![]);
+            }
+        }
+    }
+    (
+        "cargo".to_string(),
+        vec![
+            "run".to_string(),
+            "-p".to_string(),
+            "tui".to_string(),
+            "--".to_string(),
+        ],
+    )
 }
 
 fn default_cols() -> u16 {
@@ -185,6 +210,7 @@ async fn terminal_ws(
     let attach_process_id = query.execution_process_id;
     let tmux_session = query.tmux_session;
     let workspace_id = query.workspace_id;
+    let is_tui = query.is_tui.unwrap_or(false);
     Ok(ws.on_upgrade(move |socket| {
         handle_terminal_ws(
             socket,
@@ -195,6 +221,7 @@ async fn terminal_ws(
             attach_process_id,
             tmux_session,
             workspace_id,
+            is_tui,
         )
     }))
 }
@@ -287,6 +314,7 @@ async fn handle_terminal_ws(
     attach_process_id: Option<Uuid>,
     tmux_session: Option<String>,
     workspace_id: Option<Uuid>,
+    is_tui: bool,
 ) {
     let is_attach = attach_process_id.is_some();
     let is_resume = tmux_session.is_some();
@@ -344,21 +372,31 @@ async fn handle_terminal_ws(
             Err(attach_err) => Err(attach_err.message().to_string()),
         }
     } else {
-        // Create a new persistent tmux session for regular terminals
-        let session_name = format!("vk-tab-{}", Uuid::new_v4());
-        let shell = utils::shell::get_interactive_shell().await;
-        let shell_str = shell.to_string_lossy().to_string();
+        // Create a new persistent tmux session for regular terminals or TUI
+        let session_name = if is_tui {
+            format!("vk-tui-{}", Uuid::new_v4())
+        } else {
+            format!("vk-tab-{}", Uuid::new_v4())
+        };
 
-        // Create the tmux session with the user's login shell
-        let tmux_args = vec![
+        let (cmd, cmd_args) = if is_tui {
+            resolve_tui_command()
+        } else {
+            let shell = utils::shell::get_interactive_shell().await;
+            (shell.to_string_lossy().to_string(), vec![])
+        };
+
+        // Create the tmux session with the command
+        let mut tmux_args = vec![
             "new-session".to_string(),
             "-d".to_string(),
             "-s".to_string(),
             session_name.clone(),
             "-c".to_string(),
             working_dir.to_string_lossy().to_string(),
-            shell_str,
+            cmd,
         ];
+        tmux_args.extend(cmd_args);
 
         let output = tokio::process::Command::new("tmux")
             .args(&tmux_args)

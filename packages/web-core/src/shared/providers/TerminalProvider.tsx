@@ -27,12 +27,14 @@ type TerminalAction =
       workspaceId: string;
       cwd: string;
       executionProcessId?: string;
+      isTui?: boolean;
     }
   | {
       type: 'OPEN_OR_FOCUS_TAB';
       workspaceId: string;
       cwd: string;
       executionProcessId?: string;
+      isTui?: boolean;
     }
   | { type: 'CLOSE_TAB'; workspaceId: string; tabId: string }
   | { type: 'SET_ACTIVE_TAB'; workspaceId: string; tabId: string }
@@ -59,6 +61,7 @@ type TerminalAction =
       type: 'CREATE_PROJECT_TAB';
       projectId: string;
       repoPath: string;
+      isTui?: boolean;
     }
   | { type: 'CLOSE_PROJECT_TAB'; projectId: string; tabId: string }
   | { type: 'SET_ACTIVE_PROJECT_TAB'; projectId: string; tabId: string }
@@ -103,17 +106,21 @@ function addWorkspaceTab(
   state: TerminalState,
   workspaceId: string,
   cwd: string,
-  executionProcessId?: string
+  executionProcessId?: string,
+  isTui?: boolean
 ): TerminalState {
   const existingTabs = state.tabsByWorkspace[workspaceId] || [];
   const newTab: TerminalTab = {
     id: generateTabId(),
-    title: executionProcessId
-      ? 'Agent'
-      : `Workspace ${existingTabs.length + 1} Terminal`,
+    title: isTui
+      ? '⚡ Cockpit (TUI)'
+      : executionProcessId
+        ? 'Agent'
+        : `Workspace ${existingTabs.length + 1} Terminal`,
     workspaceId,
     cwd,
     executionProcessId,
+    isTui,
   };
   return {
     ...state,
@@ -132,15 +139,19 @@ function addWorkspaceTab(
 function addProjectTab(
   state: TerminalState,
   projectId: string,
-  repoPath: string
+  repoPath: string,
+  isTui?: boolean
 ): TerminalState {
   const existingTabs = state.tabsByProject[projectId] || [];
   const newTab: TerminalTab = {
     id: generateTabId(),
-    title: `Project Terminal ${existingTabs.length + 1}`,
+    title: isTui
+      ? '⚡ Cockpit (TUI)'
+      : `Project Terminal ${existingTabs.length + 1}`,
     projectId,
     repoPath,
     cwd: repoPath,
+    isTui,
   };
   return {
     ...state,
@@ -161,12 +172,18 @@ function terminalReducer(
 ): TerminalState {
   switch (action.type) {
     case 'CREATE_TAB': {
-      const { workspaceId, cwd, executionProcessId } = action;
-      return addWorkspaceTab(state, workspaceId, cwd, executionProcessId);
+      const { workspaceId, cwd, executionProcessId, isTui } = action;
+      return addWorkspaceTab(
+        state,
+        workspaceId,
+        cwd,
+        executionProcessId,
+        isTui
+      );
     }
 
     case 'OPEN_OR_FOCUS_TAB': {
-      const { workspaceId, cwd, executionProcessId } = action;
+      const { workspaceId, cwd, executionProcessId, isTui } = action;
       const existingTabs = state.tabsByWorkspace[workspaceId] || [];
       // Idempotent attach: reuse an existing tab bound to the same session
       // instead of opening a duplicate.
@@ -184,7 +201,13 @@ function terminalReducer(
           };
         }
       }
-      return addWorkspaceTab(state, workspaceId, cwd, executionProcessId);
+      return addWorkspaceTab(
+        state,
+        workspaceId,
+        cwd,
+        executionProcessId,
+        isTui
+      );
     }
 
     case 'CLOSE_TAB': {
@@ -286,8 +309,8 @@ function terminalReducer(
     }
 
     case 'CREATE_PROJECT_TAB': {
-      const { projectId, repoPath } = action;
-      return addProjectTab(state, projectId, repoPath);
+      const { projectId, repoPath, isTui } = action;
+      return addProjectTab(state, projectId, repoPath, isTui);
     }
 
     case 'CLOSE_PROJECT_TAB': {
@@ -469,19 +492,36 @@ export function TerminalProvider({ children }: TerminalProviderProps) {
   );
 
   const createTab = useCallback(
-    (workspaceId: string, cwd: string, executionProcessId?: string) => {
-      dispatch({ type: 'CREATE_TAB', workspaceId, cwd, executionProcessId });
+    (
+      workspaceId: string,
+      cwd: string,
+      executionProcessId?: string,
+      isTui?: boolean
+    ) => {
+      dispatch({
+        type: 'CREATE_TAB',
+        workspaceId,
+        cwd,
+        executionProcessId,
+        isTui,
+      });
     },
     []
   );
 
   const openOrFocusTab = useCallback(
-    (workspaceId: string, cwd: string, executionProcessId?: string) => {
+    (
+      workspaceId: string,
+      cwd: string,
+      executionProcessId?: string,
+      isTui?: boolean
+    ) => {
       dispatch({
         type: 'OPEN_OR_FOCUS_TAB',
         workspaceId,
         cwd,
         executionProcessId,
+        isTui,
       });
     },
     []
@@ -570,8 +610,8 @@ export function TerminalProvider({ children }: TerminalProviderProps) {
   );
 
   const createProjectTab = useCallback(
-    (projectId: string, repoPath: string) => {
-      dispatch({ type: 'CREATE_PROJECT_TAB', projectId, repoPath });
+    (projectId: string, repoPath: string, isTui?: boolean) => {
+      dispatch({ type: 'CREATE_PROJECT_TAB', projectId, repoPath, isTui });
     },
     []
   );

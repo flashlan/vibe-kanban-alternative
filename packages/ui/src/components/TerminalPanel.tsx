@@ -15,6 +15,7 @@ interface TerminalPanelProps {
   onSelectTab?: (tabId: string) => void;
   onCloseTab?: (tabId: string) => void;
   onNewTab?: () => void;
+  onNewTuiTab?: () => void;
   /** Optional content rendered at the left end of the tab bar. */
   leading?: ReactNode;
 }
@@ -33,6 +34,7 @@ export function TerminalPanel({
   onSelectTab,
   onCloseTab,
   onNewTab,
+  onNewTuiTab,
   leading,
 }: TerminalPanelProps) {
   // Render only the active terminal. Inactive ones stay alive in the provider
@@ -51,6 +53,18 @@ export function TerminalPanel({
           )}
           <div className="flex-1 min-w-0 overflow-x-auto">
             <div className="flex items-stretch gap-px h-full">
+              {onNewTuiTab && (
+                <button
+                  type="button"
+                  title="Open Cockpit TUI (vibe-tui)"
+                  aria-label="Open Cockpit TUI"
+                  className="flex items-center gap-1 px-2 text-xs font-medium text-amber-500 hover:text-amber-400 hover:bg-secondary border-r border-border shrink-0 h-full transition-colors"
+                  onClick={onNewTuiTab}
+                >
+                  <span>⚡</span>
+                  <span>TUI</span>
+                </button>
+              )}
               {tabs.map((tab) => {
                 const isActive = tab.id === activeTab?.id;
                 const displayTitle = tab.cwd

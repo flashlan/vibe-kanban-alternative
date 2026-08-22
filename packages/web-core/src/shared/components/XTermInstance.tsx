@@ -28,6 +28,7 @@ interface XTermInstanceProps {
   executionProcessId?: string;
   /** Persistent tmux session name for re-attachment after page reload. */
   tmuxSessionName?: string;
+  isTui?: boolean;
   onClose?: () => void;
   /** Callback when the terminal reports a CWD change via OSC 7. */
   onCwdChange?: (cwd: string) => void;
@@ -44,6 +45,7 @@ export function XTermInstance({
   isActive,
   executionProcessId,
   tmuxSessionName,
+  isTui,
   onClose,
   onCwdChange,
   onTitleChange,
@@ -82,8 +84,11 @@ export function XTermInstance({
     if (tmuxSessionName) {
       params.set('tmux_session', tmuxSessionName);
     }
+    if (isTui) {
+      params.set('is_tui', 'true');
+    }
     return `${protocol}//${host}/api/terminal/ws?${params.toString()}`;
-  }, [workspaceId, repoPath, executionProcessId, tmuxSessionName]);
+  }, [workspaceId, repoPath, executionProcessId, tmuxSessionName, isTui]);
 
   const fitTerminal = useCallback(() => {
     fitAddonRef.current?.fit();

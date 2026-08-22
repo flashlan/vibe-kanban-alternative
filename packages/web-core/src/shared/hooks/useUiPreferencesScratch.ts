@@ -158,8 +158,9 @@ function scratchDataToStore(data: UiPreferencesData): {
       {}) as Record<string, KanbanProjectViewSelection>,
     kanbanProjectViewPreferences: (data.kanban_project_view_preferences ??
       {}) as Record<string, Record<string, KanbanProjectViewPreferences>>,
-    autoMoveCardsEnabled: (data as { auto_move_cards_enabled?: boolean })
-      .auto_move_cards_enabled ?? true,
+    autoMoveCardsEnabled:
+      (data as { auto_move_cards_enabled?: boolean }).auto_move_cards_enabled ??
+      true,
   };
 }
 

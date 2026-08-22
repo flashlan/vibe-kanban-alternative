@@ -21,6 +21,8 @@ export interface TerminalTab {
   executionProcessId?: string;
   /** Persistent tmux session name for re-attachment after page reload. */
   tmuxSessionName?: string;
+  /** When true, launches the vibe-tui cockpit. */
+  isTui?: boolean;
 }
 
 export type TerminalScope =
@@ -39,7 +41,8 @@ export interface TerminalContextType {
   createTab: (
     workspaceId: string,
     cwd: string,
-    executionProcessId?: string
+    executionProcessId?: string,
+    isTui?: boolean
   ) => void;
   /**
    * Open a terminal tab, or focus an existing one. When `executionProcessId` is
@@ -49,7 +52,8 @@ export interface TerminalContextType {
   openOrFocusTab: (
     workspaceId: string,
     cwd: string,
-    executionProcessId?: string
+    executionProcessId?: string,
+    isTui?: boolean
   ) => void;
   closeTab: (workspaceId: string, tabId: string) => void;
   setActiveTab: (workspaceId: string, tabId: string) => void;
@@ -64,7 +68,11 @@ export interface TerminalContextType {
   /** Project-scoped terminal tabs. */
   getTabsForProject: (projectId: string) => TerminalTab[];
   getActiveProjectTab: (projectId: string) => TerminalTab | null;
-  createProjectTab: (projectId: string, repoPath: string) => void;
+  createProjectTab: (
+    projectId: string,
+    repoPath: string,
+    isTui?: boolean
+  ) => void;
   closeProjectTab: (projectId: string, tabId: string) => void;
   setActiveProjectTab: (projectId: string, tabId: string) => void;
   updateProjectTabTitle: (

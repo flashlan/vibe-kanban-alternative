@@ -68,6 +68,11 @@ export function TerminalPanelContainer() {
           createTab(workspaceId, containerRef);
         }
       }}
+      onNewTuiTab={() => {
+        if (workspaceId && containerRef) {
+          createTab(workspaceId, containerRef, undefined, true);
+        }
+      }}
       renderTab={(tabId, isActive) => {
         const tab = tabs.find((t) => t.id === tabId);
         return (
@@ -78,6 +83,7 @@ export function TerminalPanelContainer() {
             isActive={isActive}
             executionProcessId={tab?.executionProcessId}
             tmuxSessionName={tab?.tmuxSessionName}
+            isTui={tab?.isTui}
             onClose={() => workspaceId && closeTab(workspaceId, tabId)}
             onCwdChange={(cwd) => {
               if (workspaceId) {

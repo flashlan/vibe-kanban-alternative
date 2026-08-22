@@ -101,6 +101,12 @@ export function ProjectTerminalPanelContainer({
         const nextRepo = repos[tabs.length % repos.length];
         createProjectTab(projectId, nextRepo.path);
       }}
+      onNewTuiTab={() => {
+        const firstRepo = repos[0];
+        if (firstRepo) {
+          createProjectTab(projectId, firstRepo.path, true);
+        }
+      }}
       leading={
         <>
           <span className="text-xs font-medium text-normal whitespace-nowrap leading-none">
@@ -127,6 +133,7 @@ export function ProjectTerminalPanelContainer({
             tabId={tabId}
             repoPath={tab?.repoPath ?? ''}
             isActive={isActive}
+            isTui={tab?.isTui}
             onClose={() => closeProjectTab(projectId, tabId)}
             onCwdChange={(cwd) => {
               updateProjectTabCwd(projectId, tabId, cwd);

@@ -65,8 +65,12 @@ export function GeneralSettingsSection() {
   const [animateRunningOutline, setAnimateRunningOutline] =
     useAnimateRunningOutline();
   const { themes: themeVariantManifest } = useThemeManifest();
-  const autoMoveCardsEnabled = useUiPreferencesStore((s) => s.autoMoveCardsEnabled);
-  const setAutoMoveCardsEnabled = useUiPreferencesStore((s) => s.setAutoMoveCardsEnabled);
+  const autoMoveCardsEnabled = useUiPreferencesStore(
+    (s) => s.autoMoveCardsEnabled
+  );
+  const setAutoMoveCardsEnabled = useUiPreferencesStore(
+    (s) => s.setAutoMoveCardsEnabled
+  );
   const languageOptions = getLanguageOptions(
     t('language.browserDefault', {
       ns: 'common',
