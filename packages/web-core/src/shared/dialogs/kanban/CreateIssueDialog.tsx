@@ -84,6 +84,7 @@ export type CreateIssueDialogResult =
   | { action: 'canceled' };
 
 const NONE_PRIORITY_VALUE = '__none__';
+const EMPTY_TAG_IDS: string[] = [];
 
 const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
   ({
@@ -92,7 +93,7 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
     defaultStatusId,
     priorities,
     tags,
-    defaultTagIds = [],
+    defaultTagIds = EMPTY_TAG_IDS,
     onCreateTag,
     onTagsChange,
     parentIssueSimpleId = null,
