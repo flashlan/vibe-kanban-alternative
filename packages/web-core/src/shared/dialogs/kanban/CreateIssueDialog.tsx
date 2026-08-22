@@ -4,11 +4,13 @@ import {
   useMemo,
   useRef,
   useState,
+  type ClipboardEvent as ReactClipboardEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import NiceModal, { useModal } from '@ebay/nice-modal-react';
-import { SpinnerIcon } from '@phosphor-icons/react';
+import { SpinnerIcon, ImageIcon } from '@phosphor-icons/react';
+import { useDropzone } from 'react-dropzone';
 import type { IssuePriority, JsonValue } from 'shared/remote-types';
 import {
   Dialog,
@@ -28,8 +30,10 @@ import {
 } from '@vibe/ui/components/Select';
 import { AutoExpandingTextarea } from '@vibe/ui/components/AutoExpandingTextarea';
 import { defineModal, getErrorMessage } from '@/shared/lib/modals';
+import { attachmentsApi } from '@/shared/lib/api';
 import { useDebouncedCallback } from '@/shared/hooks/useDebouncedCallback';
 import { useUserSystem } from '@/shared/hooks/useUserSystem';
+import { useIssueAttachments } from '@/shared/hooks/useIssueAttachments';
 import {
   PipelineSection,
   type PipelineSelection,
@@ -167,6 +171,79 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
       }
     }, [cancelAutoSave, savedIssueId, onUpdate, buildUpdatePatch]);
 
+    // --- Image attachment support for the description ---
+    // Inserts the uploaded attachment's markdown into the description text.
+    const handleDescriptionInsert = useCallback(
+      (markdown: string) => {
+        setDescription((prev) => {
+          const separator = prev.length > 0 ? '\n' : '';
+          return prev + separator + markdown;
+        });
+        markDirty();
+      },
+      [markDirty]
+    );
+
+    const {
+      uploadFiles,
+      isUploading,
+      uploadError,
+      clearUploadError,
+      uploadedAttachments,
+    } = useIssueAttachments(handleDescriptionInsert);
+
+    const linkedAttachmentIdsRef = useRef(new Set<string>());
+
+    const linkUploadedAttachments = useCallback(
+      (issueId: string, attachments: { id: string }[]) => {
+        for (const attachment of attachments) {
+          if (linkedAttachmentIdsRef.current.has(attachment.id)) continue;
+          linkedAttachmentIdsRef.current.add(attachment.id);
+          void attachmentsApi
+            .linkIssueAttachments(issueId, [attachment.id])
+            .catch((error) => {
+              linkedAttachmentIdsRef.current.delete(attachment.id);
+              console.error('Failed to link issue attachment:', error);
+            });
+        }
+      },
+      []
+    );
+
+    // Link any attachments uploaded after the issue was created.
+    useEffect(() => {
+      if (!savedIssueId) return;
+      linkUploadedAttachments(savedIssueId, uploadedAttachments);
+    }, [savedIssueId, uploadedAttachments, linkUploadedAttachments]);
+
+    const {
+      getRootProps,
+      getInputProps,
+      isDragActive,
+      open: openFilePicker,
+    } = useDropzone({
+      onDrop: (acceptedFiles) => {
+        if (acceptedFiles.length > 0) void uploadFiles(acceptedFiles);
+      },
+      multiple: true,
+      noClick: true,
+      noKeyboard: true,
+      accept: { 'image/*': [] },
+    });
+
+    const handleDescriptionPaste = useCallback(
+      (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
+        const imageFiles = Array.from(event.clipboardData.files).filter(
+          (file) => file.type.startsWith('image/')
+        );
+        if (imageFiles.length > 0) {
+          event.preventDefault();
+          void uploadFiles(imageFiles);
+        }
+      },
+      [uploadFiles]
+    );
+
     const handlePipelineChange = useCallback(
       (selection: PipelineSelection) => {
         pipelineSelectionRef.current = selection;
@@ -198,6 +275,7 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
       cancelAutoSave();
       setError(null);
       setIsSubmitting(false);
+      linkedAttachmentIdsRef.current.clear();
     }, [modal.visible, defaultStatusId, cancelAutoSave]);
 
     const handleClose = useCallback(
@@ -254,6 +332,9 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
       setError(null);
       try {
         const newIssueId = await onCreate(buildUpdatePatch());
+
+        // Link any attachments uploaded before the issue existed.
+        linkUploadedAttachments(newIssueId, uploadedAttachments);
 
         setSavedIssueId(newIssueId);
       } catch (err) {
@@ -433,20 +514,57 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
             </div>
 
             <div className="flex flex-col gap-2">
-              <AutoExpandingTextarea
-                ref={descriptionTextareaRef}
-                value={description}
-                onChange={(event) => {
-                  setDescription(event.target.value);
-                  markDirty();
-                }}
-                onKeyDown={handleDescriptionKeyDown}
-                placeholder={t('createIssueDialog.descriptionPlaceholder')}
-                disabled={isSubmitting}
-                rows={4}
-                maxRows={10}
-                className="rounded-md border border-input px-3 py-2"
-              />
+              <div {...getRootProps()} className="relative flex flex-col gap-2">
+                <input {...getInputProps()} />
+                <AutoExpandingTextarea
+                  ref={descriptionTextareaRef}
+                  value={description}
+                  onChange={(event) => {
+                    setDescription(event.target.value);
+                    markDirty();
+                  }}
+                  onKeyDown={handleDescriptionKeyDown}
+                  onPaste={handleDescriptionPaste}
+                  placeholder={t('createIssueDialog.descriptionPlaceholder')}
+                  disabled={isSubmitting}
+                  rows={4}
+                  maxRows={10}
+                  className="rounded-md border border-input px-3 py-2"
+                />
+                {isDragActive ? (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md border-2 border-dashed border-brand bg-brand/10 text-sm text-brand">
+                    {t('kanban.attachFileHint')}
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={openFilePicker}
+                  disabled={isSubmitting}
+                  className="gap-1.5"
+                >
+                  <ImageIcon className="h-4 w-4" />
+                  {t('kanban.attachFile')}
+                </Button>
+                {isUploading ? (
+                  <span className="flex items-center gap-1.5 text-xs text-low">
+                    <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />
+                    {t('kanban.uploading')}
+                  </span>
+                ) : null}
+                {uploadError ? (
+                  <button
+                    type="button"
+                    onClick={clearUploadError}
+                    className="text-xs text-destructive"
+                  >
+                    {uploadError}
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             <div className="flex items-end gap-3">

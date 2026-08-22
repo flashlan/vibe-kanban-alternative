@@ -335,6 +335,7 @@
     "enterCommentPlaceholder": "Enter your comment here...",
     "attachFile": "Attach file",
     "attachFileHint": "Attach files (max 20MB each)",
+    "uploading": "Uploading…",
     "dropFilesHere": "Drop files here",
     "fileDropHint": "Any file type up to 20MB",
     "moreActions": "More actions",
