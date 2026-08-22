@@ -1,0 +1,94 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import {
+  getCachedEntries,
+  setCachedEntries,
+  deleteCachedEntries,
+  clearConversationEntryCache,
+} from './conversationEntryCache';
+import type { PatchTypeWithKey } from '@/shared/hooks/useConversationHistory/types';
+
+function makeEntries(processId: string, n: number): PatchTypeWithKey[] {
+  return Array.from({ length: n }, (_, i) => ({
+    type: 'NORMALIZED_ENTRY' as const,
+    content: { entry_type: { type: 'user_message' }, content: `msg-${i}` },
+    patchKey: `${processId}:${i}`,
+    executionProcessId: processId,
+  }));
+}
+
+// In-memory map is the source of truth for behavior; localStorage is a
+// best-effort mirror guarded by try/catch, so tests run under the 'node'
+// environment (no real localStorage) without breaking.
+describe('conversationEntryCache', () => {
+  beforeEach(() => clearConversationEntryCache());
+  afterEach(() => clearConversationEntryCache());
+
+  it('returns undefined for an unknown process id', () => {
+    expect(getCachedEntries('missing')).toBeUndefined();
+  });
+
+  it('stores and retrieves entries by process id', () => {
+    const entries = makeEntries('p1', 3);
+    setCachedEntries('p1', entries);
+    expect(getCachedEntries('p1')).toBe(entries);
+  });
+
+  it('keeps entries for separate processes independent', () => {
+    setCachedEntries('a', makeEntries('a', 2));
+    setCachedEntries('b', makeEntries('b', 5));
+    expect(getCachedEntries('a')).toHaveLength(2);
+    expect(getCachedEntries('b')).toHaveLength(5);
+  });
+
+  it('evicts the oldest entry past the capacity cap', () => {
+    const cap = 60; // MAX_PROCESSES in the module
+    for (let i = 0; i < cap + 1; i++) {
+      setCachedEntries(`p${i}`, makeEntries(`p${i}`, 1));
+    }
+    // The first inserted key should have been evicted (insertion-order LRU).
+    expect(getCachedEntries('p0')).toBeUndefined();
+    expect(getCachedEntries(`p${cap}`)).toBeDefined();
+  });
+
+  it('delete removes a single process entry', () => {
+    setCachedEntries('x', makeEntries('x', 1));
+    deleteCachedEntries('x');
+    expect(getCachedEntries('x')).toBeUndefined();
+  });
+
+  it('clear empties the whole cache', () => {
+    setCachedEntries('a', makeEntries('a', 1));
+    setCachedEntries('b', makeEntries('b', 1));
+    clearConversationEntryCache();
+    expect(getCachedEntries('a')).toBeUndefined();
+    expect(getCachedEntries('b')).toBeUndefined();
+  });
+
+  it('mirrors entries to a mocked localStorage and reads them back from storage', () => {
+    const store = new Map<string, string>();
+    (globalThis as { localStorage?: Storage }).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+      removeItem: (k: string) => void store.delete(k),
+      clear: () => store.clear(),
+      key: () => null,
+      length: 0,
+    } as Storage;
+
+    const entries = makeEntries('mirrored', 4);
+    setCachedEntries('mirrored', entries);
+    // Write path: the mirror persisted the entry to storage.
+    expect(store.size).toBe(1);
+
+    // Simulate a fresh page load: wipe in-memory map via clear(), then
+    // re-seed storage exactly as it was persisted, and confirm hydration.
+    clearConversationEntryCache();
+    store.set(
+      'vibe-conversation-entries',
+      JSON.stringify({ mirrored: entries })
+    );
+    expect(getCachedEntries('mirrored')).toEqual(entries);
+
+    delete (globalThis as { localStorage?: Storage }).localStorage;
+  });
+});

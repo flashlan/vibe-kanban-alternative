@@ -6,6 +6,10 @@ import {
 import { useExecutionProcessesContext } from '@/shared/hooks/useExecutionProcessesContext';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { streamJsonPatchEntries } from '@/shared/lib/streamJsonPatchEntries';
+import {
+  getCachedEntries,
+  setCachedEntries,
+} from '@/features/workspace-chat/model/conversationEntryCache';
 import type {
   AddEntryType,
   ConversationTimelineSource,
@@ -269,11 +273,15 @@ export const useConversationHistory = ({
         if (executionProcess.status === ExecutionProcessStatus.running)
           continue;
 
-        const entries =
-          await loadEntriesForHistoricExecutionProcess(executionProcess);
-        const entriesWithKey = entries.map((e, idx) =>
-          patchWithKey(e, executionProcess.id, idx)
-        );
+        let entriesWithKey = getCachedEntries(executionProcess.id);
+        if (!entriesWithKey) {
+          const entries =
+            await loadEntriesForHistoricExecutionProcess(executionProcess);
+          entriesWithKey = entries.map((e, idx) =>
+            patchWithKey(e, executionProcess.id, idx)
+          );
+          setCachedEntries(executionProcess.id, entriesWithKey);
+        }
 
         localDisplayedExecutionProcesses[executionProcess.id] = {
           executionProcess,
@@ -290,7 +298,7 @@ export const useConversationHistory = ({
 
       return localDisplayedExecutionProcesses;
     },
-    [executionProcesses]
+    [executionProcesses, loadEntriesForHistoricExecutionProcess]
   );
 
   const loadRemainingEntriesInBatches = useCallback(
@@ -308,11 +316,15 @@ export const useConversationHistory = ({
         )
           continue;
 
-        const entries =
-          await loadEntriesForHistoricExecutionProcess(executionProcess);
-        const entriesWithKey = entries.map((e, idx) =>
-          patchWithKey(e, executionProcess.id, idx)
-        );
+        let entriesWithKey = getCachedEntries(executionProcess.id);
+        if (!entriesWithKey) {
+          const entries =
+            await loadEntriesForHistoricExecutionProcess(executionProcess);
+          entriesWithKey = entries.map((e, idx) =>
+            patchWithKey(e, executionProcess.id, idx)
+          );
+          setCachedEntries(executionProcess.id, entriesWithKey);
+        }
 
         mergeIntoDisplayed((state) => {
           state[executionProcess.id] = {
@@ -509,6 +521,8 @@ export const useConversationHistory = ({
             entries: entriesWithKey,
           };
         });
+        // Cache the now-final logs so switching back to this workspace is instant.
+        setCachedEntries(process.id, entriesWithKey);
         anyUpdated = true;
       }
 

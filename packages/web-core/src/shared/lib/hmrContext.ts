@@ -18,7 +18,13 @@ export function createHmrContext<T>(key: string, defaultValue: T): Context<T> {
   const existing = import.meta.hot?.data?.[key] as Context<T> | undefined;
   const ctx = existing ?? createContext<T>(defaultValue);
   if (import.meta.hot) {
-    import.meta.hot.data[key] = ctx;
+    const hot = import.meta.hot as unknown as { data?: Record<string, unknown> };
+    // In Vite, import.meta.hot.data is always provided; some non-Vite
+    // environments (e.g. vitest) expose import.meta.hot without `.data`, so
+    // skip HMR persistence there rather than throwing on a missing object.
+    if (hot.data) {
+      hot.data[key] = ctx;
+    }
   }
   return ctx;
 }
