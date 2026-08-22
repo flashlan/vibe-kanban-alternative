@@ -2675,6 +2675,14 @@ impl ContainerService for LocalContainerService {
         execution_process: &ExecutionProcess,
         executor_action: &ExecutorAction,
     ) -> Result<(), ContainerError> {
+        // Auto-move: whenever a coding agent starts, bring the linked card back to In Progress.
+        if execution_process.run_reason == ExecutionProcessRunReason::CodingAgent {
+            let pool = self.db.pool.clone();
+            let ws_id = workspace.id;
+            tokio::spawn(async move {
+                services::services::auto_move::on_agent_running(&pool, ws_id).await;
+            });
+        }
         // Get the worktree path
         let container_ref = workspace
             .container_ref

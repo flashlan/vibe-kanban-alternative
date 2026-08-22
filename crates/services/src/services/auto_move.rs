@@ -2,7 +2,8 @@
 //!
 //! Triggers:
 //! - workspace creation (linked issue) -> In Progress
-//! - pipeline completion (execution success) -> In Review
+//! - agent running (any coding-agent execution starts) -> In Progress (even from In Review/Done)
+//! - pipeline completion (final execution success) -> In Review
 //! - merge (direct or PR merged) -> Done (is_terminal)
 //!
 //! Gated by `UiPreferencesData::auto_move_cards_enabled` (scratch `UI_PREFERENCES` id 000...001).
@@ -74,6 +75,36 @@ async fn move_issue_forward(
     Ok(true)
 }
 
+/// Force move to target even if it is backwards (used for AgentRunning: In Review/Done -> In Progress).
+async fn move_issue_force(
+    pool: &SqlitePool,
+    issue_id: Uuid,
+    target_status_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    if !is_enabled(pool).await {
+        return Ok(false);
+    }
+    let Some(issue) = Issue::find_by_id(pool, issue_id).await? else {
+        return Ok(false);
+    };
+    if issue.status_id == target_status_id {
+        return Ok(false);
+    }
+    sqlx::query(
+        r#"UPDATE issues SET status_id = $1, updated_at = datetime('now', 'subsec') WHERE id = $2"#,
+    )
+    .bind(target_status_id)
+    .bind(issue_id)
+    .execute(pool)
+    .await?;
+    tracing::info!(
+        "auto-move (force) card {} -> status {}",
+        issue_id,
+        target_status_id
+    );
+    Ok(true)
+}
+
 fn find_status_by_name<'a>(
     statuses: &'a [ProjectStatus],
     needle: &str,
@@ -94,7 +125,7 @@ async fn resolve_target_for_trigger(
         return None;
     }
     match trigger {
-        Trigger::WorkspaceCreated => {
+        Trigger::WorkspaceCreated | Trigger::AgentRunning => {
             // Prefer a status whose name contains "progress", else second column.
             if let Some(s) = find_status_by_name(&statuses, "progress") {
                 return Some(s.id);
@@ -130,6 +161,7 @@ async fn resolve_target_for_trigger(
 #[derive(Debug, Clone, Copy)]
 enum Trigger {
     WorkspaceCreated,
+    AgentRunning,
     PipelineCompleted,
     Merged,
 }
@@ -171,6 +203,38 @@ pub async fn on_workspace_created(pool: &SqlitePool, issue_id: Uuid) {
     };
     if let Err(e) = move_issue_forward(pool, issue_id, target).await {
         tracing::warn!("auto-move workspace_created failed for {issue_id}: {e}");
+    }
+}
+
+/// Hook: a coding-agent execution started for `workspace_id`. Move any linked card
+/// back to In Progress (force, even from In Review/Done) so active work is visible.
+/// Idempotent if already In Progress.
+pub async fn on_agent_running(pool: &SqlitePool, workspace_id: Uuid) {
+    let issue_id =
+        match IssueWorkspace::find_issue_and_project_by_workspace(pool, workspace_id).await {
+            Ok(Some((iid, _))) => iid,
+            Ok(None) => return,
+            Err(e) => {
+                tracing::warn!("auto-move agent_running issue lookup failed: {e}");
+                return;
+            }
+        };
+    let Some(issue) = (match Issue::find_by_id(pool, issue_id).await {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!("auto-move agent_running issue fetch failed: {e}");
+            return;
+        }
+    }) else {
+        return;
+    };
+    let Some(target) =
+        resolve_target_for_trigger(pool, issue.project_id, Trigger::AgentRunning).await
+    else {
+        return;
+    };
+    if let Err(e) = move_issue_force(pool, issue_id, target).await {
+        tracing::warn!("auto-move agent_running failed for {issue_id}: {e}");
     }
 }
 
