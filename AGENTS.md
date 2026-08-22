@@ -18,6 +18,7 @@ Rules:
 - This is a lightweight manual convention, not an automated sync — accuracy depends on agents keeping it current.
 
 - [x] **Done** — AGENTS.md board-status checklist (`vk/8dfb-o-agent-md-na-ra`)
+- [x] **Done** — Add image attachment to create issue dialog description (`vk/5f5b-feature-adicioan`)
 
 # Repository Guidelines
 
