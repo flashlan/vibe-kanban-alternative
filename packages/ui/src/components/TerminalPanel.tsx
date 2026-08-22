@@ -110,7 +110,7 @@ export function TerminalPanel({
                         type="button"
                         title="Close terminal"
                         aria-label="Close terminal"
-                        className="flex items-center pr-1.5 text-low hover:text-normal opacity-50 hover:opacity-100 shrink-0 h-full"
+                        className="flex items-center justify-center w-6 px-1 text-low hover:text-normal hover:bg-secondary/70 shrink-0 h-full"
                         onClick={() => handleCloseTab(tab.id)}
                       >
                         <XIcon className="size-icon-xs" weight="bold" />
