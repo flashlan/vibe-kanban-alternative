@@ -647,11 +647,12 @@ async fn list_archived_issues(
     State(deployment): State<DeploymentImpl>,
     Query(q): Query<ProjectScope>,
 ) -> Result<ResponseJson<ApiResponse<ListIssuesResponse>>, ApiError> {
-    let issues: Vec<ApiIssue> = DbIssue::list_archived_by_project(&deployment.db().pool, q.project_id)
-        .await?
-        .into_iter()
-        .map(to_api_issue)
-        .collect();
+    let issues: Vec<ApiIssue> =
+        DbIssue::list_archived_by_project(&deployment.db().pool, q.project_id)
+            .await?
+            .into_iter()
+            .map(to_api_issue)
+            .collect();
     let total_count = issues.len();
     Ok(ok(ListIssuesResponse {
         issues,

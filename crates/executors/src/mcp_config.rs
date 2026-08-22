@@ -3,7 +3,11 @@
 //! These helpers abstract over JSON vs TOML vs JSONC formats used by different agents.
 //! JSONC (JSON with Comments) is supported with comment preservation using jsonc-parser's CST.
 
-use std::{collections::HashMap, path::Path, sync::LazyLock};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::LazyLock,
+};
 
 use jsonc_parser::{
     ParseOptions,
@@ -416,4 +420,191 @@ impl CodingAgent {
         let canonical = PRECONFIGURED_MCP_SERVERS.clone();
         apply_adapter(adapter, canonical)
     }
+}
+
+// ---------------------------------------------------------------------------
+// Startup auto-injection
+// ---------------------------------------------------------------------------
+
+struct InjectTarget {
+    path: PathBuf,
+    /// JSON path components to the `mcpServers`-equivalent object.
+    servers_path: Vec<String>,
+    is_toml: bool,
+}
+
+/// Inject the `vibe_kanban` MCP server into every installed agent config at
+/// server startup. Only writes when the key is absent — never overwrites an
+/// existing entry that the user may have customised. Config files that don't
+/// exist yet are skipped (we don't create agent configs from scratch).
+/// All errors are logged and swallowed so a misconfigured agent never prevents
+/// the server from booting.
+pub async fn inject_vibe_kanban_for_all_agents() {
+    let preconfigured = PRECONFIGURED_MCP_SERVERS.clone();
+    let Some(vk_entry) = preconfigured.get("vibe_kanban").cloned() else {
+        tracing::warn!(
+            "vibe_kanban absent from PRECONFIGURED_MCP_SERVERS — skipping MCP auto-inject"
+        );
+        return;
+    };
+
+    let home = match dirs::home_dir() {
+        Some(h) => h,
+        None => {
+            tracing::warn!("MCP auto-inject: cannot determine home directory");
+            return;
+        }
+    };
+
+    let mcp = |p: &str| vec![p.to_string()];
+
+    let mut targets: Vec<InjectTarget> = vec![
+        // Claude Code (headless + headed)
+        InjectTarget {
+            path: home.join(".claude.json"),
+            servers_path: mcp("mcpServers"),
+            is_toml: false,
+        },
+        // Amp
+        InjectTarget {
+            path: home.join(".config").join("amp").join("settings.json"),
+            servers_path: mcp("amp.mcpServers"),
+            is_toml: false,
+        },
+        // Gemini CLI
+        InjectTarget {
+            path: home.join(".gemini").join("settings.json"),
+            servers_path: mcp("mcpServers"),
+            is_toml: false,
+        },
+        // Antigravity
+        InjectTarget {
+            path: home
+                .join(".gemini")
+                .join("antigravity-cli")
+                .join("settings.json"),
+            servers_path: mcp("mcpServers"),
+            is_toml: false,
+        },
+        // GitHub Copilot CLI
+        InjectTarget {
+            path: home.join(".copilot").join("mcp-config.json"),
+            servers_path: mcp("mcpServers"),
+            is_toml: false,
+        },
+        // Droid / Factory
+        InjectTarget {
+            path: home.join(".factory").join("mcp.json"),
+            servers_path: mcp("mcpServers"),
+            is_toml: false,
+        },
+        // Codex (TOML)
+        InjectTarget {
+            path: std::env::var("CODEX_HOME")
+                .ok()
+                .filter(|s| !s.trim().is_empty())
+                .map(PathBuf::from)
+                .unwrap_or_else(|| home.join(".codex"))
+                .join("config.toml"),
+            servers_path: mcp("mcp_servers"),
+            is_toml: true,
+        },
+    ];
+
+    // Opencode: XDG config dir
+    #[cfg(not(windows))]
+    {
+        let base = xdg::BaseDirectories::with_prefix("opencode");
+        let path = base
+            .get_config_file("opencode.json")
+            .filter(|p| p.exists())
+            .or_else(|| {
+                base.get_config_file("opencode.jsonc")
+                    .filter(|p| p.exists())
+            });
+        if let Some(p) = path {
+            targets.push(InjectTarget {
+                path: p,
+                servers_path: mcp("mcp"),
+                is_toml: false,
+            });
+        }
+    }
+
+    for target in targets {
+        if !target.path.exists() {
+            continue;
+        }
+
+        let mcpc = McpConfig::new(
+            target.servers_path.clone(),
+            serde_json::json!({}),
+            preconfigured.clone(),
+            target.is_toml,
+        );
+
+        let mut config = match read_agent_config(&target.path, &mcpc).await {
+            Ok(c) => c,
+            Err(e) => {
+                tracing::warn!("MCP auto-inject: read {:?}: {}", target.path, e);
+                continue;
+            }
+        };
+
+        if vk_present_in_config(&config, &target.servers_path) {
+            continue;
+        }
+
+        if let Err(e) = insert_vk_into_config(&mut config, &target.servers_path, vk_entry.clone()) {
+            tracing::warn!("MCP auto-inject: merge {:?}: {}", target.path, e);
+            continue;
+        }
+
+        match write_agent_config(&target.path, &mcpc, &config).await {
+            Ok(_) => tracing::info!(
+                "MCP auto-inject: added vibe_kanban to {}",
+                target.path.display()
+            ),
+            Err(e) => tracing::warn!("MCP auto-inject: write {:?}: {}", target.path, e),
+        }
+    }
+}
+
+fn vk_present_in_config(config: &Value, servers_path: &[String]) -> bool {
+    let mut current = config;
+    for part in servers_path {
+        match current.get(part.as_str()) {
+            Some(next) => current = next,
+            None => return false,
+        }
+    }
+    current.get("vibe_kanban").is_some()
+}
+
+fn insert_vk_into_config(
+    config: &mut Value,
+    servers_path: &[String],
+    vk_entry: Value,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if !config.is_object() {
+        *config = serde_json::json!({});
+    }
+    let mut current = config;
+    for part in servers_path {
+        if current.get(part.as_str()).is_none() {
+            current
+                .as_object_mut()
+                .unwrap()
+                .insert(part.clone(), serde_json::json!({}));
+        }
+        current = current.get_mut(part.as_str()).unwrap();
+        if !current.is_object() {
+            *current = serde_json::json!({});
+        }
+    }
+    current
+        .as_object_mut()
+        .unwrap()
+        .insert("vibe_kanban".to_string(), vk_entry);
+    Ok(())
 }
