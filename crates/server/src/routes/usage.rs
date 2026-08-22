@@ -4,6 +4,8 @@
 //! (agent breakdown), plus issue progress (created/completed), a per-project
 //! summary, and in-memory LLM token + KV-cache telemetry.
 
+use std::time::Duration;
+
 use axum::{
     Json, Router,
     extract::State,
@@ -12,6 +14,7 @@ use axum::{
 };
 use deployment::Deployment;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use services::services::mem0_relevance::Mem0RelevanceSummary;
 use services::services::token_telemetry::TokenTelemetrySummary;
 use sqlx::FromRow;
@@ -170,8 +173,177 @@ pub fn router() -> Router<DeploymentImpl> {
             "/usage/mem0-config",
             get(get_mem0_config).post(put_mem0_config),
         )
+        .route("/usage/mem0-status", get(mem0_status))
         .route("/usage/mem0-relevance", post(report_mem0_relevance))
         .route("/usage/token-telemetry", post(report_token_telemetry))
+}
+
+/// mem0 health-status indicator payload for the UI header dot. Reflects the
+/// live health of the three mem0-vk containers (mem0, embeddings, qdrant) so
+/// the user can see memory degradation at a glance without opening
+/// Settings → Memory.
+#[derive(Debug, Clone, Serialize, TS)]
+pub struct Mem0Status {
+    /// `green` | `yellow` | `orange` | `red` — see [`compute_level`].
+    pub level: String,
+    /// Per-component reachability/health. `true` means up and healthy.
+    pub components: Mem0ComponentStatus,
+    /// Human-readable summary of the current state.
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+pub struct Mem0ComponentStatus {
+    pub mem0: bool,
+    pub embeddings: bool,
+    pub qdrant: bool,
+}
+
+/// Resolve the three component base URLs. `MEM0_URL` is the canonical one
+/// (default `http://localhost:8000`); the other two default to the same host
+/// on their well-known ports but can be overridden independently.
+fn component_urls() -> (String, String, String) {
+    let mem0 = mem0_url();
+    let embeddings = std::env::var("EMBEDDINGS_URL").unwrap_or_else(|_| {
+        match url_host(&mem0) {
+            Some(host) => format!("http://{host}:8001"),
+            None => "http://localhost:8001".to_string(),
+        }
+    });
+    let qdrant = std::env::var("QDRANT_URL")
+        .unwrap_or_else(|_| "http://localhost:6333".to_string());
+    (mem0, embeddings, qdrant)
+}
+
+/// Cheap host extraction from `http(s)://host:port/path` — avoids pulling the
+/// `url` crate in for a one-line parse.
+fn url_host(input: &str) -> Option<String> {
+    let without_scheme = input.split_once("://").map(|(_, r)| r).unwrap_or(input);
+    let authority = without_scheme
+        .split('/')
+        .next()
+        .unwrap_or(without_scheme);
+    let host = authority.rsplit_once(':').map(|(h, _)| h).unwrap_or(authority);
+    if host.is_empty() {
+        None
+    } else {
+        Some(host.to_string())
+    }
+}
+
+/// mem0: reachable (`/api/config` 2xx) AND its own `/health` reports `ok`.
+/// Returns `(reachable, healthy)`.
+async fn check_mem0(client: &reqwest::Client, base: &str) -> (bool, bool) {
+    let reachable = match client
+        .get(&format!("{base}/api/config"))
+        .send()
+        .await
+    {
+        Ok(r) if r.status().is_success() => true,
+        _ => return (false, false),
+    };
+    let healthy = match client.get(&format!("{base}/health")).send().await {
+        Ok(r) if r.status().is_success() => r
+            .json::<Value>()
+            .await
+            .map(|v| v.get("ok").and_then(|x| x.as_bool()).unwrap_or(true))
+            .unwrap_or(true),
+        // `/health` missing/erroring is itself a degradation signal.
+        _ => false,
+    };
+    (reachable, healthy)
+}
+
+/// Endpoint that returns a JSON body with an `ok` boolean field (mem0
+/// `/health`, embeddings `/health`). Treats absence of the field as healthy
+/// only when the request itself succeeded.
+async fn check_json_ok(client: &reqwest::Client, url: &str) -> bool {
+    match client.get(url).send().await {
+        Ok(r) if r.status().is_success() => r
+            .json::<Value>()
+            .await
+            .map(|v| v.get("ok").and_then(|x| x.as_bool()).unwrap_or(true))
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
+/// Plain status-code liveness probe (qdrant `/healthz` returns text, not JSON).
+async fn check_status(client: &reqwest::Client, url: &str) -> bool {
+    match client.get(url).send().await {
+        Ok(r) => r.status().is_success(),
+        _ => false,
+    }
+}
+
+/// Maps the three component states onto the four-level indicator. Most severe
+/// first: red (mem0 down) > orange (backend/qdrant error while mem0 up) >
+/// yellow (embeddings down; graph degraded, vector search still works) >
+/// green (all healthy).
+fn compute_level(
+    mem0_up: bool,
+    mem0_healthy: bool,
+    embeddings: bool,
+    qdrant: bool,
+) -> (&'static str, String) {
+    if !mem0_up {
+        (
+            "red",
+            "mem0 indisponível — memory_save/memory_search falharão".to_string(),
+        )
+    } else if !mem0_healthy || !qdrant {
+        if !qdrant {
+            (
+                "orange",
+                "qdrant indisponível — vector search degradado".to_string(),
+            )
+        } else {
+            (
+                "orange",
+                "mem0 respondendo com erros — backend (qdrant) degradado".to_string(),
+            )
+        }
+    } else if !embeddings {
+        (
+            "yellow",
+            "embeddings indisponível — graph degradado, search ainda funciona".to_string(),
+        )
+    } else {
+        ("green", "mem0 operacional".to_string())
+    }
+}
+
+/// `GET /api/usage/mem0-status` — parallel health check of the three mem0-vk
+/// components (3s timeout per check) and a computed 4-level health indicator
+/// for the UI header dot. Best-effort: never errors, always returns a status.
+async fn mem0_status() -> ResponseJson<ApiResponse<Mem0Status>> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(3))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
+    let (mem0_base, emb_base, qdrant_base) = component_urls();
+
+    let emb_health_url = format!("{emb_base}/health");
+    let qdrant_health_url = format!("{qdrant_base}/healthz");
+    let (mem0_res, emb_res, qdrant_res) = tokio::join!(
+        check_mem0(&client, &mem0_base),
+        check_json_ok(&client, &emb_health_url),
+        check_status(&client, &qdrant_health_url),
+    );
+    let (mem0_up, mem0_healthy) = mem0_res;
+
+    let (level, message) =
+        compute_level(mem0_up, mem0_healthy, emb_res, qdrant_res);
+
+    ResponseJson(ApiResponse::success(Mem0Status {
+        level: level.to_string(),
+        components: Mem0ComponentStatus {
+            mem0: mem0_up && mem0_healthy,
+            embeddings: emb_res,
+            qdrant: qdrant_res,
+        },
+        message,
+    }))
 }
 
 /// Body posted by the `vibe_kanban_mcp` process (a separate process from
@@ -467,4 +639,56 @@ async fn re_extract(
 #[derive(Debug, Deserialize)]
 struct ReExtractQuery {
     user_id: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn url_host_extracts_host_without_port() {
+        assert_eq!(url_host("http://localhost:8000").as_deref(), Some("localhost"));
+        assert_eq!(
+            url_host("https://192.168.1.99:8082/x").as_deref(),
+            Some("192.168.1.99")
+        );
+        assert_eq!(url_host("http://example.com").as_deref(), Some("example.com"));
+    }
+
+    #[test]
+    fn level_mapping_all_healthy_is_green() {
+        let (level, _) = compute_level(true, true, true, true);
+        assert_eq!(level, "green");
+    }
+
+    #[test]
+    fn level_mapping_mem0_down_is_red() {
+        let (level, _) = compute_level(false, false, true, true);
+        assert_eq!(level, "red");
+    }
+
+    #[test]
+    fn level_mapping_mem0_unhealthy_is_orange() {
+        let (level, _) = compute_level(true, false, true, true);
+        assert_eq!(level, "orange");
+    }
+
+    #[test]
+    fn level_mapping_qdrant_down_is_orange() {
+        let (level, _) = compute_level(true, true, true, false);
+        assert_eq!(level, "orange");
+    }
+
+    #[test]
+    fn level_mapping_embeddings_down_is_yellow() {
+        let (level, _) = compute_level(true, true, false, true);
+        assert_eq!(level, "yellow");
+    }
+
+    #[test]
+    fn level_mapping_embeddings_down_beats_nothing_else() {
+        // embeddings down while everything else up → yellow, not orange/green.
+        let (level, _) = compute_level(true, true, false, true);
+        assert_eq!(level, "yellow");
+    }
 }
