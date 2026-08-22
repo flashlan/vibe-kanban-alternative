@@ -156,6 +156,11 @@ impl<C: ContainerService + Send + Sync + 'static> PrMonitorService<C> {
         {
             self.try_archive_workspace(workspace_id, pr.pr_number)
                 .await?;
+            // Auto-move card -> Done after PR merged. Best-effort, never fails the poll.
+            let pool = self.db.pool.clone();
+            tokio::spawn(async move {
+                crate::services::auto_move::on_workspace_merged(&pool, workspace_id).await;
+            });
         }
 
         info!("PR #{} status changed to {:?}", pr.pr_number, status.status);

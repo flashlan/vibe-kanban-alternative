@@ -96,6 +96,10 @@ pub struct WorkspaceSortStateData {
     pub sort_order: WorkspaceSortOrderData,
 }
 
+fn default_auto_move_cards_enabled() -> bool {
+    true
+}
+
 /// Data for UI preferences scratch (global preferences stored per-user or per-device)
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct UiPreferencesData {
@@ -147,6 +151,10 @@ pub struct UiPreferencesData {
     /// Kanban project view preferences (filters, toggles per project per view)
     #[serde(default)]
     pub kanban_project_view_preferences: std::collections::HashMap<String, serde_json::Value>,
+    /// When true, cards auto-move between columns on workspace create / pipeline done / merge.
+    /// True by default; disabled via Settings → General toggle.
+    #[serde(default = "default_auto_move_cards_enabled")]
+    pub auto_move_cards_enabled: bool,
 }
 
 /// Linked issue data for draft workspace scratch

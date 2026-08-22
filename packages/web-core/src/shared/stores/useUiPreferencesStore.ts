@@ -406,6 +406,9 @@ type State = {
   selectedProjectId: string | null;
   createDraftWorkspaceByDefault: boolean;
 
+  // Auto-move kanban cards between columns on workspace create / pipeline / merge.
+  autoMoveCardsEnabled: boolean;
+
   // Workspaces dashboard project filter (2026-08-07): when set, the
   // /workspaces dashboard narrows to this project's workspaces. In-memory
   // only (not persisted) — set by the sidebar Workspaces section icon and
@@ -501,6 +504,7 @@ type State = {
   // Last selected project actions
   setSelectedProjectId: (projectId: string | null) => void;
   setCreateDraftWorkspaceByDefault: (value: boolean) => void;
+  setAutoMoveCardsEnabled: (value: boolean) => void;
 };
 
 export const useUiPreferencesStore = create<State>()((set, get) => ({
@@ -548,6 +552,7 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
   // Last selected project (ADR-018 — `selectedOrgId` removed)
   selectedProjectId: null,
   createDraftWorkspaceByDefault: DEFAULT_CREATE_DRAFT_WORKSPACE_BY_DEFAULT,
+  autoMoveCardsEnabled: true,
 
   // Workspaces dashboard project filter (in-memory only).
   workspacesDashboardProjectId: null,
@@ -925,6 +930,7 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
     set({ workspacesDashboardProjectId: projectId }),
   setCreateDraftWorkspaceByDefault: (value) =>
     set({ createDraftWorkspaceByDefault: value }),
+  setAutoMoveCardsEnabled: (value) => set({ autoMoveCardsEnabled: value }),
 }));
 
 // Hook for repo action preference

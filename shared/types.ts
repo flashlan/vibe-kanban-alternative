@@ -151,7 +151,12 @@ kanban_project_view_selections: { [key in string]?: JsonValue },
 /**
  * Kanban project view preferences (filters, toggles per project per view)
  */
-kanban_project_view_preferences: { [key in string]?: JsonValue }, };
+kanban_project_view_preferences: { [key in string]?: JsonValue }, 
+/**
+ * When true, cards auto-move between columns on workspace create / pipeline done / merge.
+ * True by default; disabled via Settings → General toggle.
+ */
+auto_move_cards_enabled: boolean, };
 
 export type ProjectRepoDefaultsData = { repos: Array<DraftWorkspaceRepo>, };
 

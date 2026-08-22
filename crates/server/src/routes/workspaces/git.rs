@@ -244,6 +244,15 @@ pub async fn merge_workspace(
     )
     .await?;
 
+    // Auto-move card -> Done (is_terminal) after a direct merge. Best-effort.
+    {
+        let pool_clone = pool.clone();
+        let ws_id = workspace.id;
+        tokio::spawn(async move {
+            services::services::auto_move::on_workspace_merged(&pool_clone, ws_id).await;
+        });
+    }
+
     if !workspace.pinned
         && let Err(e) = deployment.container().archive_workspace(workspace.id).await
     {

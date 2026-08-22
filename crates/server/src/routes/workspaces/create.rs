@@ -217,15 +217,23 @@ pub async fn create_and_start_workspace(
     // titles the tab from the card instead of falling back to the branch. All
     // hard-fail work (caller repos, attachments) has already succeeded by this
     // point, so a failed start never leaves a workspace linked.
-    if let Some(issue) = &linked_local_issue
-        && let Err(e) = IssueWorkspace::link(pool, issue.id, workspace.id).await
-    {
-        tracing::warn!(
-            "failed to link workspace {} to issue {} before start (tab title falls back to branch): {}",
-            workspace.id,
-            issue.id,
-            e
-        );
+    if let Some(issue) = &linked_local_issue {
+        if let Err(e) = IssueWorkspace::link(pool, issue.id, workspace.id).await {
+            tracing::warn!(
+                "failed to link workspace {} to issue {} before start (tab title falls back to branch): {}",
+                workspace.id,
+                issue.id,
+                e
+            );
+        } else {
+            // Auto-move Todo -> In Progress when a workspace is created for the card.
+            // Fire-and-forget best-effort: never blocks workspace start on auto-move failure.
+            let pool_clone = pool.clone();
+            let issue_id = issue.id;
+            tokio::spawn(async move {
+                services::services::auto_move::on_workspace_created(&pool_clone, issue_id).await;
+            });
+        }
     }
 
     let execution_process = deployment

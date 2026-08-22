@@ -30,6 +30,7 @@ import {
   useAnimateRunningOutline,
   useMobileFontScale,
   useThemeVariant,
+  useUiPreferencesStore,
 } from '@/shared/stores/useUiPreferencesStore';
 import { useThemeManifest } from '@/shared/lib/themeVariant';
 import { cn, playSound } from '@/shared/lib/utils';
@@ -64,6 +65,8 @@ export function GeneralSettingsSection() {
   const [animateRunningOutline, setAnimateRunningOutline] =
     useAnimateRunningOutline();
   const { themes: themeVariantManifest } = useThemeManifest();
+  const autoMoveCardsEnabled = useUiPreferencesStore((s) => s.autoMoveCardsEnabled);
+  const setAutoMoveCardsEnabled = useUiPreferencesStore((s) => s.setAutoMoveCardsEnabled);
   const languageOptions = getLanguageOptions(
     t('language.browserDefault', {
       ns: 'common',
@@ -315,6 +318,20 @@ export function GeneralSettingsSection() {
           )}
           checked={animateRunningOutline}
           onChange={setAnimateRunningOutline}
+        />
+      </SettingsCard>
+
+      {/* Kanban auto-move */}
+      <SettingsCard
+        title="Kanban — Auto-move cards"
+        description="Automatically moves cards between columns: Todo → In Progress on workspace create, In Progress → In Review when the pipeline finishes, and → Done on merge. Cards remain manually movable."
+      >
+        <SettingsCheckbox
+          id="auto-move-cards"
+          label="Enable auto-move"
+          description="When disabled, cards stay where you leave them — no automatic column changes."
+          checked={autoMoveCardsEnabled}
+          onChange={setAutoMoveCardsEnabled}
         />
       </SettingsCard>
 

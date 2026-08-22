@@ -1,4 +1,5 @@
 pub mod approvals;
+pub mod auto_move;
 pub mod config;
 pub mod container;
 pub mod diff_stream;

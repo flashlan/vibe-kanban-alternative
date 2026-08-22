@@ -593,6 +593,20 @@ impl LocalContainerService {
                     ExecutionProcessStatus::Completed
                 ) && exit_code == Some(0);
 
+                // Auto-move card -> In Review when pipeline execution succeeds.
+                if success
+                    && matches!(
+                        ctx.execution_process.run_reason,
+                        ExecutionProcessRunReason::CodingAgent
+                    )
+                {
+                    let pool = db.pool.clone();
+                    let ws_id = ctx.workspace.id;
+                    tokio::spawn(async move {
+                        services::services::auto_move::on_pipeline_completed(&pool, ws_id).await;
+                    });
+                }
+
                 let cleanup_done = matches!(
                     ctx.execution_process.run_reason,
                     ExecutionProcessRunReason::CleanupScript
