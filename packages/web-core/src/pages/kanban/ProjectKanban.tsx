@@ -48,6 +48,11 @@ function ProjectMutationsRegistration({ children }: { children: ReactNode }) {
     insertIssue,
     updateIssue,
     removeIssue,
+    tags,
+    issueTags,
+    insertTag,
+    insertIssueTag,
+    removeIssueTag,
   } = useProjectContext();
 
   // Use ref to always access latest issues (avoid stale closure)
@@ -60,7 +65,11 @@ function ProjectMutationsRegistration({ children }: { children: ReactNode }) {
     () =>
       [...statuses]
         .sort((a, b) => a.sort_order - b.sort_order)
-        .map((status) => ({ id: status.id, name: status.name })),
+        .map((status) => ({
+          id: status.id,
+          name: status.name,
+          color: status.color,
+        })),
     [statuses]
   );
 
@@ -71,6 +80,43 @@ function ProjectMutationsRegistration({ children }: { children: ReactNode }) {
         label: t(`createIssueDialog.priority.${value}`),
       })),
     [t]
+  );
+
+  // Tag create callback - returns the new tag ID so it can be auto-selected.
+  const handleCreateTag = useCallback(
+    (data: { name: string; color: string }): string => {
+      const { data: newTag } = insertTag({
+        project_id: projectId,
+        name: data.name,
+        color: data.color,
+      });
+      return newTag.id;
+    },
+    [insertTag, projectId]
+  );
+
+  // Diff selected tags against the issue's current tags and apply the
+  // junction inserts/removes so the dialog's tag state stays in sync.
+  const handleTagsChange = useCallback(
+    (issueId: string, tagIds: string[]) => {
+      const currentIssueTags = issueTags.filter(
+        (it) => it.issue_id === issueId
+      );
+      const currentTagIdSet = new Set(currentIssueTags.map((it) => it.tag_id));
+      const newTagIdSet = new Set(tagIds);
+
+      for (const issueTag of currentIssueTags) {
+        if (!newTagIdSet.has(issueTag.tag_id)) {
+          removeIssueTag(issueTag.id);
+        }
+      }
+      for (const tagId of tagIds) {
+        if (!currentTagIdSet.has(tagId)) {
+          insertIssueTag({ issue_id: issueId, tag_id: tagId });
+        }
+      }
+    },
+    [issueTags, insertIssueTag, removeIssueTag]
   );
 
   const openCreateIssue = useCallback(
@@ -95,6 +141,9 @@ function ProjectMutationsRegistration({ children }: { children: ReactNode }) {
         statuses: statusOptions,
         defaultStatusId,
         priorities: priorityOptions,
+        tags,
+        onCreateTag: handleCreateTag,
+        onTagsChange: handleTagsChange,
         parentIssueSimpleId,
         onCreate: async ({
           title,
@@ -168,6 +217,9 @@ function ProjectMutationsRegistration({ children }: { children: ReactNode }) {
       getIssue,
       insertIssue,
       updateIssue,
+      tags,
+      handleCreateTag,
+      handleTagsChange,
       appNavigation,
       hostId,
       projectId,

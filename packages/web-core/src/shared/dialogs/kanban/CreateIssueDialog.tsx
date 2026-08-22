@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import NiceModal, { useModal } from '@ebay/nice-modal-react';
 import { SpinnerIcon, ImageIcon, PaperclipIcon } from '@phosphor-icons/react';
 import { useDropzone } from 'react-dropzone';
-import type { IssuePriority, JsonValue } from 'shared/remote-types';
+import type { IssuePriority, JsonValue, Tag } from 'shared/remote-types';
 import {
   Dialog,
   DialogContent,
@@ -20,15 +20,13 @@ import {
   DialogTitle,
 } from '@vibe/ui/components/KeyboardDialog';
 import { Button } from '@vibe/ui/components/Button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@vibe/ui/components/Select';
+import { PropertyDropdown } from '@vibe/ui/components/PropertyDropdown';
+import { IssueTagsRow } from '@vibe/ui/components/IssueTagsRow';
+import { StatusDot } from '@vibe/ui/components/StatusDot';
+import { PriorityIcon } from '@vibe/ui/components/PriorityIcon';
 import { ToolbarIconButton } from '@vibe/ui/components/Toolbar';
 import WYSIWYGEditor from '@/shared/components/WYSIWYGEditor';
+import { SearchableTagDropdownContainer } from '@/shared/components/SearchableTagDropdownContainer';
 import { defineModal, getErrorMessage } from '@/shared/lib/modals';
 import { attachmentsApi } from '@/shared/lib/api';
 import { useDebouncedCallback } from '@/shared/hooks/useDebouncedCallback';
@@ -49,6 +47,7 @@ export interface CreateIssueDialogPriorityOption {
 export interface CreateIssueDialogStatusOption {
   id: string;
   name: string;
+  color: string;
 }
 
 export interface CreateIssueDialogProps {
@@ -56,6 +55,10 @@ export interface CreateIssueDialogProps {
   statuses: CreateIssueDialogStatusOption[];
   defaultStatusId: string;
   priorities: CreateIssueDialogPriorityOption[];
+  tags: Tag[];
+  defaultTagIds?: string[];
+  onCreateTag: (data: { name: string; color: string }) => string;
+  onTagsChange: (issueId: string, tagIds: string[]) => void;
   parentIssueSimpleId?: string | null;
   onCreate: (data: {
     title: string;
@@ -88,6 +91,10 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
     statuses,
     defaultStatusId,
     priorities,
+    tags,
+    defaultTagIds = [],
+    onCreateTag,
+    onTagsChange,
     parentIssueSimpleId = null,
     onCreate,
     onUpdate,
@@ -105,6 +112,7 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
     const [description, setDescription] = useState('');
     const [statusId, setStatusId] = useState<string>(defaultStatusId);
     const [priority, setPriority] = useState<string>(NONE_PRIORITY_VALUE);
+    const [selectedTagIds, setSelectedTagIds] = useState<string[]>(defaultTagIds);
     const [savedIssueId, setSavedIssueId] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -256,13 +264,14 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
       setStatusId(defaultStatusId);
       setPriority(NONE_PRIORITY_VALUE);
       setSavedIssueId(null);
+      setSelectedTagIds(defaultTagIds);
       pipelineSelectionRef.current = null;
       dirtyRef.current = false;
       cancelAutoSave();
       setError(null);
       setIsSubmitting(false);
       linkedAttachmentIdsRef.current.clear();
-    }, [modal.visible, defaultStatusId, cancelAutoSave]);
+    }, [modal.visible, defaultStatusId, defaultTagIds, cancelAutoSave]);
 
     const handleClose = useCallback(
       (createdWorkspaceId?: string) => {
@@ -301,6 +310,48 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
     const hasStatuses = statuses.length > 0;
     const hasPriorities = priorities.length > 0;
 
+    const statusDropdownOptions = useMemo(
+      () =>
+        statuses.map((status) => ({
+          value: status.id,
+          label: status.name,
+          renderOption: () => (
+            <span className="flex items-center gap-half">
+              <StatusDot color={status.color} />
+              {status.name}
+            </span>
+          ),
+        })),
+      [statuses]
+    );
+
+    const priorityDropdownOptions = useMemo(
+      () => [
+        { value: NONE_PRIORITY_VALUE, label: t('form.notSpecified') },
+        ...priorities.map((option) => ({
+          value: option.value,
+          label: option.label,
+          renderOption: () => (
+            <span className="flex items-center gap-half">
+              <PriorityIcon priority={option.value} />
+              {option.label}
+            </span>
+          ),
+        })),
+      ],
+      [priorities, t]
+    );
+
+    const handleTagsChange = useCallback(
+      (tagIds: string[]) => {
+        setSelectedTagIds(tagIds);
+        if (savedIssueId) {
+          onTagsChange(savedIssueId, tagIds);
+        }
+      },
+      [savedIssueId, onTagsChange]
+    );
+
     const handleSubmit = useCallback(async () => {
       if (savedIssueId) {
         return;
@@ -322,6 +373,11 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
         // Link any attachments uploaded before the issue existed.
         linkUploadedAttachments(newIssueId, uploadedAttachments);
 
+        // Link any tags selected before the issue was created.
+        if (selectedTagIds.length > 0) {
+          onTagsChange(newIssueId, selectedTagIds);
+        }
+
         setSavedIssueId(newIssueId);
       } catch (err) {
         setError(
@@ -337,6 +393,8 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
       statusId,
       onCreate,
       buildUpdatePatch,
+      selectedTagIds,
+      onTagsChange,
       t,
     ]);
 
@@ -559,57 +617,61 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
                 <label className="text-xs font-medium text-low">
                   {t('createIssueDialog.statusLabel')}
                 </label>
-                <Select
+                <PropertyDropdown
                   value={statusId}
-                  onValueChange={(value) => {
+                  options={statusDropdownOptions}
+                  onChange={(value) => {
                     setStatusId(value);
                     markDirty();
                   }}
                   disabled={isSubmitting || !hasStatuses}
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={t('createIssueDialog.statusLabel')}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {statuses.map((status) => (
-                      <SelectItem key={status.id} value={status.id}>
-                        {status.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
               <div className="flex flex-1 flex-col gap-1">
                 <label className="text-xs font-medium text-low">
                   {t('createIssueDialog.priorityLabel')}
                 </label>
-                <Select
+                <PropertyDropdown
                   value={priority}
-                  onValueChange={(value) => {
+                  options={priorityDropdownOptions}
+                  onChange={(value) => {
                     setPriority(value);
                     markDirty();
                   }}
                   disabled={isSubmitting || !hasPriorities}
-                >
-                  <SelectTrigger>
-                    <SelectValue
-                      placeholder={t('createIssueDialog.priorityLabel')}
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NONE_PRIORITY_VALUE}>
-                      {t('form.notSpecified')}
-                    </SelectItem>
-                    {priorities.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                />
               </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-low">
+                {t('createIssueDialog.tagsLabel')}
+              </label>
+              <IssueTagsRow
+                selectedTagIds={selectedTagIds}
+                availableTags={tags}
+                onTagsChange={handleTagsChange}
+                onCreateTag={onCreateTag}
+                renderAddTagControl={({
+                  tags: rowTags,
+                  selectedTagIds,
+                  onTagToggle,
+                  onCreateTag,
+                  disabled,
+                  trigger,
+                }) => (
+                  <SearchableTagDropdownContainer
+                    tags={rowTags}
+                    selectedTagIds={selectedTagIds}
+                    onTagToggle={onTagToggle}
+                    onCreateTag={onCreateTag}
+                    disabled={disabled}
+                    contentClassName=""
+                    trigger={trigger}
+                  />
+                )}
+                disabled={isSubmitting}
+              />
             </div>
 
             <PipelineSection

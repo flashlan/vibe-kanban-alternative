@@ -489,6 +489,7 @@
     "descriptionPlaceholder": "Add a description (optional)",
     "statusLabel": "Status",
     "priorityLabel": "Priority",
+    "tagsLabel": "Tags",
     "priority": {
       "urgent": "Urgent",
       "high": "High",
