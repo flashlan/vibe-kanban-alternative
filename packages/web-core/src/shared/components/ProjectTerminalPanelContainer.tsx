@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { XIcon } from '@phosphor-icons/react';
 import { useProjectContext } from '@/shared/hooks/useProjectContext';
 import { useTerminal } from '@/shared/hooks/useTerminal';
 import { TerminalPanel } from '@vibe/ui/components/TerminalPanel';
@@ -88,6 +87,7 @@ export function ProjectTerminalPanelContainer({
 
   return (
     <TerminalPanel
+      title="Painel Terminal"
       tabs={tabs.map((t) => ({
         id: t.id,
         title: t.title,
@@ -107,24 +107,7 @@ export function ProjectTerminalPanelContainer({
           createProjectTab(projectId, firstRepo.path, true);
         }
       }}
-      leading={
-        <>
-          <span className="text-xs font-medium text-normal whitespace-nowrap leading-none">
-            Project Terminal
-          </span>
-          {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-sm p-0.5 text-low hover:text-normal hover:bg-secondary transition-colors"
-              aria-label="Close project terminal"
-              title="Close project terminal"
-            >
-              <XIcon className="size-icon-xs" weight="bold" />
-            </button>
-          )}
-        </>
-      }
+      onClose={onClose}
       renderTab={(tabId, isActive) => {
         const tab = tabs.find((t) => t.id === tabId);
         return (

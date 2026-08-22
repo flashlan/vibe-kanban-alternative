@@ -16,6 +16,8 @@ interface TerminalPanelProps {
   onCloseTab?: (tabId: string) => void;
   onNewTab?: () => void;
   onNewTuiTab?: () => void;
+  onClose?: () => void;
+  title?: string;
   /** Optional content rendered at the left end of the tab bar. */
   leading?: ReactNode;
 }
@@ -35,6 +37,8 @@ export function TerminalPanel({
   onCloseTab,
   onNewTab,
   onNewTuiTab,
+  onClose,
+  title,
   leading,
 }: TerminalPanelProps) {
   // Render only the active terminal. Inactive ones stay alive in the provider
@@ -53,18 +57,6 @@ export function TerminalPanel({
           )}
           <div className="flex-1 min-w-0 overflow-x-auto">
             <div className="flex items-stretch gap-px h-full">
-              {onNewTuiTab && (
-                <button
-                  type="button"
-                  title="Open Cockpit TUI (vibe-tui)"
-                  aria-label="Open Cockpit TUI"
-                  className="flex items-center gap-1 px-2 text-xs font-medium text-amber-500 hover:text-amber-400 hover:bg-secondary border-r border-border shrink-0 h-full transition-colors"
-                  onClick={onNewTuiTab}
-                >
-                  <span>⚡</span>
-                  <span>TUI</span>
-                </button>
-              )}
               {tabs.map((tab) => {
                 const isActive = tab.id === activeTab?.id;
                 const displayTitle = tab.cwd
@@ -119,6 +111,38 @@ export function TerminalPanel({
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Right side controls: [ Painel Terminal ] [ ⚡ TUI ] [ X ] */}
+          <div className="flex items-stretch shrink-0 border-l border-border">
+            {title && (
+              <div className="flex items-center px-2.5 text-xs font-medium text-low select-none">
+                {title}
+              </div>
+            )}
+            {onNewTuiTab && (
+              <button
+                type="button"
+                title="Open Cockpit TUI (vibe-tui)"
+                aria-label="Open Cockpit TUI"
+                className="flex items-center gap-1 px-2 text-xs font-medium text-amber-500 hover:text-amber-400 hover:bg-secondary border-l border-border h-full transition-colors"
+                onClick={onNewTuiTab}
+              >
+                <span>⚡</span>
+                <span>TUI</span>
+              </button>
+            )}
+            {onClose && (
+              <button
+                type="button"
+                title="Close panel"
+                aria-label="Close panel"
+                className="flex items-center justify-center px-2 text-low hover:text-normal hover:bg-secondary border-l border-border h-full transition-colors"
+                onClick={onClose}
+              >
+                <XIcon className="size-icon-xs" weight="bold" />
+              </button>
+            )}
           </div>
         </div>
       )}

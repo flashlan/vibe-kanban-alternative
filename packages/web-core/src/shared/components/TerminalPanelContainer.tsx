@@ -55,6 +55,7 @@ export function TerminalPanelContainer() {
 
   return (
     <TerminalPanel
+      title="Painel Terminal"
       tabs={tabs.map((t) => ({
         id: t.id,
         title: t.title,
