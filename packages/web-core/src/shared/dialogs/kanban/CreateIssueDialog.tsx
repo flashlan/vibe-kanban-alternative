@@ -4,12 +4,11 @@ import {
   useMemo,
   useRef,
   useState,
-  type ClipboardEvent as ReactClipboardEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import NiceModal, { useModal } from '@ebay/nice-modal-react';
-import { SpinnerIcon, ImageIcon } from '@phosphor-icons/react';
+import { SpinnerIcon, ImageIcon, PaperclipIcon } from '@phosphor-icons/react';
 import { useDropzone } from 'react-dropzone';
 import type { IssuePriority, JsonValue } from 'shared/remote-types';
 import {
@@ -28,7 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@vibe/ui/components/Select';
-import { AutoExpandingTextarea } from '@vibe/ui/components/AutoExpandingTextarea';
+import { ToolbarIconButton } from '@vibe/ui/components/Toolbar';
+import WYSIWYGEditor from '@/shared/components/WYSIWYGEditor';
 import { defineModal, getErrorMessage } from '@/shared/lib/modals';
 import { attachmentsApi } from '@/shared/lib/api';
 import { useDebouncedCallback } from '@/shared/hooks/useDebouncedCallback';
@@ -93,11 +93,10 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
     onUpdate,
   }) => {
     const modal = useModal();
-    const { t } = useTranslation('common');
+    const { t } = useTranslation(['common', 'tasks']);
     const { profiles } = useUserSystem();
 
     const titleInputRef = useRef<HTMLInputElement | null>(null);
-    const descriptionTextareaRef = useRef<HTMLTextAreaElement | null>(null);
     const pipelineSelectionRef = useRef<PipelineSelection | null>(null);
     const scrollContainerRef = useRef<HTMLDivElement | null>(null);
     const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -190,6 +189,7 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
       uploadError,
       clearUploadError,
       uploadedAttachments,
+      localAttachments,
     } = useIssueAttachments(handleDescriptionInsert);
 
     const linkedAttachmentIdsRef = useRef(new Set<string>());
@@ -228,21 +228,7 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
       multiple: true,
       noClick: true,
       noKeyboard: true,
-      accept: { 'image/*': [] },
     });
-
-    const handleDescriptionPaste = useCallback(
-      (event: ReactClipboardEvent<HTMLTextAreaElement>) => {
-        const imageFiles = Array.from(event.clipboardData.files).filter(
-          (file) => file.type.startsWith('image/')
-        );
-        if (imageFiles.length > 0) {
-          event.preventDefault();
-          void uploadFiles(imageFiles);
-        }
-      },
-      [uploadFiles]
-    );
 
     const handlePipelineChange = useCallback(
       (selection: PipelineSelection) => {
@@ -450,19 +436,13 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
       [handleSubmit, savedIssueId, handleClose]
     );
 
-    const handleDescriptionKeyDown = useCallback(
-      (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-          event.preventDefault();
-          if (savedIssueId) {
-            handleClose();
-          } else if (canSubmit) {
-            void handleSubmit();
-          }
-        }
-      },
-      [handleSubmit, canSubmit, savedIssueId, handleClose]
-    );
+    const handleDescriptionCmdEnter = useCallback(() => {
+      if (savedIssueId) {
+        handleClose();
+      } else if (canSubmit) {
+        void handleSubmit();
+      }
+    }, [handleSubmit, canSubmit, savedIssueId, handleClose]);
 
     // Overlay close (Esc, click outside) MUST resolve so the awaiting caller
     // never hangs.
@@ -516,39 +496,43 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
             <div className="flex flex-col gap-2">
               <div {...getRootProps()} className="relative flex flex-col gap-2">
                 <input {...getInputProps()} />
-                <AutoExpandingTextarea
-                  ref={descriptionTextareaRef}
+                <WYSIWYGEditor
                   value={description}
-                  onChange={(event) => {
-                    setDescription(event.target.value);
+                  onChange={(md: string) => {
+                    setDescription(md);
                     markDirty();
                   }}
-                  onKeyDown={handleDescriptionKeyDown}
-                  onPaste={handleDescriptionPaste}
+                  onCmdEnter={handleDescriptionCmdEnter}
+                  onPasteFiles={uploadFiles}
+                  localAttachments={localAttachments}
                   placeholder={t('createIssueDialog.descriptionPlaceholder')}
                   disabled={isSubmitting}
-                  rows={4}
-                  maxRows={10}
-                  className="rounded-md border border-input px-3 py-2"
+                  className="min-h-[140px] rounded-md border border-input bg-transparent px-3 py-2"
                 />
                 {isDragActive ? (
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-md border-2 border-dashed border-brand bg-brand/10 text-sm text-brand">
-                    {t('kanban.attachFileHint')}
+                  <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-md border-2 border-dashed border-brand bg-primary/80 backdrop-blur-sm">
+                    <div className="text-center">
+                      <div className="mx-auto mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-brand/10">
+                        <ImageIcon className="h-5 w-5 text-brand" />
+                      </div>
+                      <p className="text-sm font-medium text-high">
+                        {t('tasks:dropzone.dropImagesHere')}
+                      </p>
+                      <p className="mt-0.5 text-xs text-low">
+                        {t('tasks:dropzone.supportedFormats')}
+                      </p>
+                    </div>
                   </div>
                 ) : null}
               </div>
               <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
+                <ToolbarIconButton
+                  icon={PaperclipIcon}
+                  aria-label={t('kanban.attachFile')}
+                  title={t('kanban.attachFile')}
                   onClick={openFilePicker}
                   disabled={isSubmitting}
-                  className="gap-1.5"
-                >
-                  <ImageIcon className="h-4 w-4" />
-                  {t('kanban.attachFile')}
-                </Button>
+                />
                 {isUploading ? (
                   <span className="flex items-center gap-1.5 text-xs text-low">
                     <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />
