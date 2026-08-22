@@ -276,23 +276,80 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
     // When the issue is created, automatically scroll to the bottom of the modal
     // and switch focus to the Close button so the user can immediately press Enter to close.
     useEffect(() => {
-      if (!savedIssueId) return;
+      if (!savedIssueId || isSubmitting) return;
 
       const scrollToBottomAndFocusClose = () => {
         if (scrollContainerRef.current) {
           scrollContainerRef.current.scrollTop =
             scrollContainerRef.current.scrollHeight;
         }
-        closeButtonRef.current?.focus();
+        if (closeButtonRef.current && !closeButtonRef.current.disabled) {
+          closeButtonRef.current.focus();
+        }
       };
 
-      const frameId1 = window.requestAnimationFrame(() => {
+      // Run immediately, on animation frames, and timed delays to ensure all
+      // newly rendered sections (like linked issues) are fully mounted.
+      scrollToBottomAndFocusClose();
+      const raf1 = window.requestAnimationFrame(() => {
         scrollToBottomAndFocusClose();
         window.requestAnimationFrame(scrollToBottomAndFocusClose);
       });
+      const timer1 = window.setTimeout(scrollToBottomAndFocusClose, 50);
+      const timer2 = window.setTimeout(scrollToBottomAndFocusClose, 150);
+      const timer3 = window.setTimeout(scrollToBottomAndFocusClose, 300);
 
-      return () => window.cancelAnimationFrame(frameId1);
-    }, [savedIssueId]);
+      // Also observe size changes of the scroll container to keep it scrolled to the bottom
+      let observer: ResizeObserver | null = null;
+      if (scrollContainerRef.current && typeof ResizeObserver !== 'undefined') {
+        observer = new ResizeObserver(() => {
+          scrollToBottomAndFocusClose();
+        });
+        observer.observe(scrollContainerRef.current);
+      }
+
+      return () => {
+        window.cancelAnimationFrame(raf1);
+        window.clearTimeout(timer1);
+        window.clearTimeout(timer2);
+        window.clearTimeout(timer3);
+        observer?.disconnect();
+      };
+    }, [savedIssueId, isSubmitting]);
+
+    // When the issue is saved, any Enter keypress (globally in the dialog) closes the dialog.
+    useEffect(() => {
+      if (!savedIssueId || !modal.visible || isSubmitting) return;
+
+      const handleGlobalKeyDown = (event: globalThis.KeyboardEvent) => {
+        if (event.key === 'Enter') {
+          // If the user is typing in a textarea without modifier keys, allow line breaks
+          if (
+            event.target instanceof HTMLTextAreaElement &&
+            !event.metaKey &&
+            !event.ctrlKey
+          ) {
+            return;
+          }
+          // If the user is interacting with an open select/combobox option, ignore
+          if (
+            event.target instanceof HTMLElement &&
+            (event.target.getAttribute('role') === 'option' ||
+              event.target.getAttribute('role') === 'combobox')
+          ) {
+            return;
+          }
+          event.preventDefault();
+          event.stopPropagation();
+          handleClose();
+        }
+      };
+
+      window.addEventListener('keydown', handleGlobalKeyDown, true);
+      return () => {
+        window.removeEventListener('keydown', handleGlobalKeyDown, true);
+      };
+    }, [savedIssueId, modal.visible, isSubmitting, handleClose]);
 
     // Enter submits when focus is in the title input; Cmd/Ctrl+Enter submits
     // globally. When the issue is already saved, Enter closes the dialog.
@@ -469,7 +526,7 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
           <DialogFooter>
             <Button
               ref={closeButtonRef}
-              variant="outline"
+              variant={savedIssueId ? 'default' : 'outline'}
               onClick={handleCancel}
               disabled={isSubmitting}
             >
@@ -478,6 +535,7 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
                 : t('createIssueDialog.cancel')}
             </Button>
             <Button
+              variant={savedIssueId ? 'outline' : 'default'}
               onClick={handleSubmit}
               disabled={!canSubmit || savedIssueId !== null}
             >
