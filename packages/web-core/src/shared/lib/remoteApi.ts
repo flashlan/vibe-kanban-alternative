@@ -2,6 +2,7 @@ import type {
   UpdateIssueRequest,
   UpdateProjectRequest,
   UpdateProjectStatusRequest,
+  Issue,
 } from 'shared/remote-types';
 
 const REMOTE_API_BASE = '';
@@ -118,9 +119,7 @@ export async function restoreIssue(id: string): Promise<void> {
 }
 
 /** List archived issues for a project (for the archive recovery view). */
-export async function listArchivedIssues(
-  projectId: string
-): Promise<Array<{ id: string } & Record<string, unknown>>> {
+export async function listArchivedIssues(projectId: string): Promise<Issue[]> {
   const response = await makeRequest(
     `/v1/issues/archived?project_id=${encodeURIComponent(projectId)}`,
     { method: 'GET' }
@@ -129,11 +128,8 @@ export async function listArchivedIssues(
     const error = await response.json();
     throw new Error(error.message || 'Failed to list archived issues');
   }
-  const body = (await response.json()) as {
-    success: boolean;
-    data: { issues: Array<{ id: string } & Record<string, unknown>> };
-  };
-  return body.data.issues;
+  const body = (await response.json()) as { issues: Issue[] };
+  return body.issues ?? [];
 }
 
 export interface BulkUpdateProjectStatusItem {

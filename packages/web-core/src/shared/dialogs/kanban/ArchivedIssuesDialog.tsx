@@ -36,7 +36,7 @@ const ArchivedIssuesDialogImpl = create<ArchivedIssuesDialogProps>(
 
   const refresh = useCallback(async () => {
     const list = await listArchivedIssues(projectId);
-    setIssues(list as Issue[]);
+    setIssues(list);
     setLoading(false);
   }, [projectId]);
 
