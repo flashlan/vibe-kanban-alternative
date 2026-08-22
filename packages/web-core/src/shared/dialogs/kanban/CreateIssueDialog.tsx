@@ -494,7 +494,10 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
             </div>
 
             <div className="flex flex-col gap-2">
-              <div {...getRootProps()} className="relative flex flex-col gap-2">
+              <div
+                {...getRootProps()}
+                className="relative flex flex-col gap-2 rounded-md border border-input bg-transparent px-3 py-2"
+              >
                 <input {...getInputProps()} />
                 <WYSIWYGEditor
                   value={description}
@@ -507,7 +510,7 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
                   localAttachments={localAttachments}
                   placeholder={t('createIssueDialog.descriptionPlaceholder')}
                   disabled={isSubmitting}
-                  className="min-h-[140px] rounded-md border border-input bg-transparent px-3 py-2"
+                  className="min-h-[140px] w-full"
                 />
                 {isDragActive ? (
                   <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-md border-2 border-dashed border-brand bg-primary/80 backdrop-blur-sm">
