@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { PlusIcon, XIcon } from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
@@ -41,6 +42,18 @@ export function TerminalPanel({
   title,
   leading,
 }: TerminalPanelProps) {
+  const handleCloseTab = useCallback(
+    (tabId: string) => {
+      onCloseTab?.(tabId);
+      // Closing the last remaining tab should also dismiss the whole panel,
+      // so a single click closes the terminal instead of requiring a second
+      // click on the panel's close button.
+      if (tabs.length <= 1 && onClose) {
+        onClose();
+      }
+    },
+    [tabs.length, onCloseTab, onClose]
+  );
   // Render only the active terminal. Inactive ones stay alive in the provider
   // (their xterm instance and WebSocket persist), so switching back re-attaches
   // the existing element rather than spawning a new session.
@@ -81,21 +94,25 @@ export function TerminalPanel({
                       }
                     }}
                   >
-                    <span className="truncate max-w-[140px]">{displayTitle}</span>
-                    {onCloseTab && tabs.length > 1 && (
-                      <button
-                        type="button"
-                        title="Close terminal"
-                        aria-label="Close terminal"
-                        className="opacity-50 hover:opacity-100 shrink-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onCloseTab(tab.id);
-                        }}
-                      >
-                        <XIcon className="size-icon-xs" weight="bold" />
-                      </button>
-                    )}
+                    <span className="truncate max-w-[140px]">
+                      {displayTitle}
+                    </span>
+                    {onCloseTab &&
+                      (tabs.length > 1 || (tabs.length === 1 && onClose)) && (
+                        <button
+                          type="button"
+                          title="Close terminal"
+                          aria-label="Close terminal"
+                          className="opacity-50 hover:opacity-100 shrink-0"
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCloseTab(tab.id);
+                          }}
+                        >
+                          <XIcon className="size-icon-xs" weight="bold" />
+                        </button>
+                      )}
                   </div>
                 );
               })}

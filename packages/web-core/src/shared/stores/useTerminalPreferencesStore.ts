@@ -10,6 +10,8 @@ export interface TerminalPreferences {
   lineHeight: number;
   letterSpacing: number;
   scrollback: number;
+  /** Last manually resized height of the bottom terminal drawer window. */
+  terminalDrawerHeight: number;
 }
 
 const DEFAULT_PREFS: TerminalPreferences = {
@@ -20,6 +22,7 @@ const DEFAULT_PREFS: TerminalPreferences = {
   lineHeight: 1.2,
   letterSpacing: 0,
   scrollback: 5000,
+  terminalDrawerHeight: 320,
 };
 
 interface TerminalPreferencesStore extends TerminalPreferences {
@@ -30,6 +33,7 @@ interface TerminalPreferencesStore extends TerminalPreferences {
   setLineHeight: (height: number) => void;
   setLetterSpacing: (spacing: number) => void;
   setScrollback: (lines: number) => void;
+  setTerminalDrawerHeight: (height: number) => void;
   resetDefaults: () => void;
 }
 
@@ -44,6 +48,8 @@ export const useTerminalPreferences = create<TerminalPreferencesStore>()(
       setLineHeight: (height) => set({ lineHeight: height }),
       setLetterSpacing: (spacing) => set({ letterSpacing: spacing }),
       setScrollback: (lines) => set({ scrollback: lines }),
+      setTerminalDrawerHeight: (height) =>
+        set({ terminalDrawerHeight: height }),
       resetDefaults: () => set(DEFAULT_PREFS),
     }),
     {

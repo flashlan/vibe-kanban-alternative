@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { cn } from '@/shared/lib/utils';
 import { ProjectTerminalPanelContainer } from './ProjectTerminalPanelContainer';
+import { useTerminalPreferences } from '@/shared/stores/useTerminalPreferencesStore';
 
 interface ProjectTerminalDrawerProps {
   onClose: () => void;
@@ -8,10 +9,13 @@ interface ProjectTerminalDrawerProps {
 
 const MIN_HEIGHT = 160;
 const MAX_HEIGHT = 800;
-const DEFAULT_HEIGHT = 320;
 
 export function ProjectTerminalDrawer({ onClose }: ProjectTerminalDrawerProps) {
-  const [height, setHeight] = useState(DEFAULT_HEIGHT);
+  const persistedHeight = useTerminalPreferences((s) => s.terminalDrawerHeight);
+  const setDrawerHeight = useTerminalPreferences(
+    (s) => s.setTerminalDrawerHeight
+  );
+  const [height, setHeight] = useState(persistedHeight);
   const [isDragging, setIsDragging] = useState(false);
 
   const startResize = useCallback(
@@ -22,10 +26,12 @@ export function ProjectTerminalDrawer({ onClose }: ProjectTerminalDrawerProps) {
       setIsDragging(true);
 
       const onMouseMove = (e: MouseEvent) => {
-        const delta = startY - e.clientY;
-        setHeight(
-          Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, startHeight + delta))
+        const next = Math.max(
+          MIN_HEIGHT,
+          Math.min(MAX_HEIGHT, startHeight + (startY - e.clientY))
         );
+        setHeight(next);
+        setDrawerHeight(next);
       };
 
       const onMouseUp = () => {
@@ -37,7 +43,7 @@ export function ProjectTerminalDrawer({ onClose }: ProjectTerminalDrawerProps) {
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
     },
-    [height]
+    [height, setDrawerHeight]
   );
 
   return (
