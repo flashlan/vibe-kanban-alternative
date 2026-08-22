@@ -75,44 +75,47 @@ export function TerminalPanel({
                 const displayTitle = tab.cwd
                   ? `${tab.title} — ${shortenCwd(tab.cwd)}`
                   : tab.title;
+                const showClose =
+                  onCloseTab &&
+                  (tabs.length > 1 || (tabs.length === 1 && onClose));
                 return (
                   <div
                     key={tab.id}
-                    role="button"
-                    tabIndex={0}
                     className={cn(
-                      'group flex items-center gap-1 pl-2 pr-1 py-0.5 text-xs cursor-pointer border-r border-border shrink-0 h-full',
-                      isActive
-                        ? 'bg-secondary text-normal'
-                        : 'text-low hover:text-normal'
+                      'group flex items-stretch border-r border-border shrink-0 h-full',
+                      isActive ? 'bg-secondary' : 'bg-tertiary'
                     )}
-                    onClick={() => onSelectTab?.(tab.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        onSelectTab?.(tab.id);
-                      }
-                    }}
                   >
-                    <span className="truncate max-w-[140px]">
-                      {displayTitle}
-                    </span>
-                    {onCloseTab &&
-                      (tabs.length > 1 || (tabs.length === 1 && onClose)) && (
-                        <button
-                          type="button"
-                          title="Close terminal"
-                          aria-label="Close terminal"
-                          className="opacity-50 hover:opacity-100 shrink-0"
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCloseTab(tab.id);
-                          }}
-                        >
-                          <XIcon className="size-icon-xs" weight="bold" />
-                        </button>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      className={cn(
+                        'flex items-center gap-1 pl-2 pr-1 py-0.5 text-xs cursor-pointer h-full',
+                        isActive ? 'text-normal' : 'text-low hover:text-normal'
                       )}
+                      onClick={() => onSelectTab?.(tab.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onSelectTab?.(tab.id);
+                        }
+                      }}
+                    >
+                      <span className="truncate max-w-[140px]">
+                        {displayTitle}
+                      </span>
+                    </div>
+                    {showClose && (
+                      <button
+                        type="button"
+                        title="Close terminal"
+                        aria-label="Close terminal"
+                        className="flex items-center pr-1.5 text-low hover:text-normal opacity-50 hover:opacity-100 shrink-0 h-full"
+                        onClick={() => handleCloseTab(tab.id)}
+                      >
+                        <XIcon className="size-icon-xs" weight="bold" />
+                      </button>
+                    )}
                   </div>
                 );
               })}
