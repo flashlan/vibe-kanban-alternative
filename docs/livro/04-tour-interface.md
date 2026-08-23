@@ -1,4 +1,4 @@
-# Capítulo 3 — Tour da interface
+# Capítulo 4 — Tour da interface
 
 > **Objetivo:** saber onde cada coisa mora antes de criar o primeiro card.
 
@@ -34,7 +34,17 @@ Abra um projeto para cair no board (`docs/getting-started.mdx:44`):
 3. **+ em cada coluna / botão New Issue** — cria card já na coluna certa.
 4. **Painel direito** — detalhes do card selecionado (ou do rascunho em criação).
 
-Screenshots de referência: `/images/onboarding-projects.png`, `/images/onboarding-workspaces-page.png`.
+**Âncora do livro — board principal:**
+
+![Board principal — projeto Novo aplicativo SaaS com colunas Próximos passos / Em andamento / Em revisão / Concluído](/images/livro/ancora-board-principal.png)
+
+*O board do livro (projeto "Novo aplicativo SaaS"): 4 colunas em PT-BR — Próximos passos, Em andamento, Em revisão, Concluído (são `project_status` configuráveis via `projects.toml` → `statuses`, `docs/cockpit/local-projects.mdx`). Cada coluna mostra a contagem; o painel direito abre o card selecionado. Screenshots de referência do site: `/images/onboarding-projects.png`.*
+
+**Âncora do livro — workspace aberta:**
+
+![Workspace aberta — Conversation à esquerda, Context (Changes/Logs/Preview) ao centro, Details (Git/Terminal) à direita](/images/livro/ancora-workspace-aberta.png)
+
+*Workspace do AssinaFácil aberta: à esquerda a Conversation com o agente; ao centro o Context alternando Changes/Logs/Preview; à direita o Details com Git/Terminal/Notes — exatamente os três painéis de `docs/workspaces/interface.mdx:10`.*
 
 ## A workspace view — os três painéis
 
