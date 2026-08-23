@@ -5,9 +5,14 @@ import {
   useRef,
   useState,
 } from 'react';
-import { SpinnerIcon, DeviceMobileCameraIcon } from '@phosphor-icons/react';
+import {
+  SpinnerIcon,
+  DeviceMobileCameraIcon,
+  PictureInPictureIcon,
+} from '@phosphor-icons/react';
 import { cn } from '../lib/cn';
 import { PrimaryButton } from './PrimaryButton';
+import { IconButton } from './IconButton';
 
 export type AndroidMirrorStatus =
   | 'idle'
@@ -26,6 +31,10 @@ export interface AndroidMirrorViewProps {
   errorMessage: string | null;
   onRetry: () => void;
   className?: string;
+  /** Omit to hide the detach button entirely (e.g. unsupported browser, or
+   * this instance is already the detached copy rendered inside the
+   * floating window — see `AndroidMirrorContainer`). */
+  onDetach?: () => void;
 }
 
 // Wire format verified against scrcpy v4.1 source (Apache-2.0,
@@ -118,7 +127,10 @@ function buildAvcCodecString(spsBytes: Uint8Array): string {
 export const AndroidMirrorView = forwardRef<
   AndroidMirrorViewHandle,
   AndroidMirrorViewProps
->(function AndroidMirrorView({ status, errorMessage, onRetry, className }, ref) {
+>(function AndroidMirrorView(
+  { status, errorMessage, onRetry, className, onDetach },
+  ref
+) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const decoderRef = useRef<VideoDecoder | null>(null);
   const configuredRef = useRef(false);
@@ -356,10 +368,20 @@ export const AndroidMirrorView = forwardRef<
   return (
     <div
       className={cn(
-        'bg-brand/20 w-full h-full flex items-center justify-center overflow-hidden',
+        'bg-brand/20 relative w-full h-full flex items-center justify-center overflow-hidden',
         className
       )}
     >
+      {onDetach && (
+        <IconButton
+          icon={PictureInPictureIcon}
+          onClick={onDetach}
+          aria-label="Detach into a floating window"
+          title="Detach into a floating window"
+          variant="tertiary"
+          className="absolute right-base top-base z-10"
+        />
+      )}
       <canvas
         ref={canvasRef}
         className={cn('max-w-full max-h-full', !showCanvas && 'hidden')}
