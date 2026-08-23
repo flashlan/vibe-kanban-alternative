@@ -74,7 +74,17 @@ export async function resolveBootstrapRepos(
     return [
       {
         repo,
-        targetBranch: preferredRepo.target_branch ?? null,
+        // `??` would let a persisted-but-empty string ("") survive as the
+        // branch value: a restored DRAFT_WORKSPACE scratch (or a stale
+        // preferred-repo record) can hold `target_branch: ""` from an
+        // abandoned create-mode session where no branch was ever picked.
+        // Once repos are non-empty, the "auto-apply repo defaults" effect in
+        // useCreateModeState.ts skips re-deriving a branch (it only fills in
+        // repo-less drafts), so an empty string here would stick forever —
+        // re-saving the repo's default branch in Settings can never reach
+        // it. `||` normalizes "" to `null` here instead, so the branch shows
+        // as genuinely unselected and the user can actually pick one.
+        targetBranch: preferredRepo.target_branch || null,
       },
     ];
   });
