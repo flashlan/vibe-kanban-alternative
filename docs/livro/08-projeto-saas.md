@@ -1,4 +1,4 @@
-# Capítulo 7 — Projeto prático: Criando um SaaS com Vibe Kanban
+# Capítulo 8 — Projeto prático: Criando um SaaS com Vibe Kanban
 
 > **Objetivo:** construir um SaaS do zero usando só a interface do Vibe Kanban — cada seção é um card que você cria, despacha e revisa.
 

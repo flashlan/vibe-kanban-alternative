@@ -1,4 +1,4 @@
-# Capítulo 3 — Arquitetura spec-driven: fronteiras Node × Rust
+# Capítulo 11 — Arquitetura spec-driven: fronteiras Node × Rust
 
 > **Princípio:** a spec define quem faz o quê. Se a fronteira entre linguagens não está desenhada, o agente a desenha errado.
 

@@ -1,4 +1,4 @@
-# Capítulo 2 — The Vibe Coding Setup
+# Capítulo 10 — The Vibe Coding Setup
 
 > **Princípio:** o contexto é o código-fonte da IA. Antes de escrever uma linha de código, escreva os arquivos que dizem a uma máquina como o projeto funciona.
 

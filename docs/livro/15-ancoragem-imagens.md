@@ -1,4 +1,4 @@
-# Capítulo 7 — Ancoragem de imagens
+# Capítulo 15 — Ancoragem de imagens
 
 > **Princípio:** uma screenshot bem escolhida vale como assertion. Ela diz a um humano "parece certo" e a uma IA "compare o estado atual com este".
 

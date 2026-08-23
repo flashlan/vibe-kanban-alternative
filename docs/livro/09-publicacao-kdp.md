@@ -1,4 +1,4 @@
-# Capítulo 8 — Da escrita à Amazon KDP
+# Capítulo 9 — Da escrita à Amazon KDP
 
 > **Princípio:** publicar é um pipeline como qualquer outro — com estágios, checklist e critério de pronto. A diferença é que o "deploy" é uma loja.
 

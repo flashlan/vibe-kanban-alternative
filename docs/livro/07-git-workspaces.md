@@ -1,4 +1,4 @@
-# Capítulo 6 — Git, workspaces e worktrees
+# Capítulo 7 — Git, workspaces e worktrees
 
 > **Objetivo:** usar git dentro do Vibe Kanban sem ter medo de perder trabalho — cada workspace é um branch isolado.
 

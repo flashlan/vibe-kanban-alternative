@@ -6,7 +6,7 @@ Este livro foi escrito dentro do próprio repositório que ele ensina a usar. To
 
 ## Como usar este livro
 
-- **Parte I (caps. 1–9):** manual de uso — primeiro o vocabulário do vibe coding (cap. 2), depois instale, navegue, mexa com cards, pipelines e git, e feche com o projeto prático **Criando um SaaS com Vibe Kanban**.
+- **Parte I (caps. 1–9):** manual de uso — primeiro o vocabulário do vibe coding (cap. 2), depois instale, navegue, mexa com cards, pipelines e git, e feche com o projeto prático **Criando um SaaS com Vibe Kanban** e a publicação na Amazon.
 - **Parte II (caps. 10–15):** bastidores para quem quer customizar — arquitetura, tipos gerados, loop de engenharia, orquestração e ancoragem de imagens.
 - **Apêndice:** referência rápida de comandos.
 - O checklist de publicação na Amazon vive em `../livro-vibe-kanban-amazon-checklist.md`.
@@ -36,6 +36,18 @@ Este livro foi escrito dentro do próprio repositório que ele ensina a usar. To
 | 14 | Orquestração de agentes: MCP, pipelines e o alarme | `14-orquestracao.md` | Escrito |
 | 15 | Ancoragem de imagens | `15-ancoragem-imagens.md` | Escrito |
 | A | Apêndice: referência de comandos | `apendice-comandos.md` | Escrito |
+
+## Screenshots-âncora (cap. 5)
+
+| Imagem | Arquivo | Usada em |
+| --- | --- | --- |
+| Board principal (Próximos passos / Em andamento / Em revisão / Concluído) | `ancora-board-principal.png` | cap. 4 |
+| Workspace aberta (3 painéis) | `ancora-workspace-aberta.png` | cap. 4 |
+| Settings | `ancora-settings.png` | cap. 3 |
+| Criar card — topo (Title, Status, Priority, Tags) | `ancora-criar-card-topo.png` | cap. 5 §1 |
+| Criar card — base (Description + Save) | `ancora-criar-card-base.png` | cap. 5 §1 |
+| Criar card — seção Workspaces / Create | `ancora-criar-card-workspace.png` | cap. 5 §2 |
+| Barra da workspace (Tasks, modelo, presets, permissões, anexos) | `ancora-workspace-chat-bar.png` | cap. 5 §4 |
 
 ## Convenções
 

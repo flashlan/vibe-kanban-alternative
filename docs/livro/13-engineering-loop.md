@@ -1,4 +1,4 @@
-# Capítulo 5 — The Engineering Loop: CLI e autocorreção
+# Capítulo 13 — The Engineering Loop: CLI e autocorreção
 
 > **Princípio:** um agente só se autocorrige se consegue rodar, falhar, ler o erro e repetir — sem pedir permissão a cada passo. O seu trabalho é tornar esse loop curto, legível e sem surpresas.
 

@@ -1,4 +1,4 @@
-# Capítulo 6 — Orquestração de agentes: MCP, pipelines e o alarme
+# Capítulo 14 — Orquestração de agentes: MCP, pipelines e o alarme
 
 > **Princípio:** quando o próprio agente pode dirigir o fluxo de trabalho (criar cards, reportar progresso, pedir revisão), a ferramenta de gestão deixa de ser passiva e vira parte do loop. Este capítulo mostra como este projeto faz isso com três peças: um servidor MCP, pipelines em TOML e marcadores de texto.
 

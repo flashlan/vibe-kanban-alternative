@@ -1,4 +1,4 @@
-# Capítulo 4 — O contrato de tipos: ts-rs na prática
+# Capítulo 12 — O contrato de tipos: ts-rs na prática
 
 > **Princípio:** se duas linguagens precisam concordar sobre um formato, gere o formato a partir de uma fonte única. Convenção diverge; contrato gerado não.
 

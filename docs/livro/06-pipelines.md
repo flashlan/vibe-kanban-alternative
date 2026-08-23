@@ -1,4 +1,4 @@
-# Capítulo 5 — Pipelines na prática
+# Capítulo 6 — Pipelines na prática
 
 > **Objetivo:** entender o que é um pipeline, escolher o certo para cada card e acompanhar o progresso sem adivinhar.
 
