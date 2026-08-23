@@ -1,4 +1,10 @@
-import type { CSSProperties, MouseEvent, RefObject, TouchEvent } from 'react';
+import type {
+  CSSProperties,
+  MouseEvent,
+  ReactNode,
+  RefObject,
+  TouchEvent,
+} from 'react';
 import {
   PlayIcon,
   SpinnerIcon,
@@ -89,6 +95,17 @@ interface PreviewBrowserProps {
   isMobile?: boolean;
   mobileUrlExpanded?: boolean;
   onMobileUrlExpandedChange?: (expanded: boolean) => void;
+  /**
+   * Pre-rendered log viewer for the dev server process (e.g. a
+   * `VirtualizedProcessLogs`), shown while waiting for a preview URL to be
+   * detected. Not every `dev_server_script` starts an HTTP server (e.g. a
+   * build+deploy script for a native app) — without this, that case shows
+   * an indefinite spinner with no visibility into what the script is
+   * actually doing. Left undefined by callers that don't want this (kept
+   * optional so packages/ui doesn't need to know about the log-stream
+   * plumbing, which lives in web-core).
+   */
+  logsContent?: ReactNode;
 }
 
 export function PreviewBrowser({
@@ -135,6 +152,7 @@ export function PreviewBrowser({
   isMobile,
   mobileUrlExpanded,
   onMobileUrlExpandedChange,
+  logsContent,
 }: PreviewBrowserProps) {
   const { t } = useTranslation(['tasks', 'common']);
   const isLoading = isStarting || (isServerRunning && !url);
@@ -576,6 +594,11 @@ export function PreviewBrowser({
                   <p className="text-sm text-low mt-base">
                     {t('preview.loading.manualUrlHint')}
                   </p>
+                )}
+                {logsContent && (
+                  <div className="w-full max-w-2xl h-64 mt-base rounded-sm border border-border bg-primary overflow-hidden text-left">
+                    {logsContent}
+                  </div>
                 )}
               </>
             ) : hasDevScript ? (

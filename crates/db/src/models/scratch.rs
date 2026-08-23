@@ -37,6 +37,32 @@ pub struct PreviewSettingsData {
     pub responsive_height: Option<i32>,
 }
 
+/// Data for the android screen-mirror scratch (per-workspace pinned device +
+/// encoder tuning). `None` on any encoder field means "use scrcpy's own
+/// default" (native resolution, 8 Mbps, uncapped fps) — these are passed
+/// straight through as `max_size=`/`video_bit_rate=`/`max_fps=` server args
+/// (see `services::android_mirror::client::connect`).
+#[derive(Debug, Clone, Serialize, Deserialize, TS, Default)]
+pub struct AndroidMirrorSettingsData {
+    #[serde(default)]
+    pub device_serial: Option<String>,
+    /// Longest side, in pixels (scrcpy's `max_size`). `None`/`0` = native.
+    #[serde(default)]
+    pub max_size: Option<u32>,
+    /// Video encoder bitrate in kbps (scrcpy's `video_bit_rate`, kbps here
+    /// vs. bps on the wire — kept small/human for a UI field).
+    #[serde(default)]
+    pub bit_rate_kbps: Option<u32>,
+    /// Capped frame rate (scrcpy's `max_fps`). `None`/`0` = uncapped.
+    #[serde(default)]
+    pub max_fps: Option<u32>,
+    /// User-initiated disconnect — kept `true` until they hit "Connect"
+    /// again; distinct from the connection hook's own transient
+    /// error/retry states, which are never persisted.
+    #[serde(default)]
+    pub manually_disconnected: bool,
+}
+
 /// Data for workspace notes scratch
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct WorkspaceNotesData {
@@ -241,6 +267,7 @@ pub enum ScratchPayload {
     DraftWorkspace(DraftWorkspaceData),
     DraftIssue(DraftIssueData),
     PreviewSettings(PreviewSettingsData),
+    AndroidMirrorSettings(AndroidMirrorSettingsData),
     WorkspaceNotes(WorkspaceNotesData),
     UiPreferences(UiPreferencesData),
     ProjectRepoDefaults(ProjectRepoDefaultsData),

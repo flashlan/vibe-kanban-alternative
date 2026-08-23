@@ -28,6 +28,7 @@ use tower_http::{compression::CompressionLayer, validate_request::ValidateReques
 
 use crate::{DeploymentImpl, middleware};
 
+pub mod android_mirror;
 pub mod approvals;
 pub mod attachments;
 pub mod backup;
@@ -58,6 +59,7 @@ pub mod workspaces;
 pub fn router(deployment: DeploymentImpl) -> IntoMakeService<Router> {
     let api_routes = Router::new()
         .route("/health", get(health::health_check))
+        .merge(android_mirror::router())
         .merge(config::router())
         .merge(containers::router(&deployment))
         .merge(pipelines::router())

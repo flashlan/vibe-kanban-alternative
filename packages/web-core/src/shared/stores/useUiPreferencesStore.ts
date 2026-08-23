@@ -7,6 +7,7 @@ export const RIGHT_MAIN_PANEL_MODES = {
   CHANGES: 'changes',
   LOGS: 'logs',
   PREVIEW: 'preview',
+  MIRROR: 'mirror',
 } as const;
 
 export type RightMainPanelMode =
@@ -20,6 +21,7 @@ export type MobileTab =
   | 'changes'
   | 'logs'
   | 'preview'
+  | 'mirror'
   | 'git';
 
 export type MobileFontScale = 'default' | 'small' | 'smaller';
@@ -323,12 +325,15 @@ export const PERSIST_KEYS = {
   gitPanelAddRepositories: 'git-panel-add-repositories',
   rightPanelprocesses: 'right-panel-processes',
   rightPanelPreview: 'right-panel-preview',
+  rightPanelMirror: 'right-panel-mirror',
   // Process panel sections
   processesSection: 'processes-section',
   // Changes panel sections
   changesSection: 'changes-section',
   // Preview panel sections
   devServerSection: 'dev-server-section',
+  // Mirror panel section
+  mirrorSection: 'mirror-section',
   // Terminal panel section
   terminalSection: 'terminal-section',
   // Notes panel section
@@ -367,6 +372,8 @@ export type PersistKey =
   | typeof PERSIST_KEYS.rightMainPanel
   | typeof PERSIST_KEYS.rightPanelprocesses
   | typeof PERSIST_KEYS.rightPanelPreview
+  | typeof PERSIST_KEYS.rightPanelMirror
+  | typeof PERSIST_KEYS.mirrorSection
   | typeof PERSIST_KEYS.kanbanLeftPanel
   | typeof PERSIST_KEYS.kanbanIssueSubIssues
   | typeof PERSIST_KEYS.kanbanIssueRelationships

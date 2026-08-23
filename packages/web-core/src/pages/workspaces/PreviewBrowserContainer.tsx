@@ -20,6 +20,7 @@ import {
   type ScreenSize,
 } from '@/shared/hooks/usePreviewSettings';
 import { useLogStream } from '@/shared/hooks/useLogStream';
+import { VirtualizedProcessLogs } from '@/shared/components/VirtualizedProcessLogs';
 import { useUiPreferencesStore } from '@/shared/stores/useUiPreferencesStore';
 import { useWorkspaceContext } from '@/shared/hooks/useWorkspaceContext';
 import { useUserSystem } from '@/shared/hooks/useUserSystem';
@@ -208,8 +209,22 @@ export function PreviewBrowserContainer({
         : latest
     );
   }, [runningDevServers]);
-  const { logs } = useLogStream(primaryDevServer?.id ?? '');
+  const { logs, error: logsError } = useLogStream(primaryDevServer?.id ?? '');
   const urlInfo = usePreviewUrl(logs, previewProxyPort ?? undefined);
+
+  // Not every dev_server_script starts an HTTP server (e.g. a build+deploy
+  // script for a native app never emits a URL) — shown while waiting so the
+  // panel isn't just an indefinite spinner with no visibility into what the
+  // script is doing.
+  const devServerLogsContent = primaryDevServer ? (
+    <VirtualizedProcessLogs
+      logs={logs}
+      error={logsError}
+      searchQuery=""
+      matchIndices={[]}
+      currentMatchIndex={-1}
+    />
+  ) : undefined;
 
   // Detect failed dev server process (failed status or completed with non-zero exit code)
   const failedDevServerProcess = devServerProcesses.find(
@@ -972,6 +987,7 @@ export function PreviewBrowserContainer({
       isMobile={isMobile}
       mobileUrlExpanded={mobileUrlExpanded}
       onMobileUrlExpandedChange={setMobileUrlExpanded}
+      logsContent={devServerLogsContent}
     />
   );
 }

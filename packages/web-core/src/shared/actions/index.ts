@@ -30,6 +30,7 @@ import {
   ArrowsClockwiseIcon,
   CrosshairIcon,
   DesktopIcon,
+  DeviceMobileCameraIcon,
   PencilSimpleIcon,
   ArrowUpIcon,
   HighlighterIcon,
@@ -674,6 +675,29 @@ export const Actions = {
         .getState()
         .toggleRightMainPanelMode(
           RIGHT_MAIN_PANEL_MODES.PREVIEW,
+          ctx.currentWorkspaceId ?? undefined
+        );
+    },
+  },
+
+  ToggleMirrorMode: {
+    id: 'toggle-mirror-mode',
+    label: 'Toggle Mirror Panel',
+    icon: DeviceMobileCameraIcon,
+    shortcut: 'V M',
+    requiresTarget: ActionTargetType.NONE,
+    isVisible: (ctx) => !ctx.isCreateMode && ctx.layoutMode === 'workspaces',
+    isActive: (ctx) => ctx.rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.MIRROR,
+    isEnabled: (ctx) => !ctx.isCreateMode,
+    getLabel: (ctx) =>
+      ctx.rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.MIRROR
+        ? 'Hide Mirror Panel'
+        : 'Show Mirror Panel',
+    execute: (ctx) => {
+      useUiPreferencesStore
+        .getState()
+        .toggleRightMainPanelMode(
+          RIGHT_MAIN_PANEL_MODES.MIRROR,
           ctx.currentWorkspaceId ?? undefined
         );
     },
@@ -1579,6 +1603,7 @@ export const NavbarActionGroups = {
     Actions.ToggleChangesMode,
     Actions.ToggleLogsMode,
     Actions.TogglePreviewMode,
+    Actions.ToggleMirrorMode,
     Actions.ToggleRightSidebar,
     NavbarDivider,
     Actions.SpawnOrchestrator,
@@ -1594,6 +1619,7 @@ export const ContextBarActionGroups = {
   secondary: [
     Actions.ToggleDevServer,
     Actions.TogglePreviewMode,
+    Actions.ToggleMirrorMode,
     Actions.ToggleChangesMode,
   ] as ActionDefinition[],
 };

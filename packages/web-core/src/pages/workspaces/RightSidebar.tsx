@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { FileTreeContainer } from './FileTreeContainer';
 import { ProcessListContainer } from './ProcessListContainer';
 import { PreviewControlsContainer } from './PreviewControlsContainer';
+import { AndroidMirrorControlsContainer } from './AndroidMirrorControlsContainer';
 import { GitPanelContainer } from './GitPanelContainer';
 import { TerminalPanelContainer } from '@/shared/components/TerminalPanelContainer';
 import { WorkspaceNotesContainer } from './WorkspaceNotesContainer';
@@ -92,6 +93,10 @@ export const RightSidebar = memo(function RightSidebar({
     PERSIST_KEYS.devServerSection,
     true
   );
+  const [mirrorExpanded] = usePersistedExpanded(
+    PERSIST_KEYS.mirrorSection,
+    true
+  );
   const [gitExpanded] = usePersistedExpanded(
     PERSIST_KEYS.gitPanelRepositories,
     true
@@ -108,7 +113,8 @@ export const RightSidebar = memo(function RightSidebar({
   const hasUpperContent =
     rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.CHANGES ||
     rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.LOGS ||
-    rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.PREVIEW;
+    rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.PREVIEW ||
+    rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.MIRROR;
 
   const upperExpanded = (() => {
     if (rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.CHANGES)
@@ -117,6 +123,8 @@ export const RightSidebar = memo(function RightSidebar({
       return processesExpanded;
     if (rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.PREVIEW)
       return devServerExpanded;
+    if (rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.MIRROR)
+      return mirrorExpanded;
     return false;
   })();
 
@@ -218,6 +226,23 @@ export const RightSidebar = memo(function RightSidebar({
           });
         }
         break;
+      case RIGHT_MAIN_PANEL_MODES.MIRROR:
+        if (selectedWorkspace) {
+          result.unshift({
+            title: 'Mirror',
+            persistKey: PERSIST_KEYS.rightPanelMirror,
+            visible: hasUpperContent,
+            expanded: upperExpanded,
+            content: (
+              <AndroidMirrorControlsContainer
+                workspaceId={selectedWorkspace.id}
+                className=""
+              />
+            ),
+            actions: [],
+          });
+        }
+        break;
       case null:
         break;
     }
@@ -234,6 +259,7 @@ export const RightSidebar = memo(function RightSidebar({
     changesExpanded,
     processesExpanded,
     devServerExpanded,
+    mirrorExpanded,
     isTerminalVisible,
     isTerminalExpanded,
     hasUpperContent,

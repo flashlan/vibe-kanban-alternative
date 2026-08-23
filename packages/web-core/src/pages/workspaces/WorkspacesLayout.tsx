@@ -30,6 +30,7 @@ import { RightSidebar } from './RightSidebar';
 import { ChangesPanelContainer } from './ChangesPanelContainer';
 import { CreateChatBoxContainer } from '@/shared/components/CreateChatBoxContainer';
 import { PreviewBrowserContainer } from './PreviewBrowserContainer';
+import { AndroidMirrorContainer } from './AndroidMirrorContainer';
 
 import {
   PERSIST_KEYS,
@@ -243,6 +244,19 @@ export function WorkspacesLayout() {
               )}
             </div>
 
+            {/* Mirror tab */}
+            <div
+              className={cn(
+                'flex-1 min-h-0 overflow-hidden',
+                mobileTab !== 'mirror' && 'hidden'
+              )}
+            >
+              <AndroidMirrorContainer
+                workspaceId={selectedWorkspace?.id}
+                className=""
+              />
+            </div>
+
             {/* Git tab */}
             <div
               className={cn(
@@ -349,6 +363,12 @@ export function WorkspacesLayout() {
                       className=""
                     />
                   )}
+                {rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.MIRROR && (
+                  <AndroidMirrorContainer
+                    workspaceId={selectedWorkspace?.id}
+                    className=""
+                  />
+                )}
               </Panel>
             )}
           </Group>

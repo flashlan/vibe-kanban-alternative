@@ -290,6 +290,7 @@
       "toggle-changes-mode": "Toggle Changes panel",
       "toggle-logs-mode": "Toggle Logs panel",
       "toggle-preview-mode": "Toggle Preview panel",
+      "toggle-mirror-mode": "Toggle Mirror panel",
       "toggle-left-sidebar": "Toggle Left Sidebar",
       "toggle-left-main-panel": "Toggle Chat panel",
       "create-issue": "Create Issue",

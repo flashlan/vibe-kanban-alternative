@@ -1,6 +1,9 @@
 // Import all necessary types from shared types
 
 import {
+  AndroidMirrorDevice,
+  AndroidMirrorNavRequest,
+  AndroidMirrorForceStopRequest,
   ApprovalStatus,
   ApiResponse,
   Config,
@@ -930,6 +933,30 @@ export const workspacesApi = {
       CreateWorkspaceFromPrResponse,
       CreateFromPrError
     >(response);
+  },
+};
+
+// Android screen-mirror APIs
+export const androidMirrorApi = {
+  listDevices: async (): Promise<AndroidMirrorDevice[]> => {
+    const response = await makeRequest('/api/android-mirror/devices');
+    return handleApiResponse<AndroidMirrorDevice[]>(response);
+  },
+
+  sendNavAction: async (req: AndroidMirrorNavRequest): Promise<void> => {
+    const response = await makeRequest('/api/android-mirror/nav', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+    return handleApiResponse<void>(response);
+  },
+
+  forceStop: async (req: AndroidMirrorForceStopRequest): Promise<void> => {
+    const response = await makeRequest('/api/android-mirror/force-stop', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+    return handleApiResponse<void>(response);
   },
 };
 

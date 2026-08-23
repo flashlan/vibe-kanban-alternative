@@ -40,10 +40,10 @@ pub struct GiteaSecretConfig {
 ///
 /// Mirrors [`telegram_config::config_path`](crate::telegram_config::config_path).
 pub fn config_path() -> PathBuf {
-    if let Ok(p) = env::var("VIBE_KANBAN_GITEA_CONFIG") {
-        if !p.is_empty() {
-            return PathBuf::from(p);
-        }
+    if let Ok(p) = env::var("VIBE_KANBAN_GITEA_CONFIG")
+        && !p.is_empty()
+    {
+        return PathBuf::from(p);
     }
     dirs::home_dir()
         .map(|home| home.join(".vibe-kanban"))

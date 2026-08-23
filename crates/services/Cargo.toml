@@ -55,6 +55,4 @@ sha2.workspace = true
 fst.workspace = true
 moka.workspace = true
 mime_guess.workspace = true
-
-[dev-dependencies]
 tempfile.workspace = true
