@@ -61,7 +61,11 @@ Na primeira vez o app pede (`docs/getting-started.mdx:19`):
 - IDE (VS Code, Cursor, etc.),
 - notificações — ative o **som do alarme** de `VK-REVIEW-REQUEST` (`crates/services/src/services/review_request.rs`).
 
-O onboarding mostra screenshots em `/images/onboarding-*.png`. Altere depois em **Settings** (engrenagem no topo direito). Em `~/.vibe-kanban/` ficam configs como `telegram.toml` (`automation/telegram.toml.example`) e `orchestrator.toml` — mas para este capítulo, só o básico importa.
+O onboarding mostra screenshots em `/images/onboarding-*.png`. Altere depois em **Settings** (engrenagem no topo direito):
+
+![Settings — onde ficam agente preferido, IDE, notificações e projetos/repositórios](/images/livro/ancora-settings.png)
+
+*Settings do livro: preferências de agente/IDE, som do alarme `VK-REVIEW-REQUEST` e a lista de projetos/repositórios com seus scripts (`setup_script`, `dev_server_script`). Em `~/.vibe-kanban/` ficam configs como `telegram.toml` (`automation/telegram.toml.example`) e `orchestrator.toml` — mas para este capítulo, só o básico importa.*
 
 ## 4. Declarar seu primeiro projeto: `projects.toml`
 
