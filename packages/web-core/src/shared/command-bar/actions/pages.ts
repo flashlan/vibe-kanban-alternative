@@ -57,6 +57,7 @@ export const Pages: Record<StaticPageId, CommandBarPage> = {
         items: [
           { type: 'action', action: Actions.StartReview },
           { type: 'action', action: Actions.RenameWorkspace },
+          { type: 'action', action: Actions.SetWorkspaceColor },
           { type: 'action', action: Actions.DuplicateWorkspace },
           { type: 'action', action: Actions.SpinOffWorkspace },
           { type: 'action', action: Actions.PinWorkspace },

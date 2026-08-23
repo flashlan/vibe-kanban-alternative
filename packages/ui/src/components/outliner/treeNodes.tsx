@@ -527,17 +527,21 @@ export function TreeNodeRouter(
           dimmed={dimmed}
         />
       );
-    case 'leaf':
+    case 'leaf': {
+      // Per-workspace custom color (workspace settings) wins over the
+      // inherited project tint.
+      const wsColor = node.data.workspace.color ?? tintColor;
       return (
         <OutlinerLeafNode
           node={node as NodeApi<LeafNode>}
           style={style}
           dragHandle={dragHandle}
           activeWorkspaceId={activeWorkspaceId}
-          tintColor={tintColor}
+          tintColor={wsColor}
           dimmed={dimmed}
         />
       );
+    }
     case 'status':
       return (
         <StatusNodeRow

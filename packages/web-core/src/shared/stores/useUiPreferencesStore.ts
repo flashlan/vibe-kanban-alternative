@@ -99,6 +99,40 @@ const savePipelineSelectionPref = (pref: PipelineSelectionPref): void => {
   }
 };
 
+// Per-workspace custom colors ("workspace settings → color"). Stored as
+// `{ [workspaceId]: hsl-triple }`; deleting a workspace's entry (value null)
+// falls back to the project tint.
+const WORKSPACE_COLORS_KEY = 'vk-workspace-colors';
+
+const loadWorkspaceColors = (): Record<string, string> => {
+  try {
+    const stored = localStorage.getItem(WORKSPACE_COLORS_KEY);
+    if (!stored) return {};
+    const parsed = JSON.parse(stored) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+    return Object.fromEntries(
+      Object.entries(parsed as Record<string, unknown>).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string'
+      )
+    );
+  } catch {
+    // localStorage may be unavailable or malformed
+    return {};
+  }
+};
+
+const saveWorkspaceColors = (colors: Record<string, string>): void => {
+  try {
+    localStorage.setItem(WORKSPACE_COLORS_KEY, JSON.stringify(colors));
+  } catch {
+    // localStorage may be unavailable
+  }
+};
+
+const WORKSPACE_COLORS_LIMIT = 500;
+
 // Animated (shimmering) border around the message box while the workspace is
 // working. A subtle pulsating dot always shows; this toggles the border on top.
 const ANIMATE_RUNNING_OUTLINE_KEY = 'vk-animate-running-outline';
@@ -395,6 +429,9 @@ type State = {
   // Theme variant ("skin"), applied on top of the light/dark mode
   themeVariant: ThemeVariant;
 
+  // Per-workspace custom colors (sidebar tree tint). `null` value clears.
+  workspaceColors: Record<string, string>;
+
   // Persisted default pipeline id for the Create Issue dialog (single-select).
   defaultPipelineId: string | null;
 
@@ -495,6 +532,9 @@ type State = {
   // Theme variant actions
   setThemeVariant: (variant: ThemeVariant) => void;
 
+  // Workspace color actions
+  setWorkspaceColor: (workspaceId: string, color: string | null) => void;
+
   // Default pipeline actions
   setDefaultPipelineId: (id: string | null) => void;
 
@@ -542,6 +582,9 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
 
   // Theme variant
   themeVariant: loadThemeVariant(),
+
+  // Per-workspace custom colors
+  workspaceColors: loadWorkspaceColors(),
 
   // Persisted default pipeline id (single-select Create Issue dialog)
   defaultPipelineId: loadDefaultPipelineId(),
@@ -894,6 +937,27 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
       // localStorage may be unavailable
     }
     set({ themeVariant: variant });
+  },
+
+  // Workspace color actions
+  setWorkspaceColor: (workspaceId, color) => {
+    set((s) => {
+      const next = { ...s.workspaceColors };
+      if (color === null) {
+        delete next[workspaceId];
+      } else {
+        next[workspaceId] = color;
+      }
+      // Hard cap so a long-lived install can't grow the map unboundedly.
+      const ids = Object.keys(next);
+      if (ids.length > WORKSPACE_COLORS_LIMIT) {
+        for (const id of ids.slice(0, ids.length - WORKSPACE_COLORS_LIMIT)) {
+          delete next[id];
+        }
+      }
+      saveWorkspaceColors(next);
+      return { workspaceColors: next };
+    });
   },
 
   // Default pipeline actions

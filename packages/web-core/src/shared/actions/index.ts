@@ -42,6 +42,7 @@ import {
   ArrowBendUpRightIcon,
   ProhibitIcon,
   RobotIcon,
+  PaletteIcon,
 } from '@phosphor-icons/react';
 import { useDiffViewStore } from '@/shared/stores/useDiffViewStore';
 import { useWorkspaceDiffStore } from '@/shared/stores/useWorkspaceDiffStore';
@@ -65,6 +66,7 @@ import { DeleteWorkspaceDialog } from '@vibe/ui/components/DeleteWorkspaceDialog
 import { RebaseDialog } from '@/shared/dialogs/command-bar/RebaseDialog';
 import { ResolveConflictsDialog } from '@/shared/dialogs/tasks/ResolveConflictsDialog';
 import { RenameWorkspaceDialog } from '@vibe/ui/components/RenameWorkspaceDialog';
+import { WorkspaceColorDialog } from '@/shared/dialogs/WorkspaceColorDialog';
 import { ProjectsGuideDialog } from '@vibe/ui/components/ProjectsGuideDialog';
 import { CreatePRDialog } from '@/shared/dialogs/command-bar/CreatePRDialog';
 import { getIdeName } from '@/shared/lib/ideName';
@@ -230,6 +232,27 @@ export const Actions = {
         onRename: async (newName) => {
           await workspacesApi.update(workspaceId, { name: newName });
           invalidateWorkspaceQueries(ctx.queryClient, workspaceId);
+        },
+      });
+    },
+  },
+
+  SetWorkspaceColor: {
+    id: 'set-workspace-color',
+    label: 'Workspace Color',
+    icon: PaletteIcon,
+    requiresTarget: ActionTargetType.WORKSPACE,
+    execute: async (ctx, workspaceId) => {
+      const workspace = await getWorkspace(ctx.queryClient, workspaceId);
+      const currentColor =
+        useUiPreferencesStore.getState().workspaceColors[workspaceId] ?? null;
+      await WorkspaceColorDialog.show({
+        workspaceName: workspace.name || workspace.branch,
+        currentColor,
+        onSave: async (color) => {
+          useUiPreferencesStore
+            .getState()
+            .setWorkspaceColor(workspaceId, color);
         },
       });
     },

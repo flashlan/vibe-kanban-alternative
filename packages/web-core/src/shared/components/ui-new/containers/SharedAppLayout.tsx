@@ -616,6 +616,7 @@ export function SharedAppLayout() {
     archivedWorkspaces,
     isWorkspacesListLoading,
   } = useWorkspaceContext();
+  const workspaceColors = useUiPreferencesStore((s) => s.workspaceColors);
 
   const sidebarProjects = useMemo(
     () =>
@@ -659,6 +660,7 @@ export function SharedAppLayout() {
   const toOutlinerWorkspace = (ws: SidebarWorkspace): OutlinerWorkspace => ({
     id: ws.id,
     name: ws.name,
+    color: workspaceColors[ws.id],
     createdAt: ws.createdAt,
     filesChanged: ws.filesChanged,
     linesAdded: ws.linesAdded,
@@ -676,12 +678,12 @@ export function SharedAppLayout() {
 
   const outlinerWorkspaces = useMemo<OutlinerWorkspace[]>(
     () => activeWorkspaces.map(toOutlinerWorkspace),
-    [activeWorkspaces]
+    [activeWorkspaces, workspaceColors]
   );
 
   const outlinerArchivedWorkspaces = useMemo<OutlinerWorkspace[]>(
     () => archivedWorkspaces.map(toOutlinerWorkspace),
-    [archivedWorkspaces]
+    [archivedWorkspaces, workspaceColors]
   );
 
   // Orchestrator ⚡ icon: open the most-recent workspace under the

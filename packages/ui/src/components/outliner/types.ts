@@ -25,6 +25,9 @@ export interface ProjectTasksData {
 /** A single workspace rendered as a leaf in a workspaces tree. */
 export interface OutlinerWorkspace extends WorkspaceStatusItem {
   name: string;
+  /** Per-workspace custom color (HSL triple) from workspace settings —
+   *  overrides the inherited project tint on the leaf row when set. */
+  color?: string;
   filesChanged?: number;
   linesAdded?: number;
   linesRemoved?: number;

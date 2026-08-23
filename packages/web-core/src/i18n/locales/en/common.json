@@ -119,6 +119,12 @@
       "action": "Rename",
       "renaming": "Renaming..."
     },
+    "color": {
+      "title": "Workspace Color",
+      "description": "Pick a color for “{{name}}” in the sidebar tree. Choose Default to fall back to the project color.",
+      "default": "Default",
+      "save": "Save"
+    },
     "unlinkFromIssue": "Unlink from issue",
     "deleteWorkspace": "Delete workspace",
     "sendIssueHere": "Send issue here",
