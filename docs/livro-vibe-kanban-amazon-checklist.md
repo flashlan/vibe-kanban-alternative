@@ -1,6 +1,6 @@
 # Livro "Vibe Kanban" na Amazon — Investimento e Checklist de Publicação
 
-Guia operacional para publicar o livro sobre o Vibe Kanban na Amazon via **KDP (Kindle Direct Publishing)**: eBook Kindle e, opcionalmente, capa comum (paperback). Dados de regras do KDP verificados em ago/2026 nas fontes oficiais listadas ao final — o KDP muda regras com frequência, revalide antes de publicar.
+Guia operacional para publicar o livro sobre o Vibe Kanban na Amazon via **KDP (Kindle Direct Publishing)**: eBook Kindle e, opcionalmente, capa comum (paperback). O manuscrito vive em `docs/livro/` (índice em `00-indice.md`). Dados de regras do KDP verificados em ago/2026 nas fontes oficiais listadas ao final — o KDP muda regras com frequência, revalide antes de publicar.
 
 ## 1. Tópicos do Manual Moderno (conteúdo do livro)
 
@@ -43,6 +43,7 @@ Cenário mínimo viável: **R$ 0** (tudo DIY). Cenário recomendado: reservar ve
 
 ### Fase 1 — Manuscrito
 
+- [ ] Manuscrito em `docs/livro/` revisado (índice em `00-indice.md`, caps. 1–8 + apêndice)
 - [ ] Texto final revisado (estrutura: introdução, capítulos, sobre o autor)
 - [ ] Página de copyright incluída
 - [ ] Formatação no **Kindle Create** (gratuito) com sumário navegável
