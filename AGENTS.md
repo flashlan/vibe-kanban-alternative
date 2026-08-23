@@ -22,6 +22,25 @@ Rules:
 - [x] **Done** — Add urgency and tags buttons to create-issue dialog (`vk/160b-feature-definir`)
 - [x] **Done** — Browser cache for workspace conversations to skip re-stream on switch (`vk/f804-poss-vel-cache-d`)
 
+## Card Pipeline Protocol (MCP)
+
+A card's description now carries only a **compact pointer** to its pipeline, not the full stage list — the heavy content lives behind the `get_pipeline` MCP tool instead, so it doesn't bloat every model call. When a card's description mentions `get_pipeline`:
+
+- Call it (workspace-scoped; `workspace_id` is optional if you're already running inside that workspace) **before any code edits**.
+- Execute the stages it returns **in the order given** — do not add, skip, or reorder.
+- After completing **each** stage, call `report_pipeline_stage` with that stage's number AND emit the line `VK-PIPELINE-STAGE: N` before moving to the next one — repeat this for every stage, not just the first. (The tool's own response restates this reminder on each stage entry — re-read it as you go, don't rely on having read it once at the start.)
+- Empty `stages` in the response means no pipeline is selected on this card — proceed without one.
+
+A card whose description has no such reference has nothing to fetch — proceed normally.
+
+## Project Rules Protocol (MCP)
+
+Unlike the pipeline pointer above, this one is **unconditional** — general project rules apply to every card, so there's no pointer text to look for in the description.
+
+- Call `get_rules` **once, at the start of every card's execution**, before any code edits.
+- Keep its `pre` guidance in mind **throughout** the work — it covers always-on guardrails (e.g. which repo's memory to use, when to recall before starting).
+- Right before finishing, run through its `post` field as a **closing checklist** (e.g. what to save, and what never to save).
+
 # Repository Guidelines
 
 ## Project Structure & Module Organization

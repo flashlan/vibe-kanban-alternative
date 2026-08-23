@@ -2,7 +2,10 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::SqlitePool;
+use ts_rs::TS;
 use uuid::Uuid;
+
+use crate::models::project_status::ProjectStatus;
 
 /// Kanban card. Mirrors the wire `Issue` shape consumed by the frontend
 /// (served at /v1/fallback/issues, mutated at /v1/issues).
@@ -365,14 +368,304 @@ impl Issue {
     pub async fn restore(pool: &SqlitePool, id: Uuid) -> Result<u64, sqlx::Error> {
         let result = sqlx::query!(
             r#"UPDATE issues
-               SET archived = 0,
-                   archived_at = NULL,
-                   updated_at = datetime('now', 'subsec')
-               WHERE id = $1"#,
+                SET archived = 0,
+                    archived_at = NULL,
+                    updated_at = datetime('now', 'subsec')
+                WHERE id = $1"#,
             id
         )
         .execute(pool)
         .await?;
         Ok(result.rows_affected())
+    }
+}
+
+/// Semantically classified role of a kanban column, used to derive lifecycle
+/// metrics (review cycles, rework) from the raw status-change history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StatusRole {
+    Todo,
+    InProgress,
+    Review,
+    Done,
+    Other,
+}
+
+fn status_role(name: &str, is_terminal: bool) -> StatusRole {
+    if is_terminal {
+        return StatusRole::Done;
+    }
+    let n = name.to_lowercase();
+    if n.contains("review") || n.contains("qa") {
+        StatusRole::Review
+    } else if n.contains("progress") || n.contains("doing") || n.contains("wip") {
+        StatusRole::InProgress
+    } else if n.contains("todo") || n.contains("backlog") || n.contains("to do") {
+        StatusRole::Todo
+    } else {
+        StatusRole::Other
+    }
+}
+
+/// Lifecycle metrics for a single card, derived from `issue_status_history`.
+#[derive(Debug, Clone, Serialize, TS)]
+pub struct IssueMetrics {
+    pub issue_id: Uuid,
+    pub created_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+    /// Total elapsed seconds: `completed_at - created_at` when done, else
+    /// `now - created_at`.
+    pub total_seconds: i64,
+    /// Number of `in_progress → review` transitions (each review entry = a cycle).
+    pub cycles: i64,
+    /// Number of `review → in_progress` transitions (each return = rework).
+    pub rework_count: i64,
+    /// Number of recorded status transitions.
+    pub status_changes: i64,
+    pub current_status_name: String,
+}
+
+impl Issue {
+    /// Compute lifecycle metrics for `issue_id` from its status-change history.
+    /// Returns `None` when the issue does not exist.
+    pub async fn metrics(
+        pool: &SqlitePool,
+        issue_id: Uuid,
+    ) -> Result<Option<IssueMetrics>, sqlx::Error> {
+        let issue = match Self::find_by_id(pool, issue_id).await? {
+            Some(i) => i,
+            None => return Ok(None),
+        };
+
+        let history = sqlx::query!(
+            r#"SELECT from_status_id as "from_status_id?: Uuid",
+                      to_status_id as "to_status_id!: Uuid"
+               FROM issue_status_history
+               WHERE issue_id = $1
+               ORDER BY created_at ASC, rowid ASC"#,
+            issue_id
+        )
+        .fetch_all(pool)
+        .await?;
+
+        let statuses = ProjectStatus::list_by_project(pool, issue.project_id).await?;
+        let role_of = |id: Uuid| -> StatusRole {
+            statuses
+                .iter()
+                .find(|s| s.id == id)
+                .map(|s| status_role(&s.name, s.is_terminal))
+                .unwrap_or(StatusRole::Other)
+        };
+
+        // Reconstruct the sequence of status roles visited by the card, starting
+        // from its first status (the from_status of the earliest change).
+        let mut visited: Vec<StatusRole> = Vec::new();
+        if history.is_empty() {
+            visited.push(role_of(issue.status_id));
+        } else {
+            visited.push(role_of(
+                history[0].from_status_id.unwrap_or(issue.status_id),
+            ));
+            for row in &history {
+                visited.push(role_of(row.to_status_id));
+            }
+        }
+
+        let mut cycles = 0i64;
+        let mut rework = 0i64;
+        for window in visited.windows(2) {
+            match (window[0], window[1]) {
+                (StatusRole::InProgress, StatusRole::Review) => cycles += 1,
+                (StatusRole::Review, StatusRole::InProgress) => rework += 1,
+                _ => {}
+            }
+        }
+
+        let end = issue.completed_at.unwrap_or_else(Utc::now);
+        let total_seconds = (end - issue.created_at).num_seconds();
+
+        let current_status_name = statuses
+            .iter()
+            .find(|s| s.id == issue.status_id)
+            .map(|s| s.name.clone())
+            .unwrap_or_default();
+
+        Ok(Some(IssueMetrics {
+            issue_id,
+            created_at: issue.created_at,
+            completed_at: issue.completed_at,
+            total_seconds,
+            cycles,
+            rework_count: rework,
+            status_changes: history.len() as i64,
+            current_status_name,
+        }))
+    }
+}
+
+#[cfg(test)]
+mod metrics_tests {
+    use super::*;
+    use sqlx::{SqlitePool, migrate::Migrator};
+    use uuid::Uuid;
+
+    async fn migrated_pool() -> SqlitePool {
+        let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
+        let migrator = Migrator::new(std::path::Path::new("./migrations"))
+            .await
+            .unwrap();
+        migrator.run(&pool).await.unwrap();
+        pool
+    }
+
+    async fn insert_project(pool: &SqlitePool, id: Uuid) {
+        sqlx::query("INSERT INTO projects (id, name, color) VALUES (?, ?, '#fff')")
+            .bind(id)
+            .bind("P")
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn counts_cycles_and_rework_from_history() {
+        let pool = migrated_pool().await;
+        let project_id = Uuid::new_v4();
+        insert_project(&pool, project_id).await;
+
+        let todo = ProjectStatus::create(
+            &pool,
+            Uuid::new_v4(),
+            project_id,
+            "Todo",
+            "#fff",
+            0,
+            false,
+            false,
+        )
+        .await
+        .unwrap();
+        let in_progress = ProjectStatus::create(
+            &pool,
+            Uuid::new_v4(),
+            project_id,
+            "In Progress",
+            "#fff",
+            1,
+            false,
+            false,
+        )
+        .await
+        .unwrap();
+        let in_review = ProjectStatus::create(
+            &pool,
+            Uuid::new_v4(),
+            project_id,
+            "In Review",
+            "#fff",
+            2,
+            false,
+            false,
+        )
+        .await
+        .unwrap();
+        let done = ProjectStatus::create(
+            &pool,
+            Uuid::new_v4(),
+            project_id,
+            "Done",
+            "#fff",
+            3,
+            false,
+            true,
+        )
+        .await
+        .unwrap();
+
+        let issue = Issue::create(
+            &pool,
+            NewIssue {
+                id: Uuid::new_v4(),
+                project_id,
+                status_id: todo.id,
+                title: "Card",
+                description: None,
+                priority: None,
+                start_date: None,
+                target_date: None,
+                completed_at: None,
+                sort_order: 0.0,
+                parent_issue_id: None,
+                parent_issue_sort_order: None,
+                extension_metadata: "{}",
+                key: "TST",
+            },
+        )
+        .await
+        .unwrap();
+
+        // Simulate the lifecycle: Todo -> In Progress -> In Review ->
+        // In Progress (rework) -> In Review -> Done.
+        for status in [&in_progress, &in_review, &in_progress, &in_review, &done] {
+            sqlx::query("UPDATE issues SET status_id = $1 WHERE id = $2")
+                .bind(status.id)
+                .bind(issue.id)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+
+        let metrics = Issue::metrics(&pool, issue.id).await.unwrap().unwrap();
+        assert_eq!(metrics.cycles, 2, "expected 2 review cycles");
+        assert_eq!(metrics.rework_count, 1, "expected 1 rework");
+        assert_eq!(metrics.status_changes, 5);
+        assert_eq!(metrics.current_status_name, "Done");
+        assert!(metrics.total_seconds >= 0);
+    }
+
+    #[tokio::test]
+    async fn no_history_yields_zero_cycles() {
+        let pool = migrated_pool().await;
+        let project_id = Uuid::new_v4();
+        insert_project(&pool, project_id).await;
+        let todo = ProjectStatus::create(
+            &pool,
+            Uuid::new_v4(),
+            project_id,
+            "Todo",
+            "#fff",
+            0,
+            false,
+            false,
+        )
+        .await
+        .unwrap();
+
+        let issue = Issue::create(
+            &pool,
+            NewIssue {
+                id: Uuid::new_v4(),
+                project_id,
+                status_id: todo.id,
+                title: "Card",
+                description: None,
+                priority: None,
+                start_date: None,
+                target_date: None,
+                completed_at: None,
+                sort_order: 0.0,
+                parent_issue_id: None,
+                parent_issue_sort_order: None,
+                extension_metadata: "{}",
+                key: "TST",
+            },
+        )
+        .await
+        .unwrap();
+
+        let metrics = Issue::metrics(&pool, issue.id).await.unwrap().unwrap();
+        assert_eq!(metrics.cycles, 0);
+        assert_eq!(metrics.rework_count, 0);
+        assert_eq!(metrics.status_changes, 0);
     }
 }

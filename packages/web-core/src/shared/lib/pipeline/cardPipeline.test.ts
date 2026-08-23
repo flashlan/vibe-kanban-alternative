@@ -240,36 +240,31 @@ const basicAsyncEnabledUnion = [
 ];
 
 describe('composePipelineBlock', () => {
-  it('renders enabled stages as an ordered numbered list in pipeline order', () => {
+  it('emits a compact pointer instead of an embedded stage list', () => {
     const block = composePipelineBlock(pipeline, ['plan', 'spec'], '', null);
     expect(block).toContain('## Pipeline: Basic');
-    expect(block).toContain(
-      'Execute these stages in the order listed. Do not add, skip, or reorder stages.'
-    );
-    // Order follows the pipeline definition, not the enabledIds argument order.
-    expect(block).toContain('1. Write a spec.');
-    expect(block).toContain('2. Write a plan.');
+    expect(block).toContain('call that MCP tool');
+    expect(block).toContain('`get_pipeline`');
+    expect(block).toContain('`report_pipeline_stage`');
+    // The full stage text no longer lives in the description.
+    expect(block).not.toContain('Write a spec.');
+    expect(block).not.toContain('1.');
     expect(block.startsWith(PIPELINE_START)).toBe(true);
     expect(block.endsWith(PIPELINE_END)).toBe(true);
   });
 
-  it('instructs the agent to emit a VK-PIPELINE-STAGE marker per stage', () => {
-    const block = composePipelineBlock(pipeline, ['plan', 'spec'], '', null);
-    expect(block).toContain('VK-PIPELINE-STAGE: N');
-    expect(block).toContain('As you begin each numbered stage');
-  });
-
-  it('does not instruct marker reporting when there are no stages', () => {
+  it('does not emit the pointer when there are no stages', () => {
     const block = composePipelineBlock(null, [], '', 'CLAUDE_CODE');
-    expect(block).not.toContain('VK-PIPELINE-STAGE');
+    expect(block).not.toContain('get_pipeline');
   });
 
-  it('leads with the executor-pin line before the stages', () => {
+  it('leads with the executor-pin line after the pointer', () => {
     const block = composePipelineBlock(pipeline, ['spec'], '', 'CODEX');
     const execIdx = block.indexOf('Run this card with the **CODEX**');
-    const stageIdx = block.indexOf('1. Write a spec.');
+    const pointerIdx = block.indexOf('get_pipeline');
     expect(execIdx).toBeGreaterThan(-1);
-    expect(stageIdx).toBeGreaterThan(execIdx);
+    expect(pointerIdx).toBeGreaterThan(-1);
+    expect(execIdx).toBeGreaterThan(pointerIdx);
   });
 
   it('returns empty string when nothing is selected', () => {
@@ -280,7 +275,7 @@ describe('composePipelineBlock', () => {
     const block = composePipelineBlock(null, [], '', 'CLAUDE_CODE');
     expect(block).toContain('## Pipeline');
     expect(block).toContain('Run this card with the **CLAUDE_CODE**');
-    expect(block).not.toContain('1.');
+    expect(block).not.toContain('get_pipeline');
   });
 
   it('null pipeline without executor or custom text is empty', () => {
@@ -291,12 +286,11 @@ describe('composePipelineBlock', () => {
     const block = composePipelineBlock(pipeline, ['spec'], '', null);
     const withBlock = appendPipelineToDescription('My card body.', block);
     expect(withBlock).toContain('My card body.');
-    expect(withBlock).toContain('1. Write a spec.');
+    expect(withBlock).toContain('get_pipeline');
     // Re-appending a new block replaces, not stacks.
-    const block2 = composePipelineBlock(pipeline, ['plan'], '', null);
+    const block2 = composePipelineBlock(pipeline, ['plan'], '', 'CODEX');
     const replaced = appendPipelineToDescription(withBlock, block2);
-    expect(replaced).toContain('1. Write a plan.');
-    expect(replaced).not.toContain('Write a spec.');
+    expect(replaced).toContain('Run this card with the **CODEX**');
     expect(replaced.match(/vk:pipeline:start/g)?.length).toBe(1);
   });
 
@@ -306,21 +300,99 @@ describe('composePipelineBlock', () => {
     expect(wrapped).toBe(single);
   });
 
-  it('LOCKED: basic + wikillm default-enabled union yields the canonical merge order', () => {
-    const block = composePipelineBlock(
-      [basicPipeline, wikillmPipeline],
-      basicWikillmEnabledUnion,
+  it('recomposing a pre-migration card drops its old embedded stage list, not just the pointer', () => {
+    // Simulates a card created before this change: composePipelineBlock used
+    // to embed the full ORDER_INSTRUCTION + numbered stage list. Build that
+    // legacy shape by hand (not via composePipelineBlock, which no longer
+    // produces it) to prove extractManualLines still recognises and drops
+    // it on recompose, rather than stranding it as "manual" text forever.
+    const legacyBlock = [
+      PIPELINE_START,
+      '## Pipeline: Basic',
       '',
-      null
+      'Execute these stages in the order listed. Do not add, skip, or reorder stages. ' +
+        'As you begin each numbered stage below, call the `report_pipeline_stage` MCP tool with ' +
+        "that stage's number, AND output a line exactly `VK-PIPELINE-STAGE: N` (N = the number of " +
+        'the stage you are starting) so pipeline progress can be tracked.',
+      '',
+      '1. Write a spec.',
+      '2. Write a plan.',
+      PIPELINE_END,
+    ].join('\n');
+
+    const allFragments = new Set(pipeline.stages.map((s) => s.prompt_fragment));
+    const recomposed = composePipelineBlock(
+      pipeline,
+      ['spec', 'plan'],
+      '',
+      null,
+      { previousBlock: legacyBlock, knownStageFragments: allFragments }
     );
-    expect(block).toContain('## Pipeline: Basic + WikiLLM');
 
-    const stageLines = block
-      .split('\n')
-      .filter((l) => /^\d+\.\s/.test(l))
-      .map((l) => l.replace(/^\d+\.\s+/, ''));
+    expect(recomposed).not.toContain('Write a spec.');
+    expect(recomposed).not.toContain(
+      'Execute these stages in the order listed'
+    );
+    expect(recomposed).toContain('get_pipeline');
+  });
 
-    expect(stageLines).toEqual([
+  it('manual-line preservation: a genuinely hand-added line (not a recognised generated line) survives recompose', () => {
+    const legacyBlock = [
+      PIPELINE_START,
+      '## Pipeline: Basic',
+      '',
+      '1. Write a spec.',
+      'Also double-check the migration script.',
+      PIPELINE_END,
+    ].join('\n');
+
+    const allFragments = new Set(pipeline.stages.map((s) => s.prompt_fragment));
+    const recomposed = composePipelineBlock(
+      pipeline,
+      ['spec', 'plan'],
+      '',
+      null,
+      { previousBlock: legacyBlock, knownStageFragments: allFragments }
+    );
+
+    expect(recomposed).toContain('Also double-check the migration script.');
+    expect(recomposed).not.toContain('Write a spec.');
+  });
+
+  it('a legacy numbered line whose text no longer matches any known fragment is preserved as manual', () => {
+    const legacyBlock = [
+      PIPELINE_START,
+      '## Pipeline: Basic',
+      '',
+      '1. Write a spec.',
+      '2. Write a plan, focusing on the migration risk.',
+      PIPELINE_END,
+    ].join('\n');
+    const allFragments = new Set(pipeline.stages.map((s) => s.prompt_fragment));
+
+    const recomposed = composePipelineBlock(
+      pipeline,
+      ['spec', 'plan'],
+      '',
+      null,
+      { previousBlock: legacyBlock, knownStageFragments: allFragments }
+    );
+
+    // The edited line no longer matches the `plan` fragment verbatim, so
+    // it's treated as manual text and preserved.
+    expect(recomposed).toContain(
+      '2. Write a plan, focusing on the migration risk.'
+    );
+  });
+});
+
+describe('canonicalStageOrder / orderedEnabledStages (merge order)', () => {
+  it('LOCKED: basic + wikillm default-enabled union yields the canonical merge order', () => {
+    const stages = orderedEnabledStages(
+      [basicPipeline, wikillmPipeline],
+      basicWikillmEnabledUnion
+    );
+    expect(stages.map((s) => s.prompt_fragment)).toEqual([
       'Write a spec.',
       'Recall prior knowledge.',
       'Write a plan.',
@@ -333,25 +405,14 @@ describe('composePipelineBlock', () => {
     const asyncEnabledIds = asyncPipeline.stages
       .filter((s) => s.default_enabled)
       .map((s) => s.id);
-    const block = composePipelineBlock(
-      [asyncPipeline],
-      asyncEnabledIds,
-      '',
-      null
-    );
-    expect(block).toContain('## Pipeline: Async Sonnet');
-
-    const stageLines = block
-      .split('\n')
-      .filter((l) => /^\d+\.\s/.test(l))
-      .map((l) => l.replace(/^\d+\.\s+/, ''));
+    const stages = orderedEnabledStages([asyncPipeline], asyncEnabledIds);
 
     // spec -> plan -> plan-review-codex -> code-subagent -> code-review: the
     // Codex plan review sits immediately after `plan` and immediately before
     // the coder stage, and the Codex code review is the final
     // default-enabled stage, per spec. (There is no `review-fable` stage in
     // Async Sonnet — code review is Codex-only.)
-    expect(stageLines).toEqual([
+    expect(stages.map((s) => s.prompt_fragment)).toEqual([
       'Write a spec.',
       'Write a plan.',
       'Have Codex review the plan.',
@@ -361,18 +422,11 @@ describe('composePipelineBlock', () => {
   });
 
   it("dedupes Basic's and Async Sonnet's shared code-review stage: one Codex review, after the coder stage", () => {
-    const block = composePipelineBlock(
+    const stages = orderedEnabledStages(
       [basicPipeline, asyncPipeline],
-      basicAsyncEnabledUnion,
-      '',
-      null
+      basicAsyncEnabledUnion
     );
-    expect(block).toContain('## Pipeline: Basic + Async Sonnet');
-
-    const stageLines = block
-      .split('\n')
-      .filter((l) => /^\d+\.\s/.test(l))
-      .map((l) => l.replace(/^\d+\.\s+/, ''));
+    const stageLines = stages.map((s) => s.prompt_fragment);
 
     // Unifying the id gives `code-review` an incoming edge from the async
     // pipeline's `plan-review-codex -> code-subagent -> code-review` chain,
@@ -388,7 +442,7 @@ describe('composePipelineBlock', () => {
 
     // basic's own (default-off) `plan-review` stage stays hidden by default,
     // per spec *Decisions* — only the Codex plan review renders.
-    expect(block).not.toContain('Review the plan.');
+    expect(stageLines).not.toContain('Review the plan.');
 
     // Acceptance criterion 1: the deduped Codex review appears exactly once.
     expect(stageLines.filter((l) => l === 'Review the code.')).toHaveLength(1);
@@ -404,123 +458,6 @@ describe('composePipelineBlock', () => {
     expect(planReviewCodexIdx).toBeGreaterThan(planIdx);
     expect(coderIdx).toBeGreaterThan(planReviewCodexIdx);
     expect(codeReviewIdx).toBeGreaterThan(coderIdx);
-  });
-
-  it('orderedEnabledStages produces the same order composePipelineBlock uses', () => {
-    const stages = orderedEnabledStages(
-      [basicPipeline, wikillmPipeline],
-      basicWikillmEnabledUnion
-    );
-    expect(stages.map((s) => s.id)).toEqual([
-      'spec',
-      'recall-knowledge',
-      'plan',
-      'code-review',
-      'enrich-knowledge',
-    ]);
-  });
-
-  it('manual-line preservation: an extra operator line survives recompose', () => {
-    const first = composePipelineBlock(pipeline, ['spec', 'plan'], '', null);
-    const withManualLine = first.replace(
-      '2. Write a plan.',
-      '2. Write a plan.\nAlso double-check the migration script.'
-    );
-
-    const allFragments = new Set(pipeline.stages.map((s) => s.prompt_fragment));
-    const recomposed = composePipelineBlock(
-      pipeline,
-      ['spec', 'plan', 'code-review'],
-      '',
-      null,
-      { previousBlock: withManualLine, knownStageFragments: allFragments }
-    );
-
-    expect(recomposed).toContain('Also double-check the migration script.');
-    expect(recomposed).toContain('1. Write a spec.');
-    expect(recomposed).toContain('2. Write a plan.');
-    expect(recomposed).toContain('3. Review the code.');
-  });
-
-  it('deselecting a stage removes its generated line instead of stranding it as manual', () => {
-    const first = composePipelineBlock(
-      pipeline,
-      ['spec', 'plan', 'code-review'],
-      '',
-      null
-    );
-    const allFragments = new Set(pipeline.stages.map((s) => s.prompt_fragment));
-
-    // Untick `plan`.
-    const recomposed = composePipelineBlock(
-      pipeline,
-      ['spec', 'code-review'],
-      '',
-      null,
-      { previousBlock: first, knownStageFragments: allFragments }
-    );
-
-    expect(recomposed).not.toContain('Write a plan.');
-    expect(recomposed).toContain('Write a spec.');
-    expect(recomposed).toContain('Review the code.');
-  });
-
-  it('deselecting an entire pipeline removes its stage lines instead of stranding them as manual', () => {
-    const first = composePipelineBlock(
-      [basicPipeline, wikillmPipeline],
-      basicWikillmEnabledUnion,
-      '',
-      null
-    );
-    const allFragments = new Set(
-      [basicPipeline, wikillmPipeline].flatMap((p) =>
-        p.stages.map((s) => s.prompt_fragment)
-      )
-    );
-
-    // Drop wikillm entirely; keep basic's default-enabled stages.
-    const basicEnabled = basicPipeline.stages
-      .filter((s) => s.default_enabled)
-      .map((s) => s.id);
-    const recomposed = composePipelineBlock(
-      [basicPipeline],
-      basicEnabled,
-      '',
-      null,
-      { previousBlock: first, knownStageFragments: allFragments }
-    );
-
-    expect(recomposed).not.toContain('Enrich the knowledge base.');
-    expect(recomposed).not.toContain('Recall prior knowledge.');
-    expect(recomposed).toContain('Write a spec.');
-    expect(recomposed).toContain('Write a plan.');
-    expect(recomposed).toContain('Review the code.');
-  });
-
-  it('a hand-edited stage line no longer matches any fragment and is preserved as manual', () => {
-    const first = composePipelineBlock(pipeline, ['spec', 'plan'], '', null);
-    const edited = first.replace(
-      '2. Write a plan.',
-      '2. Write a plan, focusing on the migration risk.'
-    );
-    const allFragments = new Set(pipeline.stages.map((s) => s.prompt_fragment));
-
-    const recomposed = composePipelineBlock(
-      pipeline,
-      ['spec', 'plan'],
-      '',
-      null,
-      { previousBlock: edited, knownStageFragments: allFragments }
-    );
-
-    // The edited line no longer matches the `plan` fragment, so it's treated
-    // as manual text and preserved verbatim, alongside the freshly generated
-    // (unedited) stage lines.
-    expect(recomposed).toContain(
-      '2. Write a plan, focusing on the migration risk.'
-    );
-    expect(recomposed).toContain('1. Write a spec.');
-    expect(recomposed).toContain('2. Write a plan.');
   });
 });
 
@@ -554,8 +491,25 @@ describe('extractPipelineBlock', () => {
 });
 
 describe('parsePipelineStages', () => {
+  // These build their input by hand (not via composePipelineBlock, which no
+  // longer emits a numbered stage list) — this is the compat path: a
+  // pre-migration card's description that still has the OLD full block, or
+  // one the new `GET /api/workspaces/{id}/pipeline/resolve` endpoint can't
+  // reach (no `extension_metadata.pipeline`). New cards' progress instead
+  // comes from that endpoint, not this parser.
   it('counts the numbered stages, ignoring the order instruction and executor-pin lines', () => {
-    const block = composePipelineBlock(pipeline, ['spec', 'plan'], '', 'CODEX');
+    const block = [
+      PIPELINE_START,
+      '## Pipeline: Basic',
+      '',
+      'Execute these stages in the order listed. Do not add, skip, or reorder stages.',
+      '',
+      '- Run this card with the **CODEX** execution agent: pass `executor: "CODEX"` when starting the workspace.',
+      '',
+      '1. Write a spec.',
+      '2. Write a plan.',
+      PIPELINE_END,
+    ].join('\n');
     const stages = parsePipelineStages(block);
     expect(stages).toEqual([
       { index: 1, label: 'Write a spec.' },
@@ -564,12 +518,16 @@ describe('parsePipelineStages', () => {
   });
 
   it('does not count numbered custom text that follows a blank line after the stage list', () => {
-    const block = composePipelineBlock(
-      pipeline,
-      ['spec'],
-      '1. Not a real stage\n2. Also not a stage',
-      null
-    );
+    const block = [
+      PIPELINE_START,
+      '## Pipeline: Basic',
+      '',
+      '1. Write a spec.',
+      '',
+      '1. Not a real stage',
+      '2. Also not a stage',
+      PIPELINE_END,
+    ].join('\n');
     expect(parsePipelineStages(block)).toEqual([
       { index: 1, label: 'Write a spec.' },
     ]);

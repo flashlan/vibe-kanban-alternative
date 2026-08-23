@@ -229,7 +229,9 @@ describe('useConversationHistory — conversation cache skips re-stream', () => 
     await act(async () => {
       rerender();
     });
-    await waitFor(() => expect(streamJsonPatchEntries).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(streamJsonPatchEntries).toHaveBeenCalledTimes(1)
+    );
     // Exactly one stream: the live follow-up. The finished process is untouched.
     expect(streamJsonPatchEntries).toHaveBeenCalledTimes(1);
 
@@ -241,7 +243,9 @@ describe('useConversationHistory — conversation cache skips re-stream', () => 
     await act(async () => {
       rerender();
     });
-    await waitFor(() => expect(streamJsonPatchEntries).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(streamJsonPatchEntries).toHaveBeenCalledTimes(2)
+    );
     // Live stream (1) + final-reload stream (1) = 2; history still not re-streamed.
     expect(streamJsonPatchEntries).toHaveBeenCalledTimes(2);
     expect(getCachedEntries('proc-followup')).toBeDefined();

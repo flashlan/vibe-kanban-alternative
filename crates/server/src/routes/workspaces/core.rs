@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+
+use api_types::pipeline::{ResolvedPipelineResponse, ResolvedPipelineStage};
 use axum::{
     Extension, Json,
     extract::{Query, State},
@@ -7,13 +10,18 @@ use axum::{
 use db::models::{
     coding_agent_turn::CodingAgentTurn,
     execution_process::{ExecutionProcess, ExecutionProcessStatus},
+    issue::Issue,
+    issue_workspace::IssueWorkspace,
     workspace::{Workspace, WorkspaceError},
 };
 use deployment::Deployment;
 use serde::Deserialize;
-use services::services::container::ContainerService;
+use services::services::{
+    container::ContainerService,
+    pipelines::{self as pl, Pipeline},
+};
 use sqlx::Error as SqlxError;
-use utils::response::ApiResponse;
+use utils::{path::pipelines_dir, response::ApiResponse};
 use workspace_manager::WorkspaceManager;
 
 use crate::{DeploymentImpl, error::ApiError};
@@ -177,4 +185,131 @@ pub async fn report_pipeline_stage(
     let pool = &deployment.db().pool;
     Workspace::set_current_pipeline_stage(pool, workspace.id, Some(request.stage)).await?;
     Ok(ResponseJson(ApiResponse::success(())))
+}
+
+/// Shape of `issue.extension_metadata.pipeline`, written by the frontend's
+/// `CreateIssueDialog`/`PipelineSection` (`buildExtensionMetadata` in
+/// `CreateIssueDialog.tsx`). Ad-hoc JSON, no shared struct today — this is
+/// the server-side mirror, kept in sync by hand.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct IssuePipelineMetadata {
+    #[serde(default)]
+    pipeline_ids: Vec<String>,
+    #[serde(default)]
+    enabled_ids: Vec<String>,
+    #[serde(default)]
+    executor: Option<String>,
+    #[serde(default)]
+    custom_text: String,
+}
+
+fn empty_pipeline_response(
+    workspace_id: uuid::Uuid,
+    current_pipeline_stage: Option<i64>,
+) -> ResolvedPipelineResponse {
+    ResolvedPipelineResponse {
+        workspace_id,
+        pipeline_names: vec![],
+        instructions: String::new(),
+        stages: vec![],
+        executor: None,
+        custom_text: None,
+        current_pipeline_stage,
+    }
+}
+
+/// Resolve the pipeline stages selected on this workspace's linked card,
+/// server-side — the single source of truth shared by the `get_pipeline`
+/// MCP tool and the frontend's stage-progress UI. Reads
+/// `issue.extension_metadata.pipeline` (written at card-creation/edit time),
+/// not the card description text, so it works identically for a card whose
+/// description carries the old full stage block or the new compact pointer.
+///
+/// Empty (not an error) when the workspace has no linked issue, or the issue
+/// has no pipeline selected.
+#[axum::debug_handler]
+pub async fn resolve_pipeline(
+    Extension(workspace): Extension<Workspace>,
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<ResolvedPipelineResponse>>, ApiError> {
+    let pool = &deployment.db().pool;
+
+    let Some((issue_id, _project_id)) =
+        IssueWorkspace::find_issue_and_project_by_workspace(pool, workspace.id).await?
+    else {
+        return Ok(ResponseJson(ApiResponse::success(empty_pipeline_response(
+            workspace.id,
+            workspace.current_pipeline_stage,
+        ))));
+    };
+
+    let Some(issue) = Issue::find_by_id(pool, issue_id).await? else {
+        return Ok(ResponseJson(ApiResponse::success(empty_pipeline_response(
+            workspace.id,
+            workspace.current_pipeline_stage,
+        ))));
+    };
+
+    let metadata: Option<IssuePipelineMetadata> = issue
+        .extension_metadata
+        .get("pipeline")
+        .and_then(|v| serde_json::from_value(v.clone()).ok());
+
+    let Some(metadata) = metadata else {
+        return Ok(ResponseJson(ApiResponse::success(empty_pipeline_response(
+            workspace.id,
+            workspace.current_pipeline_stage,
+        ))));
+    };
+
+    let all_pipelines = pl::load_pipelines(&pipelines_dir());
+    let selected: Vec<&Pipeline> = all_pipelines
+        .iter()
+        .filter(|p| metadata.pipeline_ids.contains(&p.id))
+        .collect();
+
+    let enabled_ids: HashSet<String> = metadata.enabled_ids.into_iter().collect();
+    let stages = pl::ordered_enabled_stages(&selected, &enabled_ids);
+
+    let resolved_stages: Vec<ResolvedPipelineStage> = stages
+        .into_iter()
+        .enumerate()
+        .map(|(i, s)| {
+            let index = (i + 1) as i64;
+            ResolvedPipelineStage {
+                index,
+                id: s.id,
+                label: s.label,
+                prompt_fragment: s.prompt_fragment,
+                report_hint: format!(
+                    "Ao concluir esta stage, chame `report_pipeline_stage` com stage={index} e emita a linha `VK-PIPELINE-STAGE: {index}` antes de seguir para a próxima."
+                ),
+            }
+        })
+        .collect();
+
+    let pipeline_names = selected.iter().map(|p| p.name.clone()).collect();
+    let custom_text = metadata.custom_text.trim();
+
+    Ok(ResponseJson(ApiResponse::success(
+        ResolvedPipelineResponse {
+            workspace_id: workspace.id,
+            pipeline_names,
+            instructions: if resolved_stages.is_empty() {
+                String::new()
+            } else {
+                "Execute these stages in the order listed. Do not add, skip, or reorder stages."
+                    .to_string()
+            },
+            stages: resolved_stages,
+            executor: metadata.executor,
+            custom_text: if custom_text.is_empty() {
+                None
+            } else {
+                Some(custom_text.to_string())
+            },
+            current_pipeline_stage: workspace.current_pipeline_stage,
+        },
+    )))
 }

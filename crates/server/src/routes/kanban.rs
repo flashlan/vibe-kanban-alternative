@@ -36,6 +36,7 @@ use db::models::{
     execution_process::ExecutionProcess,
     file::{CommentAttachment, IssueAttachment},
     issue::Issue as DbIssue,
+    issue::IssueMetrics,
     issue_relationship::IssueRelationship as DbIssueRelationship,
     issue_workspace::IssueWorkspace,
     kanban_tag::{IssueTag as DbIssueTag, KanbanTag},
@@ -419,6 +420,19 @@ async fn get_issue(
     Ok(ok(to_api_issue(issue)))
 }
 
+/// Lifecycle metrics for a single card (total time, review cycles, rework,
+/// status-change count). Derived from `issue_status_history`.
+async fn get_issue_metrics(
+    State(deployment): State<DeploymentImpl>,
+    Path(id): Path<Uuid>,
+) -> Result<ResponseJson<ApiResponse<IssueMetrics>>, ApiError> {
+    let metrics = DbIssue::metrics(&deployment.db().pool, id)
+        .await
+        .map_err(ApiError::Database)?
+        .ok_or_else(|| ApiError::BadRequest("issue not found".into()))?;
+    Ok(ok(metrics))
+}
+
 #[derive(Debug, Deserialize)]
 struct DispatchToWorkspaceRequest {
     workspace_id: Uuid,
@@ -647,11 +661,12 @@ async fn list_archived_issues(
     State(deployment): State<DeploymentImpl>,
     Query(q): Query<ProjectScope>,
 ) -> Result<ResponseJson<ApiResponse<ListIssuesResponse>>, ApiError> {
-    let issues: Vec<ApiIssue> = DbIssue::list_archived_by_project(&deployment.db().pool, q.project_id)
-        .await?
-        .into_iter()
-        .map(to_api_issue)
-        .collect();
+    let issues: Vec<ApiIssue> =
+        DbIssue::list_archived_by_project(&deployment.db().pool, q.project_id)
+            .await?
+            .into_iter()
+            .map(to_api_issue)
+            .collect();
     let total_count = issues.len();
     Ok(ok(ListIssuesResponse {
         issues,
@@ -997,6 +1012,7 @@ pub fn router(_deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
             "/issues/{id}",
             get(get_issue).patch(update_issue).delete(delete_issue),
         )
+        .route("/issues/{id}/metrics", get(get_issue_metrics))
         .route("/issues/{id}/archive", post(archive_issue))
         .route("/issues/{id}/restore", post(restore_issue))
         .route("/issues/archived", get(list_archived_issues))

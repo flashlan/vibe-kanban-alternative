@@ -33,6 +33,7 @@ import {
   stripPipelineBlock,
 } from '@/shared/lib/pipeline/cardPipeline';
 import { selectActiveWorkspace } from '@/shared/lib/pipeline/selectActiveWorkspace';
+import { usePipelineResolve } from '@/shared/hooks/usePipelineResolve';
 import { useUserSystem } from '@/shared/hooks/useUserSystem';
 import {
   KanbanIssuePanel,
@@ -296,19 +297,53 @@ export function KanbanIssuePanelContainer({
     }));
   }, [getPullRequestsForIssue, selectedKanbanIssueId]);
 
-  // Parse the card's numbered ## Pipeline stages (M) from its live
-  // description, and pick the workspace whose live progress (N) drives the
-  // "you are here" view. Re-derives on every description/workspaces change
-  // so it can't drift from what's actually in the card.
-  const pipelineStages = useMemo(() => {
+  // LEGACY: parse the card's numbered ## Pipeline stages from its live
+  // description. Only pre-migration cards (or hand-edited descriptions)
+  // still have a numbered list there — a new card's description carries
+  // just the compact `get_pipeline` pointer, so this returns [] for those.
+  const legacyPipelineStages = useMemo(() => {
     if (!selectedIssue) return [];
     return parsePipelineStages(selectedIssue.description ?? null);
   }, [selectedIssue]);
 
+  // Whether the card has a structured pipeline selection recorded in
+  // extension_metadata — true for any card created/edited with a pipeline
+  // since that field existed, regardless of which description format it has.
+  const hasStructuredPipelineSelection = useMemo(() => {
+    const prov = readPipelineProvenance(selectedIssue?.extension_metadata);
+    return !!prov && prov.pipelineIds.length > 0;
+  }, [selectedIssue]);
+
+  const hasAnyPipelineSignal =
+    legacyPipelineStages.length > 0 || hasStructuredPipelineSelection;
+
+  // Pick the workspace whose live progress (N) drives the "you are here"
+  // view. Re-derives on every description/workspaces change so it can't
+  // drift from what's actually in the card.
   const activePipelineWorkspace = useMemo(() => {
-    if (!selectedKanbanIssueId || pipelineStages.length === 0) return null;
+    if (!selectedKanbanIssueId || !hasAnyPipelineSignal) return null;
     return selectActiveWorkspace(getWorkspacesForIssue(selectedKanbanIssueId));
-  }, [selectedKanbanIssueId, pipelineStages.length, getWorkspacesForIssue]);
+  }, [selectedKanbanIssueId, hasAnyPipelineSignal, getWorkspacesForIssue]);
+
+  // Server-resolved stage list (M) — the source of truth for the same data
+  // `get_pipeline` returns, driven by extension_metadata, not description
+  // text. This is the ONLY source for a new-style card, whose description
+  // has no numbered list left for `parsePipelineStages` to find; it also
+  // works for old-style cards, so it takes priority whenever it resolves
+  // any stages.
+  const { data: resolvedPipeline } = usePipelineResolve(
+    activePipelineWorkspace?.id
+  );
+
+  const pipelineStages = useMemo(() => {
+    if (resolvedPipeline && resolvedPipeline.stages.length > 0) {
+      return resolvedPipeline.stages.map((s) => ({
+        index: Number(s.index),
+        label: s.label,
+      }));
+    }
+    return legacyPipelineStages;
+  }, [resolvedPipeline, legacyPipelineStages]);
 
   // Determine mode from composer state (create) or issue route (edit).
   const mode = kanbanCreateMode ? 'create' : 'edit';

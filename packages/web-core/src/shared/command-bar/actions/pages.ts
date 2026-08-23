@@ -169,14 +169,14 @@ export const Pages: Record<StaticPageId, CommandBarPage> = {
           { type: 'action', action: Actions.MarkBlockedBy },
           { type: 'action', action: Actions.MarkRelated },
           { type: 'action', action: Actions.MarkDuplicateOf },
-           { type: 'action', action: Actions.DuplicateIssue },
-           { type: 'action', action: Actions.ArchiveIssue },
-           { type: 'action', action: Actions.DeleteIssue },
-           { type: 'action', action: Actions.ArchivedIssues },
-         ],
-       },
-     ],
-   },
+          { type: 'action', action: Actions.DuplicateIssue },
+          { type: 'action', action: Actions.ArchiveIssue },
+          { type: 'action', action: Actions.DeleteIssue },
+          { type: 'action', action: Actions.ArchivedIssues },
+        ],
+      },
+    ],
+  },
 };
 
 // Get all actions from a specific page

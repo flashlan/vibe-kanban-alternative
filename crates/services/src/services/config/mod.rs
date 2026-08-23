@@ -22,6 +22,16 @@ Update the PR using gh pr edit."#;
 
 pub const DEFAULT_COMMIT_REMINDER_PROMPT: &str = "There are uncommitted changes. Please stage and commit them now with a descriptive commit message.";
 
+/// Resolved by `get_rules` (`pre` field). Always-on guardrails to keep in
+/// mind throughout a card's work — scoping (which repo's memory to use) and
+/// the recall step. Extracted from what used to be duplicated verbatim in
+/// every bundled pipeline's `memory` stage.
+pub const DEFAULT_GENERAL_RULES_PRE: &str = "PROJECT MEMORY — general rules for using mem0 across this card's work. SCOPING: call `get_context` first — `workspace_repos` lists every repo attached to this workspace (usually one). Use `workspace_repos[0].repo_name` as the PRIMARY `user_id` for `memory_search`/`memory_save` calls — that's this workspace's main project repo. If `workspace_repos` has more than one entry and the fact or query you're handling genuinely concerns a different repo in that list (e.g. a card doing cross-repo integration work), ALSO call `memory_search`/`memory_save` with that OTHER repo's `repo_name` as `user_id` — memory stays scoped per-repo, but a secondary repo you're actively integrating with isn't left blind. Never use a repo slug outside `workspace_repos`. (1) BEFORE you begin, recall memories relevant to the code you will touch: call `memory_search` with `user_id` set to the relevant repo slug(s) and a query naming the files/modules/area this card changes. Returns at most 5 hits per call — if they don't cover what you need, refine the query (narrower terms, a different file/module) and call it again rather than assuming one call is enough. Apply only memories that genuinely match this work; ignore irrelevant ones. If a hit names a specific module, file, or entity and you need to know how it fits into the surrounding code — what depends on it, what it depends on — rather than just that one isolated fact, call `memory_graph_traverse` from that entity name; it returns real graph structure, not just similar-sounding text. If a hit looks old, or inconsistent with the code you are actually seeing, call `memory_check_staleness` with that entity name before trusting or acting on it — a stale memory (describing code already removed or changed) is worse than no memory at all. Never let a memory override the card's explicit instructions. (2) WHILE you work, note any new DURABLE fact about the project (a decision, convention, dependency, or root cause) that a future session would need — and which repo it belongs to.";
+
+/// Resolved by `get_rules` (`post` field). Closing checklist to run once
+/// the work is verified.
+pub const DEFAULT_GENERAL_RULES_POST: &str = "AFTER the work is verified, call `memory_save` with `user_id` set to that fact's repo slug for each durable fact noted while working. The content MUST be self-contained, factual, and verified — NEVER save speculation, guesses, half-finished work, or ephemeral state (commit hashes, timestamps, log lines). A false or unverified memory poisons every future agent, so when in doubt, do not save.";
+
 /// Prompt for the "Generate spec" intake flow. A coding agent runs once,
 /// non-interactively, in a throwaway worktree containing the project's repos,
 /// and turns a rough one-line brief into a development-ready technical task.
@@ -80,18 +90,18 @@ pub enum ConfigError {
     ValidationError(String),
 }
 
-pub type Config = versions::v9::Config;
-pub type PipelineStep = versions::v9::PipelineStep;
-pub type NotificationConfig = versions::v9::NotificationConfig;
-pub type EditorConfig = versions::v9::EditorConfig;
-pub type ThemeMode = versions::v9::ThemeMode;
-pub type SoundFile = versions::v9::SoundFile;
-pub type EditorType = versions::v9::EditorType;
-pub type GitHubConfig = versions::v9::GitHubConfig;
-pub type GiteaConfig = versions::v9::GiteaConfig;
-pub type UiLanguage = versions::v9::UiLanguage;
-pub type ShowcaseState = versions::v9::ShowcaseState;
-pub type SendMessageShortcut = versions::v9::SendMessageShortcut;
+pub type Config = versions::v10::Config;
+pub type PipelineStep = versions::v10::PipelineStep;
+pub type NotificationConfig = versions::v10::NotificationConfig;
+pub type EditorConfig = versions::v10::EditorConfig;
+pub type ThemeMode = versions::v10::ThemeMode;
+pub type SoundFile = versions::v10::SoundFile;
+pub type EditorType = versions::v10::EditorType;
+pub type GitHubConfig = versions::v10::GitHubConfig;
+pub type GiteaConfig = versions::v10::GiteaConfig;
+pub type UiLanguage = versions::v10::UiLanguage;
+pub type ShowcaseState = versions::v10::ShowcaseState;
+pub type SendMessageShortcut = versions::v10::SendMessageShortcut;
 
 /// Will always return config, trying old schemas or eventually returning default
 pub async fn load_config_from_file(config_path: &PathBuf) -> Config {

@@ -1,7 +1,10 @@
 use std::{collections::HashMap, env, fs, path::Path};
 
 use schemars::{JsonSchema, Schema, SchemaGenerator, generate::SchemaSettings};
-use services::services::config::{DEFAULT_COMMIT_REMINDER_PROMPT, DEFAULT_PR_DESCRIPTION_PROMPT};
+use services::services::config::{
+    DEFAULT_COMMIT_REMINDER_PROMPT, DEFAULT_GENERAL_RULES_POST, DEFAULT_GENERAL_RULES_PRE,
+    DEFAULT_PR_DESCRIPTION_PROMPT,
+};
 use ts_rs::TS;
 
 fn generate_types_content() -> String {
@@ -144,6 +147,11 @@ fn generate_types_content() -> String {
         api_types::OrchestratorPromptResponse::decl(),
         api_types::ResolvedOrchestratorPromptResponse::decl(),
         api_types::OrchestratorPromptSource::decl(),
+        // pipeline/rules-via-MCP: GET /api/workspaces/{id}/pipeline/resolve.
+        api_types::ResolvedPipelineResponse::decl(),
+        api_types::ResolvedPipelineStage::decl(),
+        // pipeline/rules-via-MCP: GET /api/general-rules/resolve.
+        api_types::ResolvedGeneralRules::decl(),
         git_host::UnifiedPrComment::decl(),
         git_host::ProviderKind::decl(),
         git_host::PullRequestDetail::decl(),
@@ -279,9 +287,11 @@ fn generate_types_content() -> String {
 
     // Append exported constants
     let constants = format!(
-        "export const DEFAULT_PR_DESCRIPTION_PROMPT = {};\n\nexport const DEFAULT_COMMIT_REMINDER_PROMPT = {};",
+        "export const DEFAULT_PR_DESCRIPTION_PROMPT = {};\n\nexport const DEFAULT_COMMIT_REMINDER_PROMPT = {};\n\nexport const DEFAULT_GENERAL_RULES_PRE = {};\n\nexport const DEFAULT_GENERAL_RULES_POST = {};",
         serde_json::to_string(DEFAULT_PR_DESCRIPTION_PROMPT).unwrap(),
         serde_json::to_string(DEFAULT_COMMIT_REMINDER_PROMPT).unwrap(),
+        serde_json::to_string(DEFAULT_GENERAL_RULES_PRE).unwrap(),
+        serde_json::to_string(DEFAULT_GENERAL_RULES_POST).unwrap(),
     );
 
     format!("{HEADER}\n\n{body}\n\n{constants}")

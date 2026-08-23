@@ -98,6 +98,7 @@ import {
   RunRoutineResponse,
   PipelineFileStatus,
   PipelineValidation,
+  ResolvedPipelineResponse,
 } from 'shared/types';
 import type { WorkspaceWithSession } from '@/shared/types/attempt';
 import { createWorkspaceWithSession } from '@/shared/types/attempt';
@@ -657,6 +658,15 @@ export const workspacesApi = {
       `/api/workspaces/${workspaceId}/git/status`
     );
     return handleApiResponse<RepoBranchStatus[]>(response);
+  },
+
+  resolvePipeline: async (
+    workspaceId: string
+  ): Promise<ResolvedPipelineResponse> => {
+    const response = await makeRequest(
+      `/api/workspaces/${workspaceId}/pipeline/resolve`
+    );
+    return handleApiResponse<ResolvedPipelineResponse>(response);
   },
 
   getRepos: async (workspaceId: string): Promise<RepoWithTargetBranch[]> => {

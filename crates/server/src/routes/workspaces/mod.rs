@@ -32,6 +32,7 @@ pub fn router(deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
         .route("/messages/first", get(core::get_first_user_message))
         .route("/seen", axum::routing::put(core::mark_seen))
         .route("/pipeline-stage", post(core::report_pipeline_stage))
+        .route("/pipeline/resolve", get(core::resolve_pipeline))
         .route("/open-terminal", post(core::open_terminal))
         .nest("/git", git::router())
         .nest("/execution", execution::router())

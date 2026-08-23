@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use services::services::{
     config::{
-        Config, ConfigError, SoundFile,
+        Config, ConfigError, DEFAULT_GENERAL_RULES_POST, DEFAULT_GENERAL_RULES_PRE, SoundFile,
         editor::{EditorConfig, EditorType},
         save_config_to_file,
     },
@@ -54,6 +54,7 @@ pub fn router() -> Router<DeploymentImpl> {
         .route("/agents/check-availability", get(check_agent_availability))
         .route("/agents/preset-options", get(get_agent_preset_options))
         .route("/agents/models", get(get_agent_models))
+        .route("/general-rules/resolve", get(resolve_general_rules))
         .route(
             "/agents/discovered-options/ws",
             get(stream_executor_discovered_options_ws),
@@ -161,6 +162,28 @@ async fn update_config(
         }
         Err(e) => ResponseJson(ApiResponse::error(&format!("Failed to save config: {}", e))),
     }
+}
+
+/// `GET /api/general-rules/resolve` — resolved by the `get_rules` MCP tool.
+/// Global config only (no per-project stack, unlike orchestrator prompts) —
+/// matches the `commit_reminder_prompt`/`pr_auto_description_prompt`
+/// precedent. `None` in `Config` falls back to the built-in default.
+async fn resolve_general_rules(
+    State(deployment): State<DeploymentImpl>,
+) -> ResponseJson<ApiResponse<api_types::ResolvedGeneralRules>> {
+    let config = deployment.config().read().await;
+    let pre = config
+        .general_rules_pre
+        .clone()
+        .unwrap_or_else(|| DEFAULT_GENERAL_RULES_PRE.to_string());
+    let post = config
+        .general_rules_post
+        .clone()
+        .unwrap_or_else(|| DEFAULT_GENERAL_RULES_POST.to_string());
+    ResponseJson(ApiResponse::success(api_types::ResolvedGeneralRules {
+        pre,
+        post,
+    }))
 }
 
 async fn get_sound(Path(sound): Path<SoundFile>) -> Result<Response, ApiError> {

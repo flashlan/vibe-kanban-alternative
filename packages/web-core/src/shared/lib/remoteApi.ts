@@ -151,3 +151,37 @@ export async function bulkUpdateProjectStatuses(
     throw new Error(error.message || 'Failed to bulk update project statuses');
   }
 }
+
+/** Lifecycle metrics for a single card. Mirrors the `IssueMetrics` shape
+ *  returned by `GET /api/issues/{id}/metrics`. */
+export interface IssueMetrics {
+  issue_id: string;
+  created_at: string;
+  completed_at: string | null;
+  total_seconds: number;
+  cycles: number;
+  rework_count: number;
+  status_changes: number;
+  current_status_name: string;
+}
+
+/** Fetch lifecycle metrics (total time, review cycles, rework, status
+ *  changes) for a single card. */
+export async function fetchIssueMetrics(
+  issueId: string
+): Promise<IssueMetrics> {
+  const response = await makeRequest(`/api/issues/${issueId}/metrics`, {
+    method: 'GET',
+  });
+  if (!response.ok) {
+    const error = (await response.json().catch(() => null)) as {
+      message?: string;
+    } | null;
+    throw new Error(error?.message ?? 'Failed to load card metrics');
+  }
+  const body = (await response.json()) as {
+    success: boolean;
+    data: IssueMetrics;
+  };
+  return body.data;
+}

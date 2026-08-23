@@ -707,6 +707,108 @@ pub fn delete_pipeline(dir: &Path, id: &str) -> Result<(), PipelineError> {
     Ok(())
 }
 
+/// Merge the FULL stage sequences of the given pipelines into one canonical
+/// order via a stable topological sort (Kahn's algorithm), so a stage shared
+/// by two pipelines appears once and the relative order declared by every
+/// pipeline is respected. Tiebreak = first-seen index across pipelines in
+/// selection order, which makes the result deterministic.
+///
+/// Direct Rust port of `cardPipeline.ts::canonicalStageOrder` — keep the two
+/// in sync; this is what `GET /api/workspaces/{id}/pipeline/resolve` (and
+/// therefore the `get_pipeline` MCP tool) uses server-side, so a card's
+/// editor preview (frontend) and what the execution agent actually receives
+/// must agree on stage order.
+pub fn canonical_stage_order(pipelines: &[&Pipeline]) -> Vec<PipelineStep> {
+    use std::collections::HashMap;
+
+    let mut by_id: HashMap<String, PipelineStep> = HashMap::new();
+    let mut first_seen: HashMap<String, usize> = HashMap::new();
+    let mut seen_idx = 0usize;
+    for p in pipelines {
+        for s in &p.stages {
+            by_id.entry(s.id.clone()).or_insert_with(|| s.clone());
+            first_seen.entry(s.id.clone()).or_insert_with(|| {
+                let idx = seen_idx;
+                seen_idx += 1;
+                idx
+            });
+        }
+    }
+
+    let mut indegree: HashMap<String, usize> = HashMap::new();
+    let mut adjacency: HashMap<String, HashSet<String>> = HashMap::new();
+    for id in by_id.keys() {
+        indegree.insert(id.clone(), 0);
+        adjacency.insert(id.clone(), HashSet::new());
+    }
+    for p in pipelines {
+        for pair in p.stages.windows(2) {
+            let from = &pair[0].id;
+            let to = &pair[1].id;
+            if let Some(adj) = adjacency.get_mut(from)
+                && adj.insert(to.clone())
+            {
+                *indegree.entry(to.clone()).or_insert(0) += 1;
+            }
+        }
+    }
+
+    let mut remaining: HashSet<String> = by_id.keys().cloned().collect();
+    let mut ready: Vec<String> = remaining
+        .iter()
+        .filter(|id| indegree.get(*id).copied().unwrap_or(0) == 0)
+        .cloned()
+        .collect();
+    let mut ordered: Vec<String> = Vec::new();
+
+    while !ready.is_empty() {
+        let next = ready
+            .iter()
+            .min_by_key(|id| first_seen.get(*id).copied().unwrap_or(usize::MAX))
+            .cloned()
+            .expect("ready is non-empty");
+        ready.retain(|id| id != &next);
+        ordered.push(next.clone());
+        remaining.remove(&next);
+        if let Some(succs) = adjacency.get(&next) {
+            for succ in succs {
+                if let Some(deg) = indegree.get_mut(succ) {
+                    *deg -= 1;
+                    if *deg == 0 {
+                        ready.push(succ.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // Safe fallback: if a cycle ever left nodes unprocessed (shouldn't happen
+    // with well-formed pipeline files), append the remainder in first-seen
+    // order rather than silently dropping stages.
+    if !remaining.is_empty() {
+        let mut rest: Vec<String> = remaining.into_iter().collect();
+        rest.sort_by_key(|id| first_seen.get(id).copied().unwrap_or(0));
+        ordered.extend(rest);
+    }
+
+    ordered
+        .into_iter()
+        .filter_map(|id| by_id.get(&id).cloned())
+        .collect()
+}
+
+/// The canonical stage order for `pipelines`, filtered to the enabled union.
+/// Port of `cardPipeline.ts::orderedEnabledStages`.
+pub fn ordered_enabled_stages(
+    pipelines: &[&Pipeline],
+    enabled_ids: &HashSet<String>,
+) -> Vec<PipelineStep> {
+    canonical_stage_order(pipelines)
+        .into_iter()
+        .filter(|s| enabled_ids.contains(&s.id))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -1150,5 +1252,52 @@ mod tests {
         let d = TmpDir::new();
         reset_one(d.path(), "basic").unwrap();
         assert!(manifest_seeded(d.path()).contains("basic.toml"));
+    }
+
+    fn step(id: &str) -> PipelineStep {
+        PipelineStep {
+            id: id.to_string(),
+            label: id.to_string(),
+            prompt_fragment: format!("do {id}"),
+            default_enabled: true,
+            heavy: false,
+            executor: None,
+            model: None,
+            reasoning_effort: None,
+        }
+    }
+
+    fn pipeline(id: &str, stage_ids: &[&str]) -> Pipeline {
+        Pipeline {
+            id: id.to_string(),
+            name: id.to_string(),
+            description: None,
+            stages: stage_ids.iter().map(|s| step(s)).collect(),
+        }
+    }
+
+    #[test]
+    fn canonical_stage_order_dedupes_shared_stage_and_respects_declared_order() {
+        let a = pipeline("a", &["spec", "code", "review"]);
+        let b = pipeline("b", &["code", "merge"]);
+        let ordered = canonical_stage_order(&[&a, &b]);
+        let ids: Vec<&str> = ordered.iter().map(|s| s.id.as_str()).collect();
+        // "code" is shared by both pipelines and must appear exactly once,
+        // in a position consistent with both pipelines' declared order.
+        assert_eq!(ids, vec!["spec", "code", "review", "merge"]);
+    }
+
+    #[test]
+    fn ordered_enabled_stages_filters_to_enabled_set() {
+        let a = pipeline("a", &["spec", "code", "review", "merge"]);
+        let enabled: HashSet<String> = ["code", "merge"].iter().map(|s| s.to_string()).collect();
+        let stages = ordered_enabled_stages(&[&a], &enabled);
+        let ids: Vec<&str> = stages.iter().map(|s| s.id.as_str()).collect();
+        assert_eq!(ids, vec!["code", "merge"]);
+    }
+
+    #[test]
+    fn canonical_stage_order_is_deterministic_with_no_pipelines() {
+        assert!(canonical_stage_order(&[]).is_empty());
     }
 }

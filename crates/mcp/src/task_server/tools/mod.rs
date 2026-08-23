@@ -43,8 +43,10 @@ mod issue_tags;
 mod issues;
 mod mem0;
 mod orchestrator_prompt;
+mod pipeline;
 mod projects;
 mod repos;
+mod rules;
 mod sessions;
 mod task_attempts;
 mod workspaces;
@@ -77,6 +79,15 @@ impl McpServer {
             // mem0 project memory (recall / search / save) for the coding
             // agents driving workspaces.
             + Self::mem0_tools_router()
+            // Card-scoped pipeline resolve. Not in orchestrator_mode_router,
+            // same reasoning as report_pipeline_stage: the orchestrator
+            // doesn't execute a card's pipeline stages itself.
+            + Self::pipeline_tools_router()
+            // General project rules (pre/post). Global config, no per-card
+            // scoping needed — but same reasoning as pipeline: the
+            // orchestrator doesn't do a card's actual work, so it doesn't
+            // need this either.
+            + Self::rules_tools_router()
     }
 
     pub fn orchestrator_mode_router() -> rmcp::handler::server::tool::ToolRouter<Self> {
@@ -516,6 +527,7 @@ mod tests {
             // one session can both read board prompts and sweep.
             "get_orchestrator_prompt".to_string(),
             "get_issue".to_string(),
+            "get_pipeline".to_string(),
             "get_repo".to_string(),
             "link_workspace_issue".to_string(),
             "list_issue_priorities".to_string(),
@@ -531,6 +543,7 @@ mod tests {
             "memory_graph_traverse".to_string(),
             "memory_save".to_string(),
             "memory_search".to_string(),
+            "get_rules".to_string(),
             "remove_issue_tag".to_string(),
             "report_pipeline_stage".to_string(),
             "respond_to_approval".to_string(),

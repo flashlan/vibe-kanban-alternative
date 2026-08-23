@@ -314,6 +314,18 @@
           "label": "Enable Workspaces Beta",
           "helper": "Use the new workspaces interface when viewing workspaces. Tasks will open in task view first, and attempts will open in the new workspaces view."
         }
+      },
+      "generalRules": {
+        "title": "General Rules",
+        "description": "Rules resolved by the get_rules MCP tool at the start of every card.",
+        "pre": {
+          "useCustom": "Use custom pre-rules",
+          "helper": "Always-on guardrails the agent keeps in mind throughout the card."
+        },
+        "post": {
+          "useCustom": "Use custom post-rules",
+          "helper": "Closing checklist the agent runs once the work is verified."
+        }
       }
     },
     "pipeline": {

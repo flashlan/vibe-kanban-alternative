@@ -7,6 +7,7 @@ import {
   CaretRightIcon,
   CircleDashedIcon,
   DotsThreeIcon,
+  InfoIcon,
   KanbanIcon,
   PlusIcon,
 } from '@phosphor-icons/react';
@@ -145,6 +146,7 @@ export type KanbanCardContentProps<TTag extends KanbanTag = KanbanTag> = {
   className?: string;
   onPriorityClick?: (e: MouseEvent) => void;
   onMoreActionsClick?: () => void;
+  onInfoClick?: () => void;
   tagEditProps?: TagEditProps<TTag>;
   isMobile?: boolean;
 };
@@ -166,6 +168,7 @@ export function KanbanCardContent<TTag extends KanbanTag = KanbanTag>({
   className,
   onPriorityClick,
   onMoreActionsClick,
+  onInfoClick,
   tagEditProps,
   isMobile,
 }: KanbanCardContentProps<TTag>) {
@@ -244,6 +247,27 @@ export function KanbanCardContent<TTag extends KanbanTag = KanbanTag>({
             title="More actions"
           >
             <DotsThreeIcon className="size-icon-xs" weight="bold" />
+          </button>
+        )}
+        {onInfoClick && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onInfoClick();
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+            className={cn(
+              'p-half -m-half rounded-sm text-low hover:text-normal hover:bg-secondary shrink-0',
+              isMobile
+                ? ''
+                : 'invisible opacity-0 group-hover:visible group-hover:opacity-100',
+              'transition-[opacity,color,background-color]'
+            )}
+            aria-label="Card info"
+            title="Card info"
+          >
+            <InfoIcon className="size-icon-xs" weight="bold" />
           </button>
         )}
       </div>

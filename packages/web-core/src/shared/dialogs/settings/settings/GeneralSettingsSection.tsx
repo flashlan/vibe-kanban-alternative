@@ -5,6 +5,8 @@ import { SpeakerHighIcon, SpinnerIcon } from '@phosphor-icons/react';
 import {
   type BaseCodingAgent,
   DEFAULT_COMMIT_REMINDER_PROMPT,
+  DEFAULT_GENERAL_RULES_POST,
+  DEFAULT_GENERAL_RULES_PRE,
   DEFAULT_PR_DESCRIPTION_PROMPT,
   EditorType,
   type ExecutorProfileId,
@@ -65,8 +67,12 @@ export function GeneralSettingsSection() {
   const [animateRunningOutline, setAnimateRunningOutline] =
     useAnimateRunningOutline();
   const { themes: themeVariantManifest } = useThemeManifest();
-  const autoMoveCardsEnabled = useUiPreferencesStore((s) => s.autoMoveCardsEnabled);
-  const setAutoMoveCardsEnabled = useUiPreferencesStore((s) => s.setAutoMoveCardsEnabled);
+  const autoMoveCardsEnabled = useUiPreferencesStore(
+    (s) => s.autoMoveCardsEnabled
+  );
+  const setAutoMoveCardsEnabled = useUiPreferencesStore(
+    (s) => s.setAutoMoveCardsEnabled
+  );
   const languageOptions = getLanguageOptions(
     t('language.browserDefault', {
       ns: 'common',
@@ -684,6 +690,64 @@ export function GeneralSettingsSection() {
             </SettingsField>
           </>
         )}
+      </SettingsCard>
+
+      {/* General Rules (get_rules MCP tool) */}
+      <SettingsCard
+        title={t('settings.general.generalRules.title')}
+        description={t('settings.general.generalRules.description')}
+      >
+        <SettingsCheckbox
+          id="use-custom-general-rules-pre"
+          label={t('settings.general.generalRules.pre.useCustom')}
+          checked={draft?.general_rules_pre != null}
+          onChange={(checked) => {
+            if (checked) {
+              updateDraft({
+                general_rules_pre: DEFAULT_GENERAL_RULES_PRE,
+              });
+            } else {
+              updateDraft({ general_rules_pre: null });
+            }
+          }}
+        />
+
+        <SettingsField
+          label=""
+          description={t('settings.general.generalRules.pre.helper')}
+        >
+          <SettingsTextarea
+            value={draft?.general_rules_pre ?? DEFAULT_GENERAL_RULES_PRE}
+            onChange={(value) => updateDraft({ general_rules_pre: value })}
+            disabled={draft?.general_rules_pre == null}
+          />
+        </SettingsField>
+
+        <SettingsCheckbox
+          id="use-custom-general-rules-post"
+          label={t('settings.general.generalRules.post.useCustom')}
+          checked={draft?.general_rules_post != null}
+          onChange={(checked) => {
+            if (checked) {
+              updateDraft({
+                general_rules_post: DEFAULT_GENERAL_RULES_POST,
+              });
+            } else {
+              updateDraft({ general_rules_post: null });
+            }
+          }}
+        />
+
+        <SettingsField
+          label=""
+          description={t('settings.general.generalRules.post.helper')}
+        >
+          <SettingsTextarea
+            value={draft?.general_rules_post ?? DEFAULT_GENERAL_RULES_POST}
+            onChange={(value) => updateDraft({ general_rules_post: value })}
+            disabled={draft?.general_rules_post == null}
+          />
+        </SettingsField>
       </SettingsCard>
 
       {/* Notifications */}

@@ -88,11 +88,21 @@ export interface UsageSummary {
   activity: DailyAgentActivity[];
   issues: DailyIssueActivity[];
   projects: ProjectProgress[];
+  issues_lifecycle: IssueLifecycleSummary;
   total_executions: number;
   total_seconds: number;
   mem0_tokens: Mem0TokenUsage;
   mem0_relevance: Mem0RelevanceSummary;
   token_telemetry: TokenTelemetrySummary;
+}
+
+/** Aggregate issue lifecycle counts across all projects. */
+export interface IssueLifecycleSummary {
+  total: number;
+  todo: number;
+  done: number;
+  archived: number;
+  avg_lifecycle_seconds: number;
 }
 
 export interface ReExtractResponse {
@@ -313,6 +323,57 @@ export function UsageSettingsSection() {
           </div>
         </div>
       </div>
+
+      {/* Issues lifecycle (aggregate) */}
+      <section>
+        <h3 className="mb-2 text-sm font-medium text-high">
+          {t('settings.usage.issuesLifecycle', 'Issues lifecycle')}
+        </h3>
+        <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+          <div className="rounded-sm border border-border bg-panel p-3">
+            <div className="text-2xl font-semibold text-high">
+              {summary?.issues_lifecycle.total ?? '—'}
+            </div>
+            <div className="text-xs text-low">
+              {t('settings.usage.totalCards', 'Total cards')}
+            </div>
+          </div>
+          <div className="rounded-sm border border-border bg-panel p-3">
+            <div className="text-2xl font-semibold text-high">
+              {summary?.issues_lifecycle.todo ?? '—'}
+            </div>
+            <div className="text-xs text-low">
+              {t('settings.usage.todoCards', 'Todo')}
+            </div>
+          </div>
+          <div className="rounded-sm border border-border bg-panel p-3">
+            <div className="text-2xl font-semibold text-high">
+              {summary?.issues_lifecycle.done ?? '—'}
+            </div>
+            <div className="text-xs text-low">
+              {t('settings.usage.doneCards', 'Concluded')}
+            </div>
+          </div>
+          <div className="rounded-sm border border-border bg-panel p-3">
+            <div className="text-2xl font-semibold text-high">
+              {summary?.issues_lifecycle.archived ?? '—'}
+            </div>
+            <div className="text-xs text-low">
+              {t('settings.usage.archivedCards', 'Archived')}
+            </div>
+          </div>
+          <div className="rounded-sm border border-border bg-panel p-3">
+            <div className="text-2xl font-semibold text-high">
+              {summary?.issues_lifecycle.avg_lifecycle_seconds != null
+                ? formatDuration(summary.issues_lifecycle.avg_lifecycle_seconds)
+                : '—'}
+            </div>
+            <div className="text-xs text-low">
+              {t('settings.usage.avgLifecycle', 'Avg card life')}
+            </div>
+          </div>
+        </div>
+      </section>
 
       {/* GitHub-style activity squares */}
       <section>

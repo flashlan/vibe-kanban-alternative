@@ -8,10 +8,12 @@
 use serde::{Deserialize, Deserializer};
 
 pub mod export;
+pub mod general_rules;
 pub mod issue;
 pub mod issue_comment;
 pub mod issue_relationship;
 pub mod issue_tag;
+pub mod pipeline;
 pub mod project;
 pub mod project_status;
 pub mod pull_request;
@@ -23,10 +25,12 @@ pub mod workspace;
 pub mod workspaces;
 
 pub use export::*;
+pub use general_rules::*;
 pub use issue::*;
 pub use issue_comment::*;
 pub use issue_relationship::*;
 pub use issue_tag::*;
+pub use pipeline::*;
 pub use project::*;
 pub use project_status::*;
 pub use pull_request::*;

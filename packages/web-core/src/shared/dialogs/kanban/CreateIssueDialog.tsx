@@ -113,7 +113,8 @@ const CreateIssueDialogImpl = NiceModal.create<CreateIssueDialogProps>(
     const [description, setDescription] = useState('');
     const [statusId, setStatusId] = useState<string>(defaultStatusId);
     const [priority, setPriority] = useState<string>(NONE_PRIORITY_VALUE);
-    const [selectedTagIds, setSelectedTagIds] = useState<string[]>(defaultTagIds);
+    const [selectedTagIds, setSelectedTagIds] =
+      useState<string[]>(defaultTagIds);
     const [savedIssueId, setSavedIssueId] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);

@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT from_status_id as \"from_status_id?: Uuid\",\n                      to_status_id as \"to_status_id!: Uuid\"\n               FROM issue_status_history\n               WHERE issue_id = $1\n               ORDER BY created_at ASC, rowid ASC",
+  "describe": {
+    "columns": [
+      {
+        "name": "from_status_id?: Uuid",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "to_status_id!: Uuid",
+        "ordinal": 1,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "4486d152ba2e726c362f524c9a4fa88658511b0dcd4e84f57fb377bcbb5ee096"
+}

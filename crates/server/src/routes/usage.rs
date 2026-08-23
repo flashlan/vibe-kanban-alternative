@@ -58,6 +58,21 @@ pub struct ProjectProgress {
     pub open: i64,
 }
 
+/// Aggregate issue lifecycle counts across all projects.
+#[derive(Debug, Serialize, TS)]
+pub struct IssueLifecycleSummary {
+    /// Total issues (active + archived).
+    pub total: i64,
+    /// Issues currently in a "todo"/"backlog" column.
+    pub todo: i64,
+    /// Issues marked concluded (`completed_at` set).
+    pub done: i64,
+    /// Archived issues.
+    pub archived: i64,
+    /// Average lifecycle (created → completed) over concluded issues, in seconds.
+    pub avg_lifecycle_seconds: i64,
+}
+
 #[derive(Debug, Serialize, TS)]
 pub struct UsageSummary {
     /// Activity over the last 30 days, one row per (day, agent).
@@ -66,6 +81,8 @@ pub struct UsageSummary {
     pub issues: Vec<DailyIssueActivity>,
     /// Per-project open/done counts.
     pub projects: Vec<ProjectProgress>,
+    /// Aggregate issue lifecycle counts.
+    pub issues_lifecycle: IssueLifecycleSummary,
     /// Total executions + duration across the whole window.
     pub total_executions: i64,
     pub total_seconds: i64,
@@ -204,14 +221,12 @@ pub struct Mem0ComponentStatus {
 /// on their well-known ports but can be overridden independently.
 fn component_urls() -> (String, String, String) {
     let mem0 = mem0_url();
-    let embeddings = std::env::var("EMBEDDINGS_URL").unwrap_or_else(|_| {
-        match url_host(&mem0) {
-            Some(host) => format!("http://{host}:8001"),
-            None => "http://localhost:8001".to_string(),
-        }
+    let embeddings = std::env::var("EMBEDDINGS_URL").unwrap_or_else(|_| match url_host(&mem0) {
+        Some(host) => format!("http://{host}:8001"),
+        None => "http://localhost:8001".to_string(),
     });
-    let qdrant = std::env::var("QDRANT_URL")
-        .unwrap_or_else(|_| "http://localhost:6333".to_string());
+    let qdrant =
+        std::env::var("QDRANT_URL").unwrap_or_else(|_| "http://localhost:6333".to_string());
     (mem0, embeddings, qdrant)
 }
 
@@ -219,11 +234,11 @@ fn component_urls() -> (String, String, String) {
 /// `url` crate in for a one-line parse.
 fn url_host(input: &str) -> Option<String> {
     let without_scheme = input.split_once("://").map(|(_, r)| r).unwrap_or(input);
-    let authority = without_scheme
-        .split('/')
-        .next()
-        .unwrap_or(without_scheme);
-    let host = authority.rsplit_once(':').map(|(h, _)| h).unwrap_or(authority);
+    let authority = without_scheme.split('/').next().unwrap_or(without_scheme);
+    let host = authority
+        .rsplit_once(':')
+        .map(|(h, _)| h)
+        .unwrap_or(authority);
     if host.is_empty() {
         None
     } else {
@@ -234,11 +249,7 @@ fn url_host(input: &str) -> Option<String> {
 /// mem0: reachable (`/api/config` 2xx) AND its own `/health` reports `ok`.
 /// Returns `(reachable, healthy)`.
 async fn check_mem0(client: &reqwest::Client, base: &str) -> (bool, bool) {
-    let reachable = match client
-        .get(&format!("{base}/api/config"))
-        .send()
-        .await
-    {
+    let reachable = match client.get(&format!("{base}/api/config")).send().await {
         Ok(r) if r.status().is_success() => true,
         _ => return (false, false),
     };
@@ -332,8 +343,7 @@ async fn mem0_status() -> ResponseJson<ApiResponse<Mem0Status>> {
     );
     let (mem0_up, mem0_healthy) = mem0_res;
 
-    let (level, message) =
-        compute_level(mem0_up, mem0_healthy, emb_res, qdrant_res);
+    let (level, message) = compute_level(mem0_up, mem0_healthy, emb_res, qdrant_res);
 
     ResponseJson(ApiResponse::success(Mem0Status {
         level: level.to_string(),
@@ -569,6 +579,46 @@ async fn usage_summary(
     })
     .collect();
 
+    // Aggregate issue lifecycle counts across all projects.
+    #[derive(FromRow)]
+    struct LifecycleRow {
+        total: i64,
+        archived: i64,
+        done: i64,
+        todo: i64,
+        avg_lifecycle: i64,
+    }
+    let lifecycle = sqlx::query_as::<_, LifecycleRow>(
+        r#"SELECT COUNT(*) AS total,
+                  COALESCE(SUM(CASE WHEN i.archived = 1 THEN 1 ELSE 0 END), 0) AS archived,
+                  COALESCE(SUM(CASE WHEN i.completed_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS done,
+                  COALESCE(SUM(CASE
+                      WHEN ps.name LIKE '%todo%' OR ps.name LIKE '%backlog%' OR ps.name LIKE '%to do%'
+                      THEN 1 ELSE 0 END), 0) AS todo,
+                  COALESCE(CAST(AVG(CASE
+                      WHEN i.completed_at IS NOT NULL
+                      THEN (julianday(i.completed_at) - julianday(i.created_at)) * 86400
+                      ELSE NULL END) AS INTEGER), 0) AS avg_lifecycle
+           FROM issues i
+           LEFT JOIN project_statuses ps ON ps.id = i.status_id"#,
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap_or(LifecycleRow {
+        total: 0,
+        archived: 0,
+        done: 0,
+        todo: 0,
+        avg_lifecycle: 0,
+    });
+    let issues_lifecycle = IssueLifecycleSummary {
+        total: lifecycle.total,
+        archived: lifecycle.archived,
+        done: lifecycle.done,
+        todo: lifecycle.todo,
+        avg_lifecycle_seconds: lifecycle.avg_lifecycle,
+    };
+
     // Totals across the whole 30-day window.
     let (total_executions, total_seconds) = sqlx::query_as::<_, (i64, i64)>(
         r#"SELECT COUNT(*) AS executions,
@@ -594,6 +644,7 @@ async fn usage_summary(
         activity,
         issues,
         projects,
+        issues_lifecycle,
         total_executions,
         total_seconds,
         mem0_tokens,
@@ -647,12 +698,18 @@ mod tests {
 
     #[test]
     fn url_host_extracts_host_without_port() {
-        assert_eq!(url_host("http://localhost:8000").as_deref(), Some("localhost"));
+        assert_eq!(
+            url_host("http://localhost:8000").as_deref(),
+            Some("localhost")
+        );
         assert_eq!(
             url_host("https://192.168.1.99:8082/x").as_deref(),
             Some("192.168.1.99")
         );
-        assert_eq!(url_host("http://example.com").as_deref(), Some("example.com"));
+        assert_eq!(
+            url_host("http://example.com").as_deref(),
+            Some("example.com")
+        );
     }
 
     #[test]

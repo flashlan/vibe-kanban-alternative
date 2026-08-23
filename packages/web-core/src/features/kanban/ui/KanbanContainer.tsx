@@ -26,7 +26,10 @@ import {
   useKanbanFilters,
   PRIORITY_ORDER,
 } from '../model/hooks/useKanbanFilters';
-import { type BulkUpdateIssueItem } from '@/shared/lib/remoteApi';
+import {
+  type BulkUpdateIssueItem,
+  fetchIssueMetrics,
+} from '@/shared/lib/remoteApi';
 import { persistIssues, persistIssueSwap } from '@/shared/lib/persistIssues';
 import {
   ArrowLeftIcon,
@@ -53,6 +56,7 @@ import {
 import { DragDropContext } from '@hello-pangea/dnd';
 import { KanbanCardContent } from '@vibe/ui/components/KanbanCardContent';
 import { KanbanWorkspaceDispatch } from '@vibe/ui/components/KanbanWorkspaceDispatch';
+import { CardInfoDialog } from '@vibe/ui/components/CardInfoDialog';
 import { ConfirmDialog } from '@vibe/ui/components/ConfirmDialog';
 import { useQueryClient } from '@tanstack/react-query';
 import { workspacesApi } from '@/shared/lib/api';
@@ -657,6 +661,13 @@ export function KanbanContainer() {
       else next.add(parentId);
       return next;
     });
+  }, []);
+
+  const [cardInfoIssueId, setCardInfoIssueId] = useState<string | null>(null);
+  const [cardInfoOpen, setCardInfoOpen] = useState(false);
+  const openCardInfo = useCallback((issueId: string) => {
+    setCardInfoIssueId(issueId);
+    setCardInfoOpen(true);
   }, []);
 
   const localWorkspacesById = useMemo(() => {
@@ -1356,6 +1367,7 @@ export function KanbanContainer() {
                               onMoreActionsClick={() =>
                                 handleCardMoreActionsClick(issue.id)
                               }
+                              onInfoClick={() => openCardInfo(issue.id)}
                               tagEditProps={{
                                 allTags: tags,
                                 selectedTagIds: getTagsForIssue(issue.id).map(
@@ -1534,6 +1546,16 @@ export function KanbanContainer() {
       {isProjectTerminalOpen && (
         <ProjectTerminalDrawer
           onClose={() => setIsProjectTerminalOpen(false)}
+        />
+      )}
+
+      {cardInfoIssueId && (
+        <CardInfoDialog
+          issueId={cardInfoIssueId}
+          issueTitle={issueMap[cardInfoIssueId]?.title}
+          open={cardInfoOpen}
+          onOpenChange={setCardInfoOpen}
+          loadMetrics={fetchIssueMetrics}
         />
       )}
     </div>

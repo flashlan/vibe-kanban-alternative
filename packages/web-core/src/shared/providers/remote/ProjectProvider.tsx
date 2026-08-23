@@ -143,8 +143,7 @@ export function ProjectProvider({ projectId, children }: ProjectProviderProps) {
   );
 
   const getIssuesForStatus = useCallback(
-    (statusId: string) =>
-      activeIssues.filter((i) => i.status_id === statusId),
+    (statusId: string) => activeIssues.filter((i) => i.status_id === statusId),
     [activeIssues]
   );
 

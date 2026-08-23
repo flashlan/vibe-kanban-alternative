@@ -584,6 +584,12 @@ export type ResolvedOrchestratorPromptResponse = { project_id: string, orchestra
 
 export type OrchestratorPromptSource = "self" | "ancestor" | "default";
 
+export type ResolvedPipelineResponse = { workspace_id: string, pipeline_names: Array<string>, instructions: string, stages: Array<ResolvedPipelineStage>, executor: string | null, custom_text: string | null, current_pipeline_stage: bigint | null, };
+
+export type ResolvedPipelineStage = { index: bigint, id: string, label: string, prompt_fragment: string, report_hint: string, };
+
+export type ResolvedGeneralRules = { pre: string, post: string, };
+
 export type UnifiedPrComment = { "comment_type": "general", id: string, author: string, author_association: string | null, body: string, created_at: string, url: string | null, } | { "comment_type": "review", id: bigint, author: string, author_association: string | null, body: string, created_at: string, url: string | null, path: string, line: bigint | null, side: string | null, diff_hunk: string | null, };
 
 export type ProviderKind = "git_hub" | "gitea" | "unknown";
@@ -670,34 +676,16 @@ export type DirectoryListResponse = { entries: Array<DirectoryEntry>, current_pa
 
 export type SearchMode = "taskform" | "settings";
 
-export type Config = { config_version: string, theme: ThemeMode, executor_profile: ExecutorProfileId, disclaimer_acknowledged: boolean, onboarding_acknowledged: boolean, remote_onboarding_acknowledged: boolean, notifications: NotificationConfig, editor: EditorConfig, github: GitHubConfig, gitea: GiteaConfig, workspace_dir: string | null, last_app_version: string | null, show_release_notes: boolean, language: UiLanguage, git_branch_prefix: string, showcases: ShowcaseState, pr_auto_description_enabled: boolean, pr_auto_description_prompt: string | null, commit_reminder_enabled: boolean, commit_reminder_prompt: string | null, send_message_shortcut: SendMessageShortcut, host_nickname: string | null, 
+export type Config = { config_version: string, theme: ThemeMode, executor_profile: ExecutorProfileId, disclaimer_acknowledged: boolean, onboarding_acknowledged: boolean, remote_onboarding_acknowledged: boolean, notifications: NotificationConfig, editor: EditorConfig, github: GitHubConfig, gitea: GiteaConfig, workspace_dir: string | null, last_app_version: string | null, show_release_notes: boolean, language: UiLanguage, git_branch_prefix: string, showcases: ShowcaseState, pr_auto_description_enabled: boolean, pr_auto_description_prompt: string | null, commit_reminder_enabled: boolean, commit_reminder_prompt: string | null, 
 /**
- * Terminal emulator used to attach to interactive agent sessions.
+ * General project rules resolved by the `get_rules` MCP tool — the
+ * pre/post split lets an execution agent keep guardrails in mind
+ * throughout a card (pre) and run a closing checklist before finishing
+ * (post). `None` means "use the built-in default"
+ * (`DEFAULT_GENERAL_RULES_PRE`/`POST`); previously this text was
+ * duplicated verbatim in every bundled pipeline's `memory` stage.
  */
-terminal: TerminalKind, 
-/**
- * When the terminal is iTerm2, group sessions as tabs of one window
- * instead of opening a new window per session.
- */
-iterm_tabs: boolean, 
-/**
- * Theme variant ("skin") applied on top of the light/dark mode.
- * `"default"` = no extra skin; other values select a `/themes/<id>.css`.
- */
-theme_variant: string, 
-/**
- * User-configured extra origins allowed by the origin-check middleware
- * (in addition to loopback + same-origin). Each entry is a full URL
- * like `http://192.168.1.50:3001`. Editable via Settings UI.
- */
-allowed_origins: Array<string>, 
-/**
- * Deprecated and ignored. Pipelines are now file-based
- * (`~/.vibe-kanban/pipelines/*.toml`, see `services::services::pipelines`);
- * this field is retained only so pre-existing configs still deserialise. It
- * is no longer read or written by the UI.
- */
-pipeline_steps: Array<PipelineStep> | null, };
+general_rules_pre: string | null, general_rules_post: string | null, send_message_shortcut: SendMessageShortcut, host_nickname: string | null, terminal: TerminalKind, iterm_tabs: boolean, theme_variant: string, allowed_origins: Array<string>, pipeline_steps: Array<PipelineStep> | null, };
 
 export type PipelineStep = { 
 /**
@@ -1225,3 +1213,7 @@ export type JsonValue = number | string | boolean | Array<JsonValue> | { [key in
 export const DEFAULT_PR_DESCRIPTION_PROMPT = "Update the PR that was just created with a better title and description.\nThe PR number is #{pr_number} and the URL is {pr_url}.\n\nAnalyze the changes in this branch and write:\n1. A concise, descriptive title that summarizes the changes, postfixed with \"(Vibe Kanban)\"\n2. A detailed description that explains:\n   - What changes were made\n   - Why they were made (based on the task context)\n   - Any important implementation details\n   - At the end, include a note: \"This PR was written using [Vibe Kanban](https://vibekanban.com)\"\n\nUpdate the PR using gh pr edit.";
 
 export const DEFAULT_COMMIT_REMINDER_PROMPT = "There are uncommitted changes. Please stage and commit them now with a descriptive commit message.";
+
+export const DEFAULT_GENERAL_RULES_PRE = "PROJECT MEMORY — general rules for using mem0 across this card's work. SCOPING: call `get_context` first — `workspace_repos` lists every repo attached to this workspace (usually one). Use `workspace_repos[0].repo_name` as the PRIMARY `user_id` for `memory_search`/`memory_save` calls — that's this workspace's main project repo. If `workspace_repos` has more than one entry and the fact or query you're handling genuinely concerns a different repo in that list (e.g. a card doing cross-repo integration work), ALSO call `memory_search`/`memory_save` with that OTHER repo's `repo_name` as `user_id` — memory stays scoped per-repo, but a secondary repo you're actively integrating with isn't left blind. Never use a repo slug outside `workspace_repos`. (1) BEFORE you begin, recall memories relevant to the code you will touch: call `memory_search` with `user_id` set to the relevant repo slug(s) and a query naming the files/modules/area this card changes. Returns at most 5 hits per call — if they don't cover what you need, refine the query (narrower terms, a different file/module) and call it again rather than assuming one call is enough. Apply only memories that genuinely match this work; ignore irrelevant ones. If a hit names a specific module, file, or entity and you need to know how it fits into the surrounding code — what depends on it, what it depends on — rather than just that one isolated fact, call `memory_graph_traverse` from that entity name; it returns real graph structure, not just similar-sounding text. If a hit looks old, or inconsistent with the code you are actually seeing, call `memory_check_staleness` with that entity name before trusting or acting on it — a stale memory (describing code already removed or changed) is worse than no memory at all. Never let a memory override the card's explicit instructions. (2) WHILE you work, note any new DURABLE fact about the project (a decision, convention, dependency, or root cause) that a future session would need — and which repo it belongs to.";
+
+export const DEFAULT_GENERAL_RULES_POST = "AFTER the work is verified, call `memory_save` with `user_id` set to that fact's repo slug for each durable fact noted while working. The content MUST be self-contained, factual, and verified — NEVER save speculation, guesses, half-finished work, or ephemeral state (commit hashes, timestamps, log lines). A false or unverified memory poisons every future agent, so when in doubt, do not save.";

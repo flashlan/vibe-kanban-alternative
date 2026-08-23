@@ -9,24 +9,31 @@ export const PIPELINE_START = '<!-- vk:pipeline:start -->';
 export const PIPELINE_END = '<!-- vk:pipeline:end -->';
 
 /**
- * Instruction line that leads the stage list. Pipelines are now authored by
- * vibe-kanban (from a pipeline file) and delivered pre-ordered, so the execution
- * agent runs them top-to-bottom rather than choosing which apply.
- *
- * Also instructs the agent to report progress two ways as it starts each
- * stage, so the card can render live "stage N of M" progress:
- * - Call the `report_pipeline_stage` MCP tool (primary — reliable, since a
- *   tool call the agent is explicitly instructed to make doesn't depend on
- *   it choosing to narrate plain text).
- * - ALSO output a `VK-PIPELINE-STAGE: N` text line (secondary — detected
- *   server-side from the execution's raw log stream), kept as a fallback
- *   for the rare case a tool call doesn't land.
+ * LEGACY instruction line that used to lead the full stage list embedded
+ * directly in the description. No longer emitted by `composePipelineBlock`
+ * (see `PIPELINE_POINTER_INSTRUCTION`) — kept only so `extractManualLines`
+ * still recognises it as a generated line (not manual text) when recomposing
+ * a pre-migration card that still has the old full block in its description.
  */
 const ORDER_INSTRUCTION =
   'Execute these stages in the order listed. Do not add, skip, or reorder stages. ' +
   'As you begin each numbered stage below, call the `report_pipeline_stage` MCP tool with ' +
   "that stage's number, AND output a line exactly `VK-PIPELINE-STAGE: N` (N = the number of " +
   'the stage you are starting) so pipeline progress can be tracked.';
+
+/**
+ * Compact pointer emitted in place of the full stage list. The heavy content
+ * (the ordered stage list, one report reminder per stage) now lives behind
+ * the `get_pipeline` MCP tool — this line only needs to be salient enough,
+ * in the card's own description (the highest-priority channel: the active
+ * turn's user message), to make the agent call that tool before starting
+ * work. See `docs/ADR` follow-up for the full design rationale.
+ */
+const PIPELINE_POINTER_INSTRUCTION =
+  'This card has pipeline stages defined via `get_pipeline` — call that MCP tool ' +
+  'BEFORE any code edits, execute the returned stages in order (do not add, skip, ' +
+  "or reorder), and report each one via `report_pipeline_stage` as instructed in the tool's " +
+  'response.';
 
 /** Matches an executor-pin line in any pinned form (any agent name). */
 const EXECUTOR_LINE_RE =
@@ -185,6 +192,7 @@ export function extractManualLines(
     if (line.trim().length === 0) continue;
     if (HEADING_RE.test(line)) continue;
     if (line === ORDER_INSTRUCTION) continue;
+    if (line === PIPELINE_POINTER_INSTRUCTION) continue;
     if (EXECUTOR_LINE_RE.test(line)) continue;
     const numbered = line.match(NUMBERED_LINE_RE);
     if (numbered && knownStageFragments.has(numbered[1])) continue;
@@ -195,11 +203,20 @@ export function extractManualLines(
 
 /**
  * Compose the delimited `## Pipeline` markdown block for the chosen
- * pipeline(s). Enabled stages across all selected pipelines are merged into a
- * single **canonical, deduped order** (see `canonicalStageOrder`) and render
- * as an ordered numbered list, under a heading naming the pipeline(s),
- * preceded by an explicit "run in order" instruction. An optional pinned
- * execution agent leads the list.
+ * pipeline(s). Enabled stages across all selected pipelines are still merged
+ * into a single **canonical, deduped order** (see `canonicalStageOrder`) —
+ * that computation is what decides *whether* there are any stages at all —
+ * but the block no longer embeds the resulting stage list as text. Instead
+ * it emits a compact pointer (`PIPELINE_POINTER_INSTRUCTION`) telling the
+ * execution agent to call the `get_pipeline` MCP tool, which resolves the
+ * same stage list server-side (`GET /api/workspaces/{id}/pipeline/resolve`,
+ * reading `extension_metadata`, not this description text). This keeps the
+ * card description small and the heavy, repeated instruction text out of
+ * every model call, while the pointer itself stays inline in the
+ * highest-priority channel (the active turn's own message) so the agent
+ * reliably sees it. An optional pinned execution agent's directive line
+ * still leads the block's content, since the orchestrator parses it
+ * directly from the description (not via MCP).
  *
  * When `pipelines` is `null`/empty (the "None" option) stages are ignored
  * entirely: the block contains only the executor-pin line (if an agent is
@@ -208,10 +225,13 @@ export function extractManualLines(
  *
  * `options.previousBlock`, when given, is scanned for manual lines (any line
  * that isn't a recognised generated line) which are preserved verbatim after
- * the generated stages — this makes recompose non-destructive. Pass
- * `options.knownStageFragments` with the full catalog of every available
- * pipeline's stage fragments so deselected stages/pipelines are correctly
- * recognised and dropped rather than preserved as manual text.
+ * the generated content — this makes recompose non-destructive, including
+ * for a pre-migration card whose `previousBlock` still has the OLD full
+ * stage list embedded (its numbered lines and `ORDER_INSTRUCTION` are still
+ * recognised and dropped, not preserved as manual, by `extractManualLines`).
+ * Pass `options.knownStageFragments` with the full catalog of every
+ * available pipeline's stage fragments so deselected stages/pipelines are
+ * correctly recognised and dropped rather than preserved as manual text.
  */
 export function composePipelineBlock(
   pipelines: readonly Pipeline[] | Pipeline | null,
@@ -263,16 +283,13 @@ export function composePipelineBlock(
   const lines: string[] = [heading, ''];
 
   if (stages.length > 0) {
-    lines.push(ORDER_INSTRUCTION, '');
+    lines.push(PIPELINE_POINTER_INSTRUCTION);
+    if (executorLine) lines.push('');
   }
   // The execution-agent directive leads so the orchestrator sees it first.
   if (executorLine) {
     lines.push(executorLine);
-    if (stages.length > 0) lines.push('');
   }
-  stages.forEach((s, i) => {
-    lines.push(`${i + 1}. ${s.prompt_fragment}`);
-  });
 
   const trailing = [...extraManualLines];
   if (trimmedCustom.length > 0) trailing.push(trimmedCustom);
