@@ -2,9 +2,16 @@
 
 Guia operacional para publicar o livro sobre o Vibe Kanban na Amazon via **KDP (Kindle Direct Publishing)**: eBook Kindle e, opcionalmente, capa comum (paperback). Dados de regras do KDP verificados em ago/2026 nas fontes oficiais listadas ao final — o KDP muda regras com frequência, revalide antes de publicar.
 
-## 1. Investimento estimado
+## 1. Tópicos do Manual Moderno (conteúdo do livro)
 
-O KDP **não cobra taxa para publicar** — a Amazon fica com uma fatia de cada venda (royalties na seção 2). O investimento real vai para produção e divulgação. Faixas abaixo são estimativas de mercado a confirmar na hora da contratação:
+1. **The Vibe Coding Setup** — como documentar o ambiente Node/Rust para que uma IA (ou você, codando por intenção) consiga ler o projeto e entender o contexto instantaneamente: estruturação de `.clinerules`, `.cursorrules` ou arquivos de contexto do repositório (neste projeto, o `AGENTS.md` cumpre esse papel).
+2. **Spec-Driven Architecture** — como desenhar a seção que explica as fronteiras do sistema: como a "Spec" dita o que o JavaScript/TypeScript faz no Node e onde o Rust entra para garantir performance e segurança de tipos.
+3. **The Engineering Loop (CLI & Autocorreção)** — como documentar os comandos de terminal (`npm`, `cargo`) e os padrões de erro para que os agentes rodem testes, leiam os logs de compilação do Rust e se autocorrigirem sem intervenção humana a cada erro.
+4. **Ancoragem de Imagens** — planejar os prints de tela exatos que servem de validação visual, para o desenvolvedor (ou a IA) confirmar que o comportamento do app está correto.
+
+## 2. Investimento estimado
+
+O KDP **não cobra taxa para publicar** — a Amazon fica com uma fatia de cada venda (royalties na seção 3). O investimento real vai para produção e divulgação. Faixas abaixo são estimativas de mercado a confirmar na hora da contratação:
 
 | Item | Obrigatório? | Custo estimado |
 | --- | --- | --- |
@@ -19,14 +26,14 @@ O KDP **não cobra taxa para publicar** — a Amazon fica com uma fatia de cada 
 
 Cenário mínimo viável: **R$ 0** (tudo DIY). Cenário recomendado: reservar verba para capa profissional e um orçamento inicial pequeno de Ads.
 
-## 2. Royalties e preço (regras vigentes, ago/2026)
+## 3. Royalties e preço (regras vigentes, ago/2026)
 
 - **eBook — opção 70%:** preço entre **US$ 2,99 e US$ 12,99** (o teto subiu de US$ 9,99 para US$ 12,99 em 07/jul/2026). Há taxa de entrega por tamanho de arquivo (US$ 0,15/MB na Amazon.com). Vendas para clientes no **Brasil, Japão, México e Índia só pagam 70% se o livro estiver no KDP Select**.
 - **eBook — opção 35%:** qualquer preço de US$ 0,99 a US$ 200 (mínimo sobe com o tamanho do arquivo: US$ 1,99 a partir de 3 MB; US$ 2,99 a partir de 10 MB). Sem taxa de entrega.
 - **Paperback:** royalty de 50% ou 60% (na Amazon.com, o corte é US$ 9,99) **menos o custo de impressão**.
 - **Regra dos 20%:** para a opção de 70%, o preço do eBook deve estar pelo menos 20% abaixo do preço da edição física.
 
-## 3. Checklist de publicação
+## 4. Checklist de publicação
 
 ### Fase 0 — Conta e dados fiscais
 
@@ -59,7 +66,7 @@ Cenário mínimo viável: **R$ 0** (tudo DIY). Cenário recomendado: reservar ve
 
 - [ ] Confirmar que você detém os direitos de todo o conteúdo (texto e imagens)
 - [ ] Selecionar territórios de venda
-- [ ] Escolher opção de royalty 70% vs 35% conforme seção 2
+- [ ] Escolher opção de royalty 70% vs 35% conforme seção 3
 - [ ] Decidir sobre **KDP Select** (exclusividade digital de 90 dias; habilita Kindle Unlimited e o royalty de 70% no Brasil)
 - [ ] Definir preço por marketplace
 
@@ -82,7 +89,7 @@ Cenário mínimo viável: **R$ 0** (tudo DIY). Cenário recomendado: reservar ve
 - [ ] Configurar campanha de **Amazon Ads** (se houver verba)
 - [ ] Monitorar relatórios de vendas no painel KDP e ajustar preço/metadados
 
-## 4. Definition of done
+## 5. Definition of done
 
 - [ ] eBook disponível na Amazon
 - [ ] Paperback disponível (se escolhido)
