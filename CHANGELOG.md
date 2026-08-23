@@ -7,6 +7,42 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-alternat
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.36] - 2026-08-22
+
+### Added
+
+- **Card Pipeline & Project Rules protocol via MCP**: new `get_pipeline` MCP tool resolves a card's selected pipeline stages server-side (`GET /api/workspaces/{id}/pipeline/resolve`, reading `extension_metadata`) instead of embedding the full ordered stage list in the card description text — the description now carries only a compact pointer, keeping the heavy instruction text out of every model call. New `get_rules` MCP tool resolves global pre/post project guidance (`GET /api/general-rules/resolve`, configurable in Settings → General), replacing the old inline "PROJECT MEMORY" prompt blob duplicated across all 9 bundled pipeline TOMLs. `AGENTS.md` documents both protocols so any agent working the board knows to call them.
+- **Card lifecycle metrics**: new `issue_status_history` table + trigger records every status change (drag/drop, auto-move, API, or MCP); a new `GET /v1/issues/{id}/metrics` endpoint and `CardInfoDialog` surface per-card total time, review cycles, rework count, and status-change count, with aggregate `issues_lifecycle` counters added to Settings → Usage.
+- **Issue archive/restore/purge**: 3-dot card menu with Archive, an Archived Issues recovery dialog (Restore / Delete permanently), and a new `archived`/`archived_at` column pair excluding archived issues from the active board.
+- **Auto-move cards**: cards move Todo → In Progress (on workspace create) → In Review (on pipeline completion) → Done (on merge), gated by a Settings toggle (`auto_move_cards_enabled`, default on); forward-only and never overrides a manual drag.
+- **Create-issue dialog parity with cards**: image attachments (drag-drop/paste/browse, via the same WYSIWYG editor and attachment model chat uses) and urgency/tags buttons matching the on-card `PropertyDropdown`/tag row.
+- **mem0 sidebar health indicator**: new `GET /api/usage/mem0-status` checks mem0/embeddings/Qdrant in parallel and shows a 4-level colored dot in the sidebar (polled every 30s), linking to Settings → Memory.
+- **Selectable backup export/import**: choose which parts to include (database, workspace conversation transcripts, settings, home config) instead of an all-or-nothing backup.
+- **TUI cockpit launcher** button in project/workspace terminal tabs, and the underlying `vibe-tui` tmux session is now killed when its tab closes (previously kept running detached in the background).
+- **Prompt cache / KV-cache telemetry**: new counters and a mini-dashboard in Settings → Usage.
+- **AntigravityHeaded executor mode** with a tmux session runner and schemas; Antigravity's log normalizer gained unified diffs, relative paths, category detection, and more robust stderr/token-usage handling.
+- **OpenCode headed sessions** now mirror live SSE events into the message store instead of only showing output after the run finishes.
+- **Workspace-chat conversation cache**: finished execution processes are cached in the browser (in-memory + localStorage, 60-process LRU, 4 MiB guard), so switching between workspaces reuses cached entries instead of re-streaming every historic process over the websocket.
+
+### Fixed
+
+- **Terminal tab close required two clicks**: the close button was nested inside the tab's own select handler (and, on the floating drawer, closing a tab didn't close the panel). Moved the close button to a sibling element with a real hit area, shown on every tab including the last, and wired it to close the whole panel on the floating drawer — one click now reliably closes.
+- Terminal xterm callbacks stabilized to stop DOM unmount on title updates and keep keyboard focus; launch scripts now get `0o700` permissions with a responsive auto-confirm and cleaned-up warnings.
+- Pipeline stage now resets on **any** coding-agent run (previously only the initial one), so a follow-up execution doesn't keep showing the previous run's stage; pipeline progress is preserved across a chat reply, and `memory_save` is gated to Done cards.
+- Removed the startup MCP auto-injection into every installed agent's config (a source of API drift between the dev server and the published binary) in favor of explicit, user-driven setup; the interim wrapper-script workaround commits are superseded by this removal.
+- Create-issue dialog: title no longer resets on every keystroke (unstable default-prop array reference was re-running the form-reset effect), description box no longer shows a stray duplicate border, and Close-button focus timing plus a global Enter-to-save listener were fixed.
+- Archive dialog: `ArchivedIssuesDialog` now has a stable modal id (`NiceModal.create`), and `/v1/issues/archived`'s bare `{issues}` response shape is now parsed correctly.
+- Workspace-chat input now focuses automatically when a workspace is opened from a card.
+- Claude Code auth-failure stderr now surfaces recovery guidance instead of a raw error.
+- Fixed a canonical-path resolution logging spam and a Gitea test failure in `utils`.
+- Quick pipeline's prompt now explicitly instructs the agent to emit a `TodoWrite` checklist so the Tasks view populates.
+- Fixed Issue test fixtures missing the `archived`/`archived_at` fields added by the archive feature.
+
+### Changed
+
+- Removed the "mark card Done via chat" auto-instructions from the memory-stage prompt across all 9 bundled pipelines, keeping only the save-gate and recall/save instructions.
+- Terminal tab bar restyled: tabs left-aligned, with the "Painel Terminal" label, TUI launcher button, and close `X` on the right.
+
 ## [0.2.35] - 2026-08-21
 
 ### Added
