@@ -11,7 +11,9 @@ Para um desenvolvedor que acabou de instalar o Vibe Kanban Indie e quer **usar a
 - usar **git sem medo** dentro do Vibe Kanban (workspaces, worktrees, branches, PRs);
 - construir um projeto do zero — **um SaaS completo** — usando só a interface.
 
-A Parte II fica para quando você quiser customizar o próprio Vibe Kanban. O foco agora é **usar o aplicativo para desenvolver**.
+A **Parte II** fica para quando você quiser customizar o próprio Vibe Kanban. O foco agora é **usar o aplicativo para desenvolver**.
+
+> **Leia o capítulo 02 antes de instalar.** Ele apresenta o vocabulário do vibe coding atual — *Engineering Loop*, *Spec Development*, *multi-agente*, *YOLO mode*, *context engineering* — com exemplos deste repositório. Os capítulos práticos (03 em diante) assumem que você já reconhece esses termos.
 
 ## O que é o Vibe Kanban Indie, em uma página
 
@@ -30,10 +32,10 @@ Os conceitos que você vai usar todo dia:
 
 ## O projeto-guia deste livro
 
-A partir do capítulo 7 você constrói um SaaS de verdade — **AssinaFácil**, um SaaS fictício de gestão de assinaturas — inteiramente pela interface do Vibe Kanban. Cada capítulo da Parte I deixa um card pronto para o próximo, de modo que no final você tem um board com o histórico completo do produto.
+A partir do capítulo 08 você constrói um SaaS de verdade — **AssinaFácil**, um SaaS fictício de gestão de assinaturas — inteiramente pela interface do Vibe Kanban. Cada capítulo da Parte I deixa um card pronto para o próximo, de modo que no final você tem um board com o histórico completo do produto.
 
 ## Como ler
 
 - Siga a Parte I em ordem na primeira leitura; cada capítulo termina com um **checklist** que você pode marcar no seu próprio board.
 - Caminhos como `docs/getting-started.mdx` ou `crates/server/src/main.rs` existem de verdade nesta branch (`vk/1f98-livre-vibo-kanba`) — abra e confira.
-- Screenshots citadas vivem em `/images/` (docs do site) e `docs/images/livro/` (âncoras do livro, cap. 14).
+- Screenshots citadas vivem em `/images/` (docs do site) e `docs/images/livro/` (âncoras do livro, cap. 15).
