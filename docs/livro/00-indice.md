@@ -1,31 +1,42 @@
 # Manual Moderno de Vibe Coding — Índice
 
-**Subtítulo de trabalho:** *Como estruturar um projeto Node + Rust para que agentes de IA (e você) codem por intenção — estudo de caso: vibe-kanban-indie.*
+**Subtítulo:** *Manual prático da interface do Vibe Kanban Indie — do `npx` ao SaaS em produção, com um projeto-guia.*
 
-Este livro está sendo escrito diretamente sobre o código deste repositório. Cada capítulo ensina um princípio transferível para qualquer projeto e mostra como ele aparece **neste código**, com caminhos reais de arquivos que você pode abrir e conferir.
+Este livro foi escrito dentro do próprio repositório que ele ensina a usar. Todo caminho de arquivo citado existe no código; quando uma regra externa muda (ex.: preços do KDP), o capítulo marca a data de verificação.
 
-## Estado dos capítulos
+## Como usar este livro
+
+- **Parte I (caps. 1–7):** manual de uso — instale, configure e aprenda a mexer com cards, pipelines e git na interface. Feche com o projeto prático **Criando um SaaS com Vibe Kanban**.
+- **Parte II (caps. 8–14):** bastidores para quem quer customizar — arquitetura, tipos gerados, loop de engenharia, orquestração e ancoragem de imagens.
+- **Apêndice:** referência rápida de comandos.
+- O checklist de publicação na Amazon vive em `../livro-vibe-kanban-amazon-checklist.md`.
+
+## Parte I — Manual de Uso + Projeto Prático
 
 | # | Capítulo | Arquivo | Estado |
 | --- | --- | --- | --- |
-| 1 | Introdução: vibe coding e o projeto | `01-introducao.md` | Escrito |
-| 2 | The Vibe Coding Setup | `02-vibe-coding-setup.md` | Escrito |
-| 3 | Arquitetura spec-driven: fronteiras Node × Rust | `03-arquitetura-spec-driven.md` | Escrito |
-| 4 | O contrato de tipos: ts-rs na prática | `04-contrato-de-tipos.md` | Escrito |
-| 5 | The Engineering Loop: CLI e autocorreção | `05-engineering-loop.md` | Escrito |
-| 6 | Orquestração de agentes: MCP, pipelines e o alarme | `06-orquestracao-de-agentes.md` | Escrito |
-| 7 | Ancoragem de imagens | `07-ancoragem-de-imagens.md` | Escrito |
+| 1 | Introdução: o que este manual resolve | `01-introducao.md` | Escrito |
+| 2 | Instalação e configuração | `02-instalacao-configuracao.md` | Escrito |
+| 3 | Tour da interface | `03-tour-interface.md` | Escrito |
+| 4 | Cards e Kanban — ciclo de vida na prática | `04-cards-kanban.md` | Escrito |
+| 5 | Pipelines na prática | `05-pipelines.md` | Escrito |
+| 6 | Git, workspaces e worktrees | `06-git-workspaces.md` | Escrito |
+| 7 | Projeto prático: Criando um SaaS com Vibe Kanban | `07-projeto-saas.md` | Escrito |
 | 8 | Da escrita à Amazon KDP | `08-publicacao-kdp.md` | Escrito |
+
+## Parte II — Bastidores (para quem customiza o app)
+
+| # | Capítulo | Arquivo | Estado |
+| --- | --- | --- | --- |
+| 9 | The Vibe Coding Setup (arquivos de contexto) | `09-vibe-coding-setup.md` | Escrito |
+| 10 | Arquitetura spec-driven: fronteiras Node × Rust | `10-arquitetura-spec-driven.md` | Escrito |
+| 11 | O contrato de tipos: ts-rs na prática | `11-contrato-de-tipos.md` | Escrito |
+| 12 | The Engineering Loop: CLI e autocorreção | `12-engineering-loop.md` | Escrito |
+| 13 | Orquestração de agentes: MCP, pipelines e o alarme | `13-orquestracao.md` | Escrito |
+| 14 | Ancoragem de imagens | `14-ancoragem-imagens.md` | Escrito |
 | A | Apêndice: referência de comandos | `apendice-comandos.md` | Escrito |
 
-## Convenções do livro
+## Convenções
 
-- Todo caminho de arquivo citado existe neste repositório (verificado na escrita).
-- Quando uma regra externa muda com frequência (ex.: preços do KDP), o capítulo marca a data de verificação.
-- O checklist de publicação vive em `../livro-vibe-kanban-amazon-checklist.md`.
-
-## Como contribuir (humano ou IA)
-
-1. Leia o capítulo que vai tocar e o código que ele cita.
-2. Se o código mudou e o capítulo ficou desatualizado, atualize o capítulo no mesmo commit do código.
-3. Capítulos novos entram no índice acima já na primeira versão.
+- Caminhos como `crates/server/src/routes/kanban.rs` são reais no repositório desta branch (`vk/1f98-livre-vibo-kanba`).
+- Screenshots sugeridas usam `docs/images/livro/` e estão descritas no cap. 14.

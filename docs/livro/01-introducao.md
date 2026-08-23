@@ -1,42 +1,39 @@
-# Capítulo 1 — Introdução: vibe coding e o projeto
+# Capítulo 1 — Introdução: o que este manual resolve
 
-## O que é vibe coding
+## Para quem é este livro
 
-"Vibe coding" é o nome que ficou para um jeito novo de programar: você descreve **o que quer** — em linguagem natural — e um agente de IA escreve, roda e corrige o código. Você codifica por intenção. O teclado continua seu, mas o seu trabalho muda: de digitar sintaxe para **dirigir contexto, verificar resultados e tomar decisões**.
+Para um desenvolvedor que acabou de instalar o Vibe Kanban Indie e quer **usar a interface para desenvolver de verdade** — não para estudar a arquitetura do app. Ao final da Parte I você vai saber:
 
-A parte que ninguém conta no primeiro dia: a IA não falha por falta de inteligência, falha por falta de **contexto**. Um agente solto num repositório sem documentação de ambiente, sem comandos canônicos e sem fronteiras claras produz código que não compila, quebra convenções e mistura responsabilidades. A diferença entre "vibe coding que funciona" e "vibe coding que gera lixo" não está no modelo — está em como o projeto está estruturado para ser lido por uma máquina.
+- instalar e configurar o app no seu `projects.toml`;
+- navegar na interface (board, workspaces, painéis);
+- criar e mover **cards** pelas colunas do kanban;
+- entender o que são **pipelines** e como eles movem o seu card sozinho;
+- usar **git sem medo** dentro do Vibe Kanban (workspaces, worktrees, branches, PRs);
+- construir um projeto do zero — **um SaaS completo** — usando só a interface.
 
-Este livro é sobre essa estruturação. E ele não é teórico: cada princípio é mostrado num projeto real.
+A Parte II fica para quando você quiser customizar o próprio Vibe Kanban. O foco agora é **usar o aplicativo para desenvolver**.
 
-## O estudo de caso: vibe-kanban-indie
+## O que é o Vibe Kanban Indie, em uma página
 
-O projeto que atravessa todos os capítulos é este próprio repositório: um kanban self-hosted para **um desenvolvedor solo dirigir uma equipe de agentes de IA**. Ele existe justamente para fazer vibe coding em escala — então cada decisão de arquitetura nele é, ao mesmo tempo, uma lição sobre como preparar um projeto para agentes.
+O Vibe Kanban Indie é um **kanban self-hosted para um desenvolvedor solo dirigir agentes de IA**. Cada cartão do quadro é uma tarefa ("consertar login", "criar página de planos do SaaS"). Cada tarefa vira um **workspace** — uma pasta isolada com seu próprio branch git — onde um agente (Claude Code, OpenCode, Codex, Gemini, Cursor, Copilot, etc.) escreve código por você. Você acompanha o progresso no board, revisa diffs e dá merge.
 
-O que ele faz, em um parágrafo: você cria cards num quadro kanban; cada card vira um **workspace** (uma worktree git isolada); um executor spawna o agente de coding da sua preferência (Claude Code, OpenCode, Codex, Gemini, Cursor, Amp, Copilot, Qwen, Droid — todos em `crates/executors/src/executors/`); o agente trabalha, reporta progresso por marcadores de texto no log, pede aprovações e avisa quando precisa de revisão humana — com direito a alarme sonoro e escalação para o Telegram.
+Os conceitos que você vai usar todo dia:
 
-## A stack em uma página
+| Conceito | O que é, numa frase |
+| --- | --- |
+| **Issue / Card** | Unidade de trabalho. Título + descrição + status + prioridade + tags. A descrição vira o prompt do agente. |
+| **Board / Colunas** | Quadro kanban por projeto. Cada coluna é um `project_status` (ex.: Todo → In Progress → Done). Você arrasta cards entre colunas. |
+| **Workspace** | Ambiente isolado de uma tarefa: um git worktree + branch `vk/xxxx-nome` + sessão do agente. |
+| **Pipeline** | Receita em TOML (`assets/pipelines/*.toml`) que diz ao agente o que fazer e em que ordem — e como reportar progresso (`VK-PIPELINE-STAGE: N`). |
+| **Sessão** | Conversa com um agente dentro de um workspace. Um workspace pode ter várias sessões. |
+| **Setup/Cleanup/Dev scripts** | Comandos por repositório/projeto que o Vibe Kanban roda automaticamente ao criar/abrir/fechar um workspace. |
 
-| Lado | Tecnologia | Papel |
-| --- | --- | --- |
-| Backend | Rust (edição 2024), 19 crates num workspace Cargo | Tudo que toca estado: HTTP/WebSocket (axum 0.8), banco (SQLx + SQLite), processos, git, filesystem |
-| Frontend | TypeScript + React, Vite, pnpm workspaces, TanStack Router, Tailwind | Tudo que é apresentação e interação |
-| Contrato | `ts-rs` gera `shared/types.ts` a partir dos structs Rust | Os dois lados falam a mesma língua de tipos |
-| Orquestração | Servidor MCP próprio + pipelines em TOML | Os agentes dirigem o próprio fluxo de trabalho |
+## O projeto-guia deste livro
 
-Números de contexto na data da escrita: 19 crates no workspace (`Cargo.toml` raiz), 93 migrations SQL (`crates/db/migrations/`), 12+ executores de agentes, 9 pipelines em `assets/pipelines/`.
+A partir do capítulo 7 você constrói um SaaS de verdade — **AssinaFácil**, um SaaS fictício de gestão de assinaturas — inteiramente pela interface do Vibe Kanban. Cada capítulo da Parte I deixa um card pronto para o próximo, de modo que no final você tem um board com o histórico completo do produto.
 
-## O que você vai aprender
+## Como ler
 
-Os quatro pilares do manual (os tópicos do plano original) viraram seis capítulos:
-
-- **Cap. 2 — The Vibe Coding Setup:** como documentar o ambiente para que uma IA leia o projeto e entenda o contexto instantaneamente.
-- **Cap. 3 e 4 — Spec-Driven Architecture:** como as fronteiras do sistema são desenhadas (o que o TypeScript faz no Node, onde o Rust entra) e como o contrato entre os lados é gerado, não combinado.
-- **Cap. 5 e 6 — The Engineering Loop:** como documentar comandos e padrões de erro para que agentes rodem testes, leiam logs de compilação e se autocorrigirem — e como o projeto inteiro se torna orquestrável por marcadores de texto.
-- **Cap. 7 — Ancoragem de Imagens:** como screenshots funcionam como validação visual para humano e IA.
-- **Cap. 8 — Da escrita à Amazon KDP:** o caminho deste manuscrito até a loja.
-
-Cada capítulo termina com um checklist prático para você aplicar no seu próprio projeto.
-
-## Convenção deste livro
-
-Sempre que um capítulo afirmar algo sobre o código, ele cita o caminho do arquivo. Exemplo: o alarme de revisão humana vive em `crates/services/src/services/review_request.rs`. Se um dia o capítulo e o código divergirem, o código está certo — e o capítulo precisa de um commit.
+- Siga a Parte I em ordem na primeira leitura; cada capítulo termina com um **checklist** que você pode marcar no seu próprio board.
+- Caminhos como `docs/getting-started.mdx` ou `crates/server/src/main.rs` existem de verdade nesta branch (`vk/1f98-livre-vibo-kanba`) — abra e confira.
+- Screenshots citadas vivem em `/images/` (docs do site) e `docs/images/livro/` (âncoras do livro, cap. 14).
