@@ -7,6 +7,16 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-alternat
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.37] - 2026-08-23
+
+### Fixed
+
+- **Create-workspace "select a branch" error stuck even after fixing the repo's default branch**: an abandoned create-mode draft (closed before picking a branch) could persist `target_branch: ""` in its `DRAFT_WORKSPACE` scratch. Restoring that draft used `??`, which only treats `null`/`undefined` as "absent" — the empty string survived as the literal branch value. Because a repo was already present in the restored draft, the auto-apply-repo-defaults logic (which only fills in *repo-less* drafts) never re-derived a branch from the repo's configured default, so the stuck empty string was immune to re-saving "main" in Settings → Repositories no matter how many times it was reselected there. `resolveBootstrapRepos` now normalizes `""` to `null` the same way `workspaceDefaults.ts` already does, so a restored draft's branch field shows as genuinely unselected and can actually be set.
+
+### Added
+
+- **Per-workspace sidebar color**: a color picker (`WorkspaceColorDialog`) lets each workspace get its own tint in the sidebar's outliner tree, so visually similar cards/branches are easier to tell apart at a glance.
+
 ## [0.2.36] - 2026-08-22
 
 ### Added
