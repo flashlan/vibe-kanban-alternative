@@ -547,9 +547,6 @@ export function KanbanContainer() {
   const isProjectTerminalOpen = useUiPreferencesStore(
     (s) => s.isProjectTerminalOpen
   );
-  const toggleProjectTerminal = useUiPreferencesStore(
-    (s) => s.toggleProjectTerminal
-  );
 
   // Sync items from filtered issues when they change
   useEffect(() => {
@@ -1140,7 +1137,7 @@ export function KanbanContainer() {
 
           <button
             type="button"
-            onClick={() => toggleProjectTerminal()}
+            onClick={() => executeAction(Actions.ToggleProjectTerminal)}
             className={cn(
               'p-half rounded-sm text-low hover:text-normal hover:bg-secondary transition-colors',
               isProjectTerminalOpen && 'text-normal bg-secondary'
