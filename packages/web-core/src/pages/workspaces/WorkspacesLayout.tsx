@@ -308,8 +308,8 @@ export function WorkspacesLayout() {
             {isLeftMainPanelVisible && (
               <Panel
                 id="left-main"
-                minSize="340px"
-                className="min-w-[340px] h-full overflow-hidden"
+                minSize="380px"
+                className="min-w-[380px] h-full overflow-hidden"
               >
                 {isCreateMode ? (
                   <CreateChatBoxContainer
@@ -343,8 +343,8 @@ export function WorkspacesLayout() {
             {rightMainPanelMode !== null && (
               <Panel
                 id="right-main"
-                minSize="340px"
-                className="min-w-[340px] h-full overflow-hidden"
+                minSize="360px"
+                className="min-w-[360px] h-full overflow-hidden"
               >
                 {rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.CHANGES &&
                   selectedWorkspace?.id && (
@@ -374,7 +374,7 @@ export function WorkspacesLayout() {
           </Group>
 
           {isRightSidebarVisible && !isCreateMode && selectedWorkspace && (
-            <div className="w-[300px] shrink-0 h-full overflow-hidden">
+            <div className="w-[320px] shrink-0 h-full overflow-hidden">
               <RightSidebar
                 rightMainPanelMode={rightMainPanelMode}
                 selectedWorkspace={selectedWorkspace}
