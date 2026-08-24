@@ -298,6 +298,7 @@ export function WorkspacesLayout() {
   const mainContent = (
     <ReviewProvider workspaceId={selectedWorkspace?.id}>
       <ChangesViewProvider>
+        {/* Lateral workspace bars: mins 684/648/576 (+80%) garantem proporção da captura sem empilhar/ocultar */}
         <div className="flex h-full">
           <Group
             orientation="horizontal"
