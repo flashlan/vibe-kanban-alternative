@@ -90,6 +90,11 @@
     "date": "Date",
     "label": "Label"
   },
+  "projectColor": {
+    "title": "Project Color",
+    "description": "Pick a new color for “{{name}}” — it tints the project row and its whole subtree in the sidebar tree.",
+    "save": "Save"
+  },
   "workspaces": {
     "title": "Workspaces",
     "searchPlaceholder": "Search...",
@@ -542,6 +547,7 @@
     "orchestratorPromptSet": "Orchestrator prompt is set",
     "projectActions": "Project actions",
     "addChildBoard": "Add board",
+    "changeProjectColor": "Change color",
     "addOrchestratorPrompt": "Add orchestrator prompt",
     "openProjectPage": "Open project board",
     "openWorkspacesPage": "Open workspaces",

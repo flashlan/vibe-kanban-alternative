@@ -12,25 +12,24 @@ import { Button } from '@vibe/ui/components/Button';
 import { InlineColorPicker } from '@vibe/ui/components/ColorPicker';
 import { create, useModal } from '@ebay/nice-modal-react';
 import { defineModal } from '@/shared/lib/modals';
-import { cn } from '@/shared/lib/utils';
 import { DARK_THEME_PRESET_COLORS } from '@/shared/lib/colors';
 
-export interface WorkspaceColorDialogProps {
-  workspaceName: string;
-  currentColor: string | null;
-  onSave: (color: string | null) => Promise<void>;
+export interface ProjectColorDialogProps {
+  projectName: string;
+  currentColor: string;
+  onSave: (color: string) => Promise<void>;
 }
 
-export type WorkspaceColorDialogResult = {
+export type ProjectColorDialogResult = {
   action: 'saved' | 'canceled';
-  color?: string | null;
+  color?: string;
 };
 
-const WorkspaceColorDialogImpl = create<WorkspaceColorDialogProps>(
-  ({ workspaceName, currentColor, onSave }) => {
+const ProjectColorDialogImpl = create<ProjectColorDialogProps>(
+  ({ projectName, currentColor, onSave }) => {
     const modal = useModal();
     const { t } = useTranslation('common');
-    const [color, setColor] = useState<string | null>(currentColor);
+    const [color, setColor] = useState<string>(currentColor);
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -38,7 +37,7 @@ const WorkspaceColorDialogImpl = create<WorkspaceColorDialogProps>(
       if (color === currentColor) {
         modal.resolve({
           action: 'canceled',
-        } satisfies WorkspaceColorDialogResult);
+        } satisfies ProjectColorDialogResult);
         modal.hide();
         return;
       }
@@ -49,11 +48,11 @@ const WorkspaceColorDialogImpl = create<WorkspaceColorDialogProps>(
         modal.resolve({
           action: 'saved',
           color,
-        } satisfies WorkspaceColorDialogResult);
+        } satisfies ProjectColorDialogResult);
         modal.hide();
       } catch (err) {
         setError(
-          err instanceof Error ? err.message : 'Failed to save workspace color'
+          err instanceof Error ? err.message : 'Failed to save project color'
         );
       } finally {
         setIsSubmitting(false);
@@ -63,7 +62,7 @@ const WorkspaceColorDialogImpl = create<WorkspaceColorDialogProps>(
     const handleCancel = () => {
       modal.resolve({
         action: 'canceled',
-      } satisfies WorkspaceColorDialogResult);
+      } satisfies ProjectColorDialogResult);
       modal.hide();
     };
 
@@ -76,20 +75,20 @@ const WorkspaceColorDialogImpl = create<WorkspaceColorDialogProps>(
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {t('workspaces.color.title', 'Workspace color')}
+              {t('projectColor.title', 'Project Color')}
             </DialogTitle>
             <DialogDescription>
               {t(
-                'workspaces.color.description',
-                'Pick a color for “{{name}}” in the sidebar tree. Choose Default to fall back to the project color.',
-                { name: workspaceName }
+                'projectColor.description',
+                'Pick a new color for “{{name}}” — it tints the project row and its whole subtree in the sidebar tree.',
+                { name: projectName }
               )}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             <InlineColorPicker
-              value={color ?? ''}
+              value={color}
               onChange={(c) => {
                 setColor(c);
                 setError(null);
@@ -97,23 +96,6 @@ const WorkspaceColorDialogImpl = create<WorkspaceColorDialogProps>(
               colors={DARK_THEME_PRESET_COLORS}
               disabled={isSubmitting}
             />
-            <button
-              type="button"
-              onClick={() => setColor(null)}
-              disabled={isSubmitting}
-              className={cn(
-                'flex items-center gap-2 rounded-sm border px-2 py-1.5 text-sm transition-colors cursor-pointer',
-                color === null
-                  ? 'border-brand text-high bg-brand/10'
-                  : 'border-border text-normal hover:bg-secondary'
-              )}
-            >
-              <span
-                aria-hidden
-                className="size-4 rounded-full border border-border bg-tertiary"
-              />
-              {t('workspaces.color.default', 'Default')}
-            </button>
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
 
@@ -126,7 +108,7 @@ const WorkspaceColorDialogImpl = create<WorkspaceColorDialogProps>(
               {t('buttons.cancel')}
             </Button>
             <Button onClick={() => void handleSave()} disabled={isSubmitting}>
-              {t('workspaces.color.save', 'Save')}
+              {t('projectColor.save', 'Save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -135,7 +117,7 @@ const WorkspaceColorDialogImpl = create<WorkspaceColorDialogProps>(
   }
 );
 
-export const WorkspaceColorDialog = defineModal<
-  WorkspaceColorDialogProps,
-  WorkspaceColorDialogResult
->(WorkspaceColorDialogImpl);
+export const ProjectColorDialog = defineModal<
+  ProjectColorDialogProps,
+  ProjectColorDialogResult
+>(ProjectColorDialogImpl);

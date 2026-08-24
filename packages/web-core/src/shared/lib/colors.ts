@@ -18,6 +18,28 @@ export const PRESET_COLORS = [
 export type PresetColor = (typeof PRESET_COLORS)[number];
 
 /**
+ * High-luminance palette tuned for the dark theme — every swatch reads as
+ * row tint/text on dark backgrounds and stays distinguishable on light.
+ * HSL triples matching the project-tint format (`hsl(H S% L% / alpha)`).
+ * Used by the project/workspace color editors where the operator re-picks
+ * colors that look wrong on dark backgrounds.
+ */
+export const DARK_THEME_PRESET_COLORS = [
+  '8 90% 72%', // Coral
+  '25 100% 70%', // Apricot
+  '45 100% 66%', // Amber
+  '90 65% 62%', // Pistachio
+  '152 62% 60%', // Mint
+  '174 62% 56%', // Teal
+  '197 88% 64%', // Sky
+  '222 85% 70%', // Periwinkle
+  '262 88% 72%', // Lavender
+  '292 78% 68%', // Orchid
+  '328 88% 70%', // Rose
+  '348 85% 66%', // Raspberry
+] as const;
+
+/**
  * Get a random color from the preset palette
  */
 export function getRandomPresetColor(): string {

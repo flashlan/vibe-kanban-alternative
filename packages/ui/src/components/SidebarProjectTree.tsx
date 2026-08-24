@@ -65,6 +65,9 @@ interface SidebarProjectTreeProps {
   onSelectOrchestratorPrompt?: (projectId: string) => void;
   /** Renames the supplied project (sidebar `+` menu → Rename). */
   onRenameProject?: (projectId: string) => void;
+  /** Opens the color editor for the supplied project (sidebar `+` menu →
+   *  Change color). The new color tints the row and its whole subtree. */
+  onChangeProjectColor?: (projectId: string) => void;
   /** Deletes the supplied project (sidebar `+` menu → Delete). */
   onArchiveProject?: (projectId: string) => void;
   /** ADR-016: project id whose prompt editor is currently open. Drives
@@ -101,6 +104,7 @@ export function SidebarProjectTree({
   onCreateChildBoard,
   onSelectOrchestratorPrompt,
   onRenameProject,
+  onChangeProjectColor,
   onArchiveProject,
   activeProjectPromptId = null,
   isMultiSelectActive = false,
@@ -542,6 +546,7 @@ export function SidebarProjectTree({
                   onCreateChildBoard={onCreateChildBoard}
                   onSelectOrchestratorPrompt={onSelectOrchestratorPrompt}
                   onRenameProject={onRenameProject}
+                  onChangeProjectColor={onChangeProjectColor}
                   onArchiveProject={onArchiveProject}
                   onOpenProjectPage={onOpenProjectPage}
                   onOpenWorkspacesPage={onOpenWorkspacesPage}

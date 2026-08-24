@@ -27,6 +27,7 @@ import {
   CreateProjectDialog,
   type CreateProjectResult,
 } from '@/shared/dialogs/CreateProjectDialog';
+import { ProjectColorDialog } from '@/shared/dialogs/ProjectColorDialog';
 import { CreateProjectButton } from './CreateProjectButton';
 import { useCommandBarShortcut } from '@/shared/hooks/useCommandBarShortcut';
 import { useShape } from '@/shared/integrations/electric/hooks';
@@ -267,6 +268,27 @@ export function SharedAppLayout() {
         await updateProject(projectId, { name: trimmed });
       } catch {
         // Swallow — the shape collection surfaces errors via the row state.
+      }
+    },
+    [updateProject]
+  );
+
+  // Change a project's color from the sidebar `+` menu. The color tints the
+  // project row and its whole subtree (sections, workspaces, tasks, cards).
+  const handleChangeProjectColor = useCallback(
+    async (projectId: string) => {
+      const project = projectsByIdRef.current.get(projectId);
+      if (!project) return;
+      try {
+        await ProjectColorDialog.show({
+          projectName: project.name,
+          currentColor: project.color,
+          onSave: async (color) => {
+            await updateProject(projectId, { color });
+          },
+        });
+      } catch {
+        // Dialog cancelled — no-op.
       }
     },
     [updateProject]
@@ -752,6 +774,7 @@ export function SharedAppLayout() {
                     onSelectOrchestratorPrompt={handleSelectOrchestratorPrompt}
                     onCreateChildBoard={handleCreateChildBoard}
                     onRenameProject={handleRenameProject}
+                    onChangeProjectColor={handleChangeProjectColor}
                     onArchiveProject={handleArchiveProject}
                     archivedProjects={archivedSidebarProjects}
                     onRestoreProject={handleRestoreProject}
@@ -842,6 +865,10 @@ export function SharedAppLayout() {
                       onCreateChildBoard={handleCreateChildBoard}
                       onRenameProject={(id) => {
                         void handleRenameProject(id);
+                        setIsDrawerOpen(false);
+                      }}
+                      onChangeProjectColor={(id) => {
+                        void handleChangeProjectColor(id);
                         setIsDrawerOpen(false);
                       }}
                       onArchiveProject={(id) => {

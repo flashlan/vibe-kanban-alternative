@@ -4,6 +4,7 @@ import {
   ArrowSquareOutIcon,
   LightningIcon,
   NotePencilIcon,
+  PaletteIcon,
   PencilSimpleIcon,
   PlusIcon,
 } from '@phosphor-icons/react';
@@ -58,6 +59,7 @@ function ProjectTreeNode(
     onCreateChildBoard?: (parentId: string) => void;
     onSelectOrchestratorPrompt?: (projectId: string) => void;
     onRenameProject?: (projectId: string) => void;
+    onChangeProjectColor?: (projectId: string) => void;
     onArchiveProject?: (projectId: string) => void;
     onOpenProjectPage?: (projectId: string) => void;
     /** Opens the most-recent workspace under the Orchestrator (Unassigned)
@@ -75,6 +77,7 @@ function ProjectTreeNode(
     onCreateChildBoard,
     onSelectOrchestratorPrompt,
     onRenameProject,
+    onChangeProjectColor,
     onArchiveProject,
     onOpenProjectPage,
     onOpenLastWorkspace,
@@ -115,6 +118,7 @@ function ProjectTreeNode(
     (onCreateChildBoard ||
       onSelectOrchestratorPrompt ||
       onRenameProject ||
+      onChangeProjectColor ||
       onArchiveProject);
   // Collapse-by-default (2026-08-07): row click toggles expand/collapse;
   // the open-page icon navigates to the project's kanban board. The
@@ -259,6 +263,18 @@ function ProjectTreeNode(
                     aria-hidden
                   />
                   {t('sidebar.renameProject', 'Rename')}
+                </DropdownMenuItem>
+              )}
+              {onChangeProjectColor && !isUnassigned && (
+                <DropdownMenuItem
+                  onSelect={() => onChangeProjectColor(project.id)}
+                >
+                  <PaletteIcon
+                    className="size-4"
+                    weight="regular"
+                    aria-hidden
+                  />
+                  {t('sidebar.changeProjectColor', 'Change color')}
                 </DropdownMenuItem>
               )}
               {onCreateChildBoard && (
@@ -421,6 +437,7 @@ export function TreeNodeRouter(
     onCreateChildBoard?: (parentId: string) => void;
     onSelectOrchestratorPrompt?: (projectId: string) => void;
     onRenameProject?: (projectId: string) => void;
+    onChangeProjectColor?: (projectId: string) => void;
     onArchiveProject?: (projectId: string) => void;
     onOpenProjectPage?: (projectId: string) => void;
     onOpenWorkspacesPage?: (projectId: string) => void;
@@ -446,6 +463,7 @@ export function TreeNodeRouter(
     onCreateChildBoard,
     onSelectOrchestratorPrompt,
     onRenameProject,
+    onChangeProjectColor,
     onArchiveProject,
     onOpenProjectPage,
     onOpenWorkspacesPage,
@@ -477,6 +495,7 @@ export function TreeNodeRouter(
           onCreateChildBoard={onCreateChildBoard}
           onSelectOrchestratorPrompt={onSelectOrchestratorPrompt}
           onRenameProject={onRenameProject}
+          onChangeProjectColor={onChangeProjectColor}
           onArchiveProject={onArchiveProject}
           onOpenProjectPage={onOpenProjectPage}
           onOpenLastWorkspace={onOpenLastWorkspace}
