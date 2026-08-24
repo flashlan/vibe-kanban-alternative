@@ -16,6 +16,7 @@ import { useShape } from '@/shared/integrations/electric/hooks';
 import { PROJECT_ISSUES_SHAPE } from 'shared/remote-types';
 import { RemoteIssueLink } from './RemoteIssueLink';
 import { AppBarUserPopoverContainer } from './AppBarUserPopoverContainer';
+import { GitHubStarBanner } from './GitHubStarBanner';
 
 import { NavbarActionGroups } from '@/shared/actions';
 import {
@@ -299,6 +300,7 @@ export function NavbarContainer({
       workspaceTitle={navbarTitle}
       breadcrumbs={breadcrumbs}
       brand={<BrandLockup />}
+      banner={<GitHubStarBanner />}
       leftItems={leftItems}
       rightItems={rightItems}
       syncErrors={syncErrors}

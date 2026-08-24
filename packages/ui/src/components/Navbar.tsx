@@ -163,6 +163,9 @@ export interface NavbarProps {
   leftSlot?: ReactNode;
   // Optional brand/logo element pinned to the far left (desktop only)
   brand?: ReactNode;
+  // Optional banner strip rendered as the bottom row of the top bar
+  // (e.g. promo notices). Fused with the navbar via a top border.
+  banner?: ReactNode;
   // Sync errors shown in the right section
   syncErrors?: readonly SyncErrorIndicatorError[] | null;
   className?: string;
@@ -191,6 +194,7 @@ export function Navbar({
   rightItems = [],
   leftSlot,
   brand,
+  banner,
   syncErrors,
   className,
   mobileMode = false,
@@ -413,6 +417,13 @@ export function Navbar({
             </div>
           </div>
         )}
+
+        {/* Row 3: optional banner strip fused with the top bar */}
+        {banner && (
+          <div className="flex justify-center border-t border-border">
+            {banner}
+          </div>
+        )}
       </nav>
     );
   }
@@ -422,57 +433,71 @@ export function Navbar({
   // window dragging to work (the attribute does not propagate to children).
   return (
     <nav
-      data-tauri-drag-region
-      className={cn(
-        'flex items-center justify-between px-base py-half bg-secondary border-b shrink-0',
-        className
-      )}
+      className={cn('flex flex-col bg-secondary border-b shrink-0', className)}
     >
-      {/* Left - Brand + Archive & Old UI Link + optional slot */}
-      <div data-tauri-drag-region className="flex-1 flex items-center gap-base">
-        {brand}
-        {leftItems.map((item, index) =>
-          renderItem(
-            item,
-            `left-${isDivider(item) ? 'divider' : item.id}-${index}`
-          )
-        )}
-        {leftSlot}
-      </div>
-
-      {/* Center - Breadcrumbs or Workspace Title */}
       <div
         data-tauri-drag-region
-        className="flex-1 flex items-center justify-center min-w-0"
+        className="flex items-center justify-between px-base py-half"
       >
-        {breadcrumbs && breadcrumbs.length > 0 ? (
-          <NavbarBreadcrumbs
-            breadcrumbs={breadcrumbs}
-            textClassName="text-base"
-          />
-        ) : (
-          <p
-            data-tauri-drag-region
-            className="text-base text-low truncate cursor-default select-none"
-          >
-            {workspaceTitle ?? ''}
-          </p>
-        )}
+        {/* Left - Brand + Archive & Old UI Link + optional slot */}
+        <div
+          data-tauri-drag-region
+          className="flex-1 flex items-center gap-base"
+        >
+          {brand}
+          {leftItems.map((item, index) =>
+            renderItem(
+              item,
+              `left-${isDivider(item) ? 'divider' : item.id}-${index}`
+            )
+          )}
+          {leftSlot}
+        </div>
+
+        {/* Center - Breadcrumbs or Workspace Title */}
+        <div
+          data-tauri-drag-region
+          className="flex-1 flex items-center justify-center min-w-0"
+        >
+          {breadcrumbs && breadcrumbs.length > 0 ? (
+            <NavbarBreadcrumbs
+              breadcrumbs={breadcrumbs}
+              textClassName="text-base"
+            />
+          ) : (
+            <p
+              data-tauri-drag-region
+              className="text-base text-low truncate cursor-default select-none"
+            >
+              {workspaceTitle ?? ''}
+            </p>
+          )}
+        </div>
+
+        {/* Right - Sync Error Indicator + Diff Controls + Panel Toggles (dividers inline) */}
+        <div
+          data-tauri-drag-region
+          className="flex-1 flex items-center justify-end gap-base"
+        >
+          <SyncErrorIndicator errors={syncErrors} />
+          {rightItems.map((item, index) =>
+            renderItem(
+              item,
+              `right-${isDivider(item) ? 'divider' : item.id}-${index}`
+            )
+          )}
+        </div>
       </div>
 
-      {/* Right - Sync Error Indicator + Diff Controls + Panel Toggles (dividers inline) */}
-      <div
-        data-tauri-drag-region
-        className="flex-1 flex items-center justify-end gap-base"
-      >
-        <SyncErrorIndicator errors={syncErrors} />
-        {rightItems.map((item, index) =>
-          renderItem(
-            item,
-            `right-${isDivider(item) ? 'divider' : item.id}-${index}`
-          )
-        )}
-      </div>
+      {/* Bottom row: optional banner strip fused with the top bar */}
+      {banner && (
+        <div
+          data-tauri-drag-region
+          className="flex justify-center border-t border-border"
+        >
+          {banner}
+        </div>
+      )}
     </nav>
   );
 }

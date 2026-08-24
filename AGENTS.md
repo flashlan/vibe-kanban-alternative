@@ -23,6 +23,7 @@ Rules:
 - [x] **Done** — Browser cache for workspace conversations to skip re-stream on switch (`vk/f804-poss-vel-cache-d`)
 - [x] **Done** — Workspace color setting (sidebar tree tint) (`vk/3585-altra-cor-do-wor`)
 - [ ] **In Review** — Livro Vibe Kanban na Amazon — checklist + manuscrito completo (15 caps + apêndice, 1.749 linhas, 12 âncoras) (`vk/1f98-livre-vibo-kanba`)
+- [ ] **In Review** — Banner "Deixe uma ⭐️ no GitHub" no topo do app (`vk/c2b4-gostou-do-projet`)
 
 ## Card Pipeline Protocol (MCP)
 
