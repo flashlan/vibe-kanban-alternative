@@ -22,7 +22,25 @@ export function RootRedirectPage() {
 
       // Read saved selections imperatively to avoid re-triggering this effect
       // when the scratch store initializes from the server
-      const { selectedProjectId } = useUiPreferencesStore.getState();
+      const { selectedProjectId, lastWorkspaceId } =
+        useUiPreferencesStore.getState();
+
+      // "nao salva o workspace ao sair" — restore the last workspace
+      // the operator was on before closing the tab. localStorage is the
+      // source of truth before the scratch store hydrates.
+      let effectiveLastWorkspaceId: string | null = lastWorkspaceId;
+      if (!effectiveLastWorkspaceId) {
+        try {
+          effectiveLastWorkspaceId = localStorage.getItem('vk-last-workspace-id');
+        } catch {
+          effectiveLastWorkspaceId = null;
+        }
+      }
+      if (effectiveLastWorkspaceId) {
+        if (!isActive) return;
+        appNavigation.goToWorkspace(effectiveLastWorkspaceId, { replace: true });
+        return;
+      }
 
       // ADR-018 — projects are tenant-less, so the `savedOrgId` arg is
       // dropped. Only the saved project id is consulted.

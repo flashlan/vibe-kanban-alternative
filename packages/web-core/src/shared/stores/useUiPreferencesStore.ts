@@ -214,6 +214,21 @@ const loadThemeVariant = (): ThemeVariant => {
   return DEFAULT_THEME_VARIANT;
 };
 
+// Last visited workspace — restored on next app launch (via RootRedirectPage)
+// and updated whenever a workspace route is entered. Client-side only
+// (localStorage), mirroring the workspaceColors pattern.
+const LAST_WORKSPACE_KEY = 'vk-last-workspace-id';
+
+const loadLastWorkspaceId = (): string | null => {
+  try {
+    const stored = localStorage.getItem(LAST_WORKSPACE_KEY);
+    if (stored) return stored;
+  } catch {
+    // localStorage may be unavailable
+  }
+  return null;
+};
+
 export type KanbanViewMode = 'kanban' | 'list';
 
 export type ContextBarPosition =
@@ -509,6 +524,8 @@ type State = {
   // Last selected project (persisted via scratch store).
   // ADR-018 — `selectedOrgId` removed.
   selectedProjectId: string | null;
+  // Last visited workspace (client-side localStorage, restored on app launch).
+  lastWorkspaceId: string | null;
   createDraftWorkspaceByDefault: boolean;
 
   // Global left sidebar width (px) — persisted to localStorage, global for any workspace and across app reloads.
@@ -616,6 +633,8 @@ type State = {
 
   // Last selected project actions
   setSelectedProjectId: (projectId: string | null) => void;
+  // Last workspace actions (client-side only)
+  setLastWorkspaceId: (workspaceId: string | null) => void;
   setCreateDraftWorkspaceByDefault: (value: boolean) => void;
   setAutoMoveCardsEnabled: (value: boolean) => void;
   setLeftSidebarWidth: (width: number) => void;
@@ -680,6 +699,8 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
 
   // Last selected project (ADR-018 — `selectedOrgId` removed)
   selectedProjectId: null,
+  // Last workspace (client-side)
+  lastWorkspaceId: loadLastWorkspaceId(),
   createDraftWorkspaceByDefault: DEFAULT_CREATE_DRAFT_WORKSPACE_BY_DEFAULT,
   autoMoveCardsEnabled: true,
 
@@ -1085,6 +1106,18 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
 
   // Last selected project actions
   setSelectedProjectId: (projectId) => set({ selectedProjectId: projectId }),
+  setLastWorkspaceId: (workspaceId) => {
+    try {
+      if (workspaceId) {
+        localStorage.setItem(LAST_WORKSPACE_KEY, workspaceId);
+      } else {
+        localStorage.removeItem(LAST_WORKSPACE_KEY);
+      }
+    } catch {
+      // localStorage may be unavailable
+    }
+    set({ lastWorkspaceId: workspaceId });
+  },
   setWorkspacesDashboardProjectId: (projectId) =>
     set({ workspacesDashboardProjectId: projectId }),
   setCreateDraftWorkspaceByDefault: (value) =>

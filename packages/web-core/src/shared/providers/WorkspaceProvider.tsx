@@ -10,6 +10,7 @@ import { useGitHubComments } from '@/shared/hooks/useGitHubComments';
 import { useDiffStream } from '@/shared/hooks/useDiffStream';
 import { workspacesApi } from '@/shared/lib/api';
 import { useWorkspaceDiffStore } from '@/shared/stores/useWorkspaceDiffStore';
+import { useUiPreferencesStore } from '@/shared/stores/useUiPreferencesStore';
 import type { DiffStats } from 'shared/types';
 import { useAppNavigation } from '@/shared/hooks/useAppNavigation';
 import { useCurrentAppDestination } from '@/shared/hooks/useCurrentAppDestination';
@@ -166,6 +167,15 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
   useEffect(() => {
     if (!workspaceId || isCreateMode) return;
 
+    // Persist last visited workspace so the next app launch can restore it
+    // ("nao salva o workspace ao sair"). Stored in localStorage via
+    // the UiPreferencesStore (client-side only, same pattern as workspaceColors).
+    try {
+      useUiPreferencesStore.getState().setLastWorkspaceId(workspaceId);
+    } catch {
+      // store may be unavailable during early render
+    }
+
     workspacesApi
       .markSeen(workspaceId)
       .then(() => {
@@ -175,6 +185,29 @@ export function WorkspaceProvider({ children }: WorkspaceProviderProps) {
         console.warn('Failed to mark workspace as seen:', error);
       });
   }, [workspaceId, isCreateMode, queryClient]);
+
+  // Extra guarantee on tab close / reload: flush the same key via beforeunload
+  // so the last workspace is never lost even if the effect above hasn't fired
+  // (e.g. very fast navigation).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => {
+      if (!workspaceId || isCreateMode) return;
+      try {
+        // Direct localStorage write as synchronous fallback; the store write
+        // above is async-ish via Zustand.
+        window.localStorage.setItem('vk-last-workspace-id', workspaceId);
+      } catch {
+        // localStorage may be unavailable
+      }
+    };
+    window.addEventListener('beforeunload', handler);
+    window.addEventListener('pagehide', handler);
+    return () => {
+      window.removeEventListener('beforeunload', handler);
+      window.removeEventListener('pagehide', handler);
+    };
+  }, [workspaceId, isCreateMode]);
 
   const selectWorkspace = useCallback(
     (id: string) => {
