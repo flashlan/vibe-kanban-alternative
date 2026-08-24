@@ -62,14 +62,26 @@ Para cada sub-issue, faça o loop completo — é o "usar o aplicativo para dese
 
 | Ordem | Card | O que validar |
 | --- | --- | --- |
-| 1 | Setup do monorepo | `pnpm run dev` sobe; Preview mostra "Hello AssinaFácil" |
-| 2 | Landing page | Hero + CTA funcionando; âncora `docs/images/livro/saas-landing.png` |
-| 3 | Auth — login/cadastro | Formulários com validação; estado mockado |
-| 4 | Planos e checkout | Tabela 3 planos; Assinar → /checkout mock |
-| 5 | Área logada | Lista mockada; Cancelar muda estado |
-| 6 | Webhooks | `POST /webhooks` muda entitlement; teste via Terminal da workspace |
+| 1 | Setup do monorepo | `pnpm run dev` sobe; Preview mostra "Hello AssinaFácil" | — |
+| 2 | Landing page | Hero + CTA funcionando | `saas-landing.png` (desktop 1440×900) + `saas-landing-mobile.png` (390×780) |
+| 3 | Auth — login/cadastro | Formulários com validação; estado mockado | (âncora futura `saas-auth.png`) |
+| 4 | Planos e checkout | Tabela 3 planos; Assinar → /checkout mock | `saas-planos.png` + `saas-checkout.png` |
+| 5 | Área logada | Lista mockada; Cancelar muda estado | `saas-minhas-assinaturas.png` |
+| 6 | Webhooks | `POST /webhooks` muda entitlement; teste via Terminal da workspace | — |
 
-Capture cada âncora quando o card for para Done e guarde em `docs/images/livro/saas-*.png` (arraste a imagem no chat da workspace — `crates/server/src/routes/attachments.rs:83` — ou salve direto; ver cap. 15).
+As âncoras já geradas (PIL, 1440×900) vivem em `docs/images/livro/` — veja abaixo. Capture cada nova âncora quando o card for para Done (arraste a imagem no chat da workspace — `crates/server/src/routes/attachments.rs:83` — ou salve direto; ver cap. 15).
+
+**Âncoras do AssinaFácil (prévias geradas):**
+
+![Landing — AssinaFácil (hero + MRR + features)](/images/livro/saas-landing.png)
+
+![Planos — 3 colunas, Pro em destaque](/images/livro/saas-planos.png)
+
+![Checkout — formulário + resumo](/images/livro/saas-checkout.png)
+
+![Minhas assinaturas — tabela com ações](/images/livro/saas-minhas-assinaturas.png)
+
+*Prévias geradas em PIL para o livro — substitua por screenshots reais quando os cards forem para Done; mantenha 1440×900 para comparação estável.*
 
 ## Quando algo dá errado (atalhos)
 
