@@ -329,6 +329,7 @@ export type KanbanHeaderProps =
       color: Status['color'];
       className?: string;
       onAddTask?: () => void;
+      count?: number;
     };
 
 export const KanbanHeader = (props: KanbanHeaderProps) => {
@@ -357,6 +358,14 @@ export const KanbanHeader = (props: KanbanHeaderProps) => {
 
         <p className="m-0 text-sm">{props.name}</p>
       </span>
+      {props.count !== undefined && (
+        <span
+          className="inline-flex items-center justify-center rounded-full bg-background border text-xs font-medium min-w-5 h-5 px-1.5 leading-none text-muted-foreground"
+          aria-label={`${props.count} cards`}
+        >
+          {props.count}
+        </span>
+      )}
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>

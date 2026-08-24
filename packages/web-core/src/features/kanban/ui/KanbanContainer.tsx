@@ -1264,16 +1264,24 @@ export function KanbanContainer() {
                           />
                           <p className="m-0 text-sm">{status.name}</p>
                         </div>
-                        {!parentIssueId && (
-                          <button
-                            type="button"
-                            onClick={() => handleAddTask(status.id)}
-                            className="p-half rounded-sm text-low hover:text-normal hover:bg-secondary transition-colors"
-                            aria-label="Add task"
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="inline-flex items-center justify-center rounded-full bg-background border text-xs font-medium min-w-5 h-5 px-1.5 leading-none text-muted-foreground"
+                            aria-label={`${issueIds.length} cards`}
                           >
-                            <PlusIcon className="size-icon-xs" weight="bold" />
-                          </button>
-                        )}
+                            {issueIds.length}
+                          </span>
+                          {!parentIssueId && (
+                            <button
+                              type="button"
+                              onClick={() => handleAddTask(status.id)}
+                              className="p-half rounded-sm text-low hover:text-normal hover:bg-secondary transition-colors"
+                              aria-label="Add task"
+                            >
+                              <PlusIcon className="size-icon-xs" weight="bold" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </KanbanHeader>
                     <KanbanCards
