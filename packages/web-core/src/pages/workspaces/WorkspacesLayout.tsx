@@ -135,7 +135,7 @@ export function WorkspacesLayout() {
 
   const [rightMainPanelSize, setRightMainPanelSize] = usePaneSize(
     PERSIST_KEYS.rightMainPanel,
-    '36%'
+    50
   );
 
   const defaultLayout: Layout = (() => {
@@ -145,9 +145,8 @@ export function WorkspacesLayout() {
         ? parseFloat(raw.replace('%', ''))
         : typeof raw === 'number'
           ? raw
-          : 36;
-    // Clamp para caber os dois mins 36% cada (80% maior que 20% original) sem estourar 100%
-    const right = Math.min(Math.max(parsed, 36), 64);
+          : 50;
+    const right = Math.min(Math.max(parsed, 20), 80);
     const left = 100 - right;
     return { 'left-main': left, 'right-main': right };
   })();
@@ -165,7 +164,9 @@ export function WorkspacesLayout() {
       if (isLeftMainPanelVisible && rightMainPanelMode !== null) {
         if (layoutTimerRef.current) clearTimeout(layoutTimerRef.current);
         layoutTimerRef.current = setTimeout(() => {
-          setRightMainPanelSize(layout['right-main']);
+          if (layout['right-main'] != null) {
+            setRightMainPanelSize(layout['right-main']);
+          }
         }, 150);
       }
     },
@@ -315,8 +316,8 @@ export function WorkspacesLayout() {
             {isLeftMainPanelVisible && (
               <Panel
                 id="left-main"
-                minSize="36%"
-                className="min-w-0 h-full overflow-hidden"
+                minSize="380px"
+                className="min-w-[380px] h-full overflow-hidden"
               >
                 {isCreateMode ? (
                   <CreateChatBoxContainer
@@ -350,8 +351,8 @@ export function WorkspacesLayout() {
             {rightMainPanelMode !== null && (
               <Panel
                 id="right-main"
-                minSize="36%"
-                className="min-w-0 h-full overflow-hidden"
+                minSize="360px"
+                className="min-w-[360px] h-full overflow-hidden"
               >
                 {rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.CHANGES &&
                   selectedWorkspace?.id && (
