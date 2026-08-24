@@ -326,27 +326,59 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
   const isRightPanelOpen = isPanelOpen;
 
   if (isMobile) {
-    return isRightPanelOpen ? (
-      <div className="h-full w-full overflow-hidden bg-secondary">
-        <ProjectRightSidebarContainer />
-      </div>
-    ) : (
+    if (isRightPanelOpen) {
+      return (
+        <div className="h-full w-full overflow-hidden bg-secondary">
+          <ProjectRightSidebarContainer />
+        </div>
+      );
+    }
+    if (isProjectTerminalOpen) {
+      return (
+        <div className="h-full w-full overflow-hidden bg-secondary">
+          <ProjectTerminalPanelContainer
+            onClose={() => setProjectTerminalOpen(false)}
+          />
+        </div>
+      );
+    }
+    return (
       <div className="h-full w-full overflow-hidden bg-primary">
         <ProjectKanbanBoard />
       </div>
     );
   }
 
-  const kanbanDefaultLayout: Layout =
-    typeof kanbanLeftPanelSize === 'number'
-      ? {
-          'kanban-left': kanbanLeftPanelSize,
-          'kanban-right': 100 - kanbanLeftPanelSize,
-        }
-      : { 'kanban-left': 75, 'kanban-right': 25 };
+  const kanbanDefaultLayout: Layout = (() => {
+    const leftSize =
+      typeof kanbanLeftPanelSize === 'number' ? kanbanLeftPanelSize : 75;
+    if (isProjectTerminalOpen && isRightPanelOpen) {
+      const remaining = 100 - leftSize;
+      const terminal = Math.round(remaining * 0.5);
+      const right = remaining - terminal;
+      return {
+        'kanban-left': leftSize,
+        'kanban-terminal': terminal,
+        'kanban-right': right,
+      };
+    }
+    if (isProjectTerminalOpen) {
+      return {
+        'kanban-left': leftSize,
+        'kanban-terminal': 100 - leftSize,
+      };
+    }
+    if (isRightPanelOpen) {
+      return {
+        'kanban-left': leftSize,
+        'kanban-right': 100 - leftSize,
+      };
+    }
+    return { 'kanban-left': 100 };
+  })();
 
   const onKanbanLayoutChange = (layout: Layout) => {
-    if (isRightPanelOpen) {
+    if (layout['kanban-left'] != null) {
       setKanbanLeftPanelSize(layout['kanban-left']);
     }
   };
@@ -376,8 +408,9 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
       {isProjectTerminalOpen && (
         <Panel
           id="kanban-terminal"
-          minSize="400px"
-          maxSize="800px"
+          minSize="20%"
+          maxSize="45%"
+          defaultSize="28%"
           className="min-w-0 h-full overflow-hidden bg-secondary"
         >
           <ProjectTerminalPanelContainer
@@ -396,8 +429,9 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
       {isRightPanelOpen && (
         <Panel
           id="kanban-right"
-          minSize="400px"
-          maxSize="800px"
+          minSize="20%"
+          maxSize="45%"
+          defaultSize="28%"
           className="min-w-0 h-full overflow-hidden bg-secondary"
         >
           <ProjectRightSidebarContainer />

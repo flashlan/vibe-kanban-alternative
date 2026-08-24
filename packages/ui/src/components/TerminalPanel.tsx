@@ -59,13 +59,56 @@ export function TerminalPanel({
 
   return (
     <div className="flex flex-col h-full min-h-0 w-full">
+      {/* Top header: Project Terminal + Vibe + controls */}
+      <div className="flex items-center justify-between shrink-0 border-b border-border bg-tertiary h-8 px-2">
+        <div className="flex items-center gap-2 min-w-0">
+          {leading ? (
+            <div className="flex items-center gap-1 shrink-0">{leading}</div>
+          ) : null}
+          <span className="text-xs font-semibold text-normal select-none truncate">
+            {title ?? 'Project Terminal'}
+          </span>
+          <span className="text-[10px] font-medium tracking-wide text-amber-500/90 select-none">
+            Vibe
+          </span>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          {onNewTuiTab && (
+            <button
+              type="button"
+              title="Open Cockpit TUI (vibe-tui)"
+              aria-label="Open Cockpit TUI"
+              className="flex items-center gap-1 px-2 py-1 rounded-sm text-xs font-medium text-amber-500 hover:text-amber-400 hover:bg-secondary transition-colors cursor-pointer"
+              onClick={onNewTuiTab}
+            >
+              <span>⚡</span>
+              <span>TUI</span>
+            </button>
+          )}
+          {onClose && (
+            <button
+              type="button"
+              title="Close panel"
+              aria-label="Close panel"
+              className="flex items-center justify-center size-6 rounded-sm text-low hover:text-normal hover:bg-secondary transition-colors cursor-pointer"
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onClose();
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+              }}
+            >
+              <XIcon className="size-icon-xs pointer-events-none" weight="bold" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {tabs.length > 0 && (
         <div className="flex items-stretch shrink-0 border-b border-border bg-tertiary h-7">
-          {leading && (
-            <div className="flex items-center gap-1 pl-2 pr-2 py-0.5 border-r border-border shrink-0">
-              {leading}
-            </div>
-          )}
           <div className="flex-1 min-w-0 overflow-x-auto">
             <div className="flex items-stretch gap-px h-full">
               {tabs.map((tab) => {
@@ -145,46 +188,6 @@ export function TerminalPanel({
                 </button>
               )}
             </div>
-          </div>
-
-          {/* Right side controls: [ Project Terminal ] [ ⚡ TUI ] [ X ] */}
-          <div className="flex items-stretch shrink-0 border-l border-border">
-            {title && (
-              <div className="flex items-center px-2.5 text-xs font-medium text-low select-none">
-                {title}
-              </div>
-            )}
-            {onNewTuiTab && (
-              <button
-                type="button"
-                title="Open Cockpit TUI (vibe-tui)"
-                aria-label="Open Cockpit TUI"
-                className="flex items-center gap-1 px-2 text-xs font-medium text-amber-500 hover:text-amber-400 hover:bg-secondary border-l border-border h-full transition-colors cursor-pointer"
-                onClick={onNewTuiTab}
-              >
-                <span>⚡</span>
-                <span>TUI</span>
-              </button>
-            )}
-            {onClose && (
-              <button
-                type="button"
-                title="Close panel"
-                aria-label="Close panel"
-                className="flex items-center justify-center px-2 text-low hover:text-normal hover:bg-secondary border-l border-border h-full transition-colors cursor-pointer"
-                onPointerDown={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  onClose();
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                }}
-              >
-                <XIcon className="size-icon-xs pointer-events-none" weight="bold" />
-              </button>
-            )}
           </div>
         </div>
       )}

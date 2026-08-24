@@ -84,7 +84,6 @@ import { refreshShapeSource } from '@/shared/lib/electric/collections';
 import { useIssueMultiSelect } from '@/shared/hooks/useIssueMultiSelect';
 import { useIssueSelectionStore } from '@/shared/stores/useIssueSelectionStore';
 import { BulkActionBarContainer } from './BulkActionBarContainer';
-import { ProjectTerminalDrawer } from '@/shared/components/ProjectTerminalDrawer';
 import { computeKanbanMove } from '../model/computeKanbanMove';
 import { buildKanbanMoveUpdates } from '../model/buildKanbanMoveUpdates';
 import { createSyncGuard } from '../model/syncGuard';
@@ -545,21 +544,12 @@ export function KanbanContainer() {
   const itemsRef = useRef<Record<string, string[]>>({});
   itemsRef.current = items;
   const [isFiltersDialogOpen, setIsFiltersDialogOpen] = useState(false);
-  const [isProjectTerminalOpen, setIsProjectTerminalOpen] = useState(false);
-
-  // Toggle the project terminal drawer with Ctrl+Shift+`.
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const ctrl = event.ctrlKey;
-      const shift = event.shiftKey;
-      if (ctrl && shift && event.key === '`') {
-        event.preventDefault();
-        setIsProjectTerminalOpen((v) => !v);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  const isProjectTerminalOpen = useUiPreferencesStore(
+    (s) => s.isProjectTerminalOpen
+  );
+  const toggleProjectTerminal = useUiPreferencesStore(
+    (s) => s.toggleProjectTerminal
+  );
 
   // Sync items from filtered issues when they change
   useEffect(() => {
@@ -1150,7 +1140,7 @@ export function KanbanContainer() {
 
           <button
             type="button"
-            onClick={() => setIsProjectTerminalOpen((v) => !v)}
+            onClick={() => toggleProjectTerminal()}
             className={cn(
               'p-half rounded-sm text-low hover:text-normal hover:bg-secondary transition-colors',
               isProjectTerminalOpen && 'text-normal bg-secondary'
@@ -1542,12 +1532,6 @@ export function KanbanContainer() {
       )}
 
       {isMultiSelectActive && <BulkActionBarContainer projectId={projectId} />}
-
-      {isProjectTerminalOpen && (
-        <ProjectTerminalDrawer
-          onClose={() => setIsProjectTerminalOpen(false)}
-        />
-      )}
 
       {cardInfoIssueId && (
         <CardInfoDialog
