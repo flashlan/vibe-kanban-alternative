@@ -326,19 +326,23 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
   const isRightPanelOpen = isPanelOpen;
 
   if (isMobile) {
-    if (isRightPanelOpen) {
-      return (
-        <div className="h-full w-full overflow-hidden bg-secondary">
-          <ProjectRightSidebarContainer />
-        </div>
-      );
-    }
+    // Em mobile o Group horizontal não cabe — mostra um painel por vez.
+    // Prioridade: terminal > right > board, para o terminal nunca ficar
+    // atrás do workspace (“fica no fundo”). Se ambos abertos o usuário
+    // fecha o terminal e volta ao workspace.
     if (isProjectTerminalOpen) {
       return (
         <div className="h-full w-full overflow-hidden bg-secondary">
           <ProjectTerminalPanelContainer
             onClose={() => setProjectTerminalOpen(false)}
           />
+        </div>
+      );
+    }
+    if (isRightPanelOpen) {
+      return (
+        <div className="h-full w-full overflow-hidden bg-secondary">
+          <ProjectRightSidebarContainer />
         </div>
       );
     }
