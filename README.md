@@ -13,7 +13,7 @@
 <h1 align="center">VIBE KANBAN ALTERNATIVE</h1>
 
 <p align="center">
-  Multi-agent development on a Kanban board, with semantic and vector memory shared across agent stages.
+  Multi-agent development on a Kanban board, with semantic and vector memory (Qdrant memory Graph) shared across agent stages.
 </p>
 
 <p align="center">
