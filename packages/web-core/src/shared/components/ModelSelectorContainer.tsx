@@ -431,7 +431,7 @@ export function ModelSelectorContainer({
   const permissionIcon = permissionMeta?.icon ?? HandIcon;
 
   return (
-    <>
+    <div className="flex items-center gap-half min-w-0 max-w-full flex-nowrap">
       <DropdownMenu>
         <DropdownMenuTriggerButton
           size="sm"
@@ -548,6 +548,6 @@ export function ModelSelectorContainer({
           </DropdownMenuContent>
         </DropdownMenu>
       )}
-    </>
+    </div>
   );
 }
