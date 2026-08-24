@@ -37,7 +37,7 @@ Este livro foi escrito dentro do próprio repositório que ele ensina a usar. To
 | 15 | Ancoragem de imagens | `15-ancoragem-imagens.md` | Escrito |
 | A | Apêndice: referência de comandos | `apendice-comandos.md` | Escrito |
 
-## Screenshots-âncora (cap. 5)
+## Screenshots-âncora (caps. 3–8)
 
 | Imagem | Arquivo | Usada em |
 | --- | --- | --- |
@@ -48,6 +48,13 @@ Este livro foi escrito dentro do próprio repositório que ele ensina a usar. To
 | Criar card — base (Description + Save) | `ancora-criar-card-base.png` | cap. 5 §1 |
 | Criar card — seção Workspaces / Create | `ancora-criar-card-workspace.png` | cap. 5 §2 |
 | Barra da workspace (Tasks, modelo, presets, permissões, anexos) | `ancora-workspace-chat-bar.png` | cap. 5 §4 |
+| AssinaFácil — Landing (hero + MRR + features) | `saas-landing.png` | cap. 8 |
+| AssinaFácil — Planos (3 colunas, Pro em destaque) | `saas-planos.png` | cap. 8 |
+| AssinaFácil — Checkout (formulário + resumo) | `saas-checkout.png` | cap. 8 |
+| AssinaFácil — Minhas assinaturas (tabela logada) | `saas-minhas-assinaturas.png` | cap. 8 |
+| AssinaFácil — Landing mobile (390×780) | `saas-landing-mobile.png` | cap. 8 |
+
+> As 7 primeiras são screenshots reais do app; as 5 do AssinaFácil são **prévias geradas em PIL** (cap. 15) — substituir por screenshots reais do Preview quando os cards do cap. 8 forem para Done.
 
 ## Convenções
 
