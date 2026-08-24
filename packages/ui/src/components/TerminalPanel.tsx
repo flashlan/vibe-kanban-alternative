@@ -108,11 +108,14 @@ export function TerminalPanel({
                         title="Close terminal"
                         aria-label="Close terminal"
                         className="flex items-center justify-center w-6 px-1 text-low hover:text-normal hover:bg-secondary/70 shrink-0 h-full cursor-pointer"
-                        onPointerDown={(e) => e.stopPropagation()}
-                        onMouseDown={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          handleCloseTab(tab.id);
+                        }}
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleCloseTab(tab.id);
+                          e.preventDefault();
                         }}
                       >
                         <XIcon className="size-icon-xs pointer-events-none" weight="bold" />
@@ -127,7 +130,15 @@ export function TerminalPanel({
                   title="New terminal"
                   aria-label="New terminal"
                   className="flex items-center px-1.5 text-low hover:text-normal shrink-0 h-full cursor-pointer"
-                  onClick={onNewTab}
+                  onPointerDown={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onNewTab();
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
                 >
                   <PlusIcon className="size-icon-xs pointer-events-none" weight="bold" />
                 </button>
@@ -160,7 +171,15 @@ export function TerminalPanel({
                 title="Close panel"
                 aria-label="Close panel"
                 className="flex items-center justify-center px-2 text-low hover:text-normal hover:bg-secondary border-l border-border h-full transition-colors cursor-pointer"
-                onClick={onClose}
+                onPointerDown={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onClose();
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                }}
               >
                 <XIcon className="size-icon-xs pointer-events-none" weight="bold" />
               </button>
