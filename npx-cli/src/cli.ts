@@ -236,6 +236,21 @@ async function runReview(args: string[]): Promise<void> {
   });
 }
 
+async function runTui(args: string[]): Promise<void> {
+  await extractAndRun("vibe-tui", (bin) => {
+    const proc = spawn(bin, args, { stdio: "inherit" });
+    proc.on("exit", (c) => process.exit(c || 0));
+    proc.on("error", (e) => {
+      console.error("TUI error:", e.message);
+      process.exit(1);
+    });
+    process.on("SIGINT", () => {
+      proc.kill("SIGINT");
+    });
+    process.on("SIGTERM", () => proc.kill("SIGTERM"));
+  });
+}
+
 async function runMain(desktopMode: boolean): Promise<void> {
   checkForUpdates();
 
@@ -330,6 +345,13 @@ async function main(): Promise<void> {
     .allowUnknownOptions()
     .action((args: string[]) => {
       runOrExit(runMcp(args));
+    });
+
+  cli
+    .command("tui [...args]", "Run the TUI cockpit")
+    .allowUnknownOptions()
+    .action((args: string[]) => {
+      runOrExit(runTui(args));
     });
 
   cli.help();

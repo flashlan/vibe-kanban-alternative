@@ -53,6 +53,7 @@ echo "🔨 Building Rust binaries..."
 if command -v cargo >/dev/null 2>&1; then
   cargo build --release --manifest-path Cargo.toml
   cargo build --release --bin vibe-kanban-mcp --manifest-path Cargo.toml
+  cargo build --release --bin vibe-tui --manifest-path Cargo.toml
 else
   # cargo not in PATH (e.g. npm prepack). Fall back to prebuilt release binaries.
   echo "⚠️  cargo not found — using prebuilt binaries in ${CARGO_TARGET_DIR}/release"
@@ -78,11 +79,18 @@ zip -q vibe-kanban-review.zip vibe-kanban-review
 rm -f vibe-kanban-review
 mv vibe-kanban-review.zip npx-cli/dist/$PLATFORM/vibe-kanban-review.zip
 
+# Copy the TUI binary
+cp ${CARGO_TARGET_DIR}/release/vibe-tui vibe-tui
+zip -q vibe-tui.zip vibe-tui
+rm -f vibe-tui
+mv vibe-tui.zip npx-cli/dist/$PLATFORM/vibe-tui.zip
+
 echo "✅ CLI build complete!"
 echo "📁 Files created:"
 echo "   - npx-cli/dist/$PLATFORM/vibe-kanban.zip"
 echo "   - npx-cli/dist/$PLATFORM/vibe-kanban-mcp.zip"
 echo "   - npx-cli/dist/$PLATFORM/vibe-kanban-review.zip"
+echo "   - npx-cli/dist/$PLATFORM/vibe-tui.zip"
 
 # Optionally build the Tauri desktop app
 if [[ "$1" == "--desktop" || "$1" == "--all" ]]; then

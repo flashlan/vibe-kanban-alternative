@@ -565,7 +565,9 @@ async fn resolve_base() -> Result<(String, String), ApiError> {
         return Ok((format!("{url}/api"), format!("{ws}/api")));
     }
 
-    let host = std::env::var("HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+    // "localhost", not "127.0.0.1" — see the matching comment in
+    // crates/mcp/src/bin/vibe_kanban_mcp.rs's resolve_base_url.
+    let host = std::env::var("HOST").unwrap_or_else(|_| "localhost".to_string());
     let port = match std::env::var("BACKEND_PORT").or_else(|_| std::env::var("PORT")) {
         Ok(p) => p
             .parse::<u16>()

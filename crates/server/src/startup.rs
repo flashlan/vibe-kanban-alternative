@@ -8,7 +8,7 @@ use deployment::{Deployment, DeploymentError};
 use services::services::container::ContainerService;
 use tokio_util::sync::CancellationToken;
 use tower_http::validate_request::ValidateRequestHeaderLayer;
-use utils::assets::asset_dir;
+use utils::{assets::asset_dir, port_file::write_port_file_with_proxy};
 
 use crate::{DeploymentImpl, middleware, middleware::origin::validate_origin, routes};
 
@@ -114,6 +114,17 @@ pub async fn start_with_bind(
 
     let proxy_listener = tokio::net::TcpListener::bind(proxy_addr).await?;
     let proxy_port = proxy_listener.local_addr()?.port();
+
+    // Write the port file here too, not just in the standalone `server`
+    // binary's `main()` — this is also the path the packaged Tauri app uses
+    // (via `server::startup::start()`), and its port is freshly auto-assigned
+    // (`localhost:0`) on every launch. Without this, `vibe-kanban-mcp` (and
+    // anything else that port-file-discovers the backend, e.g. the TUI) can
+    // silently read a stale port left behind by an earlier dev-mode run,
+    // instead of failing loudly or finding the real one.
+    if let Err(e) = write_port_file_with_proxy(port, Some(proxy_port)).await {
+        tracing::warn!("Failed to write port file: {}", e);
+    }
 
     tracing::info!("Server on :{port}, Preview proxy on :{proxy_port}");
 

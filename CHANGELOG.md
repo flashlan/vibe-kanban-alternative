@@ -7,6 +7,16 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-alternat
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.39] - 2026-08-24
+
+### Fixed
+
+- **MCP backend host & port resolution**: `vibe-kanban-mcp`, `telegram-bridge`, and the TUI now resolve the backend host as `"localhost"` by default (matching the server's bind to `localhost:0`), resolving IPv6 `::1` connection failures on modern macOS. In addition, `start_with_bind()` now writes the runtime port file immediately on launch, enabling `vibe-kanban-mcp` and other tools to dynamically discover the active port when running embedded under Tauri.
+
+### Added
+
+- **TUI CLI command**: added `npx vibe-kanban-alternative tui` to launch the terminal cockpit directly via the CLI package.
+
 ## [0.2.38] - 2026-08-24
 
 ### Added

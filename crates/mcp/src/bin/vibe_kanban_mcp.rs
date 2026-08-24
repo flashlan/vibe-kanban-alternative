@@ -157,9 +157,14 @@ async fn resolve_base_url(log_prefix: &str) -> anyhow::Result<String> {
         return Ok(url);
     }
 
+    // Default to "localhost", not "127.0.0.1": the server binds to
+    // `localhost:0` (see `server::startup::start_with_bind`'s doc comment),
+    // which modern macOS resolves to `::1` (IPv6) — a literal 127.0.0.1
+    // fallback here would never connect on a machine where that's the case.
+    // "localhost" makes this resolve the same way the server's bind did.
     let host = std::env::var(HOST_ENV)
         .or_else(|_| std::env::var("HOST"))
-        .unwrap_or_else(|_| "127.0.0.1".to_string());
+        .unwrap_or_else(|_| "localhost".to_string());
 
     let port = match std::env::var(PORT_ENV)
         .or_else(|_| std::env::var("BACKEND_PORT"))
