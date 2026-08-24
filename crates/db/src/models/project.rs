@@ -4,6 +4,13 @@ use sqlx::{Executor, FromRow, SqlitePool};
 use ts_rs::TS;
 use uuid::Uuid;
 
+/// Default pre/post prompts for new projects — versioned in git (`assets/default_orchestrator_prompt.txt`)
+/// and baked into the binary via `include_str!`, so every `npm` install gets the same
+/// pre-filled `Project Settings → Instructions & Rules` (pre = `vk:rules:pre`, post = `vk:rules:post`)
+/// without needing a user-specific `projects.toml` export.
+pub const DEFAULT_ORCHESTRATOR_PROMPT: &str =
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/default_orchestrator_prompt.txt"));
+
 /// Project-key derivation, single source of truth. Caller passes the project
 /// `name`; this strips non-alphanumeric chars, uppercases the first four
 /// surviving chars, and falls back to `"PRJ"` when nothing is left.
@@ -147,8 +154,8 @@ impl Project {
     pub async fn create(pool: &SqlitePool, project: NewProject<'_>) -> Result<Self, sqlx::Error> {
         sqlx::query_as!(
             Project,
-            r#"INSERT INTO projects (id, name, key, color, sort_order, default_agent_working_dir, parent_id)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
+            r#"INSERT INTO projects (id, name, key, color, sort_order, default_agent_working_dir, parent_id, orchestrator_prompt)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                RETURNING id as "id!: Uuid",
                          name,
                          key,
@@ -168,9 +175,16 @@ impl Project {
             project.sort_order,
             project.default_agent_working_dir,
             project.parent_id,
+            Self::default_orchestrator_prompt(),
         )
         .fetch_one(pool)
         .await
+    }
+
+    /// Returns the baked-in default prompt (from `assets/default_orchestrator_prompt.txt`),
+    /// trimmed. Empty string = no default (e.g. during tests with placeholder file).
+    pub fn default_orchestrator_prompt() -> String {
+        DEFAULT_ORCHESTRATOR_PROMPT.trim().to_string()
     }
 
     /// Update the editable presentation fields of a project.
@@ -394,6 +408,20 @@ impl Project {
         }
 
         if stack.is_empty() {
+            // No project/board prompt set — fall back to the baked-in default
+            // (`assets/default_orchestrator_prompt.txt`, git-tracked and
+            // embedded in the binary so every `npm` install gets pre-filled
+            // `Project Settings → Instructions & Rules` without needing a
+            // user-specific `projects.toml` workspace export).
+            let def = DEFAULT_ORCHESTRATOR_PROMPT.trim();
+            if !def.is_empty() {
+                // Render as a single Project section so the LLM sees the same
+                // stack shape as a real project prompt; source stays `None`
+                // (wire `default`) so the UI can distinguish "baked default"
+                // from an explicit DB value.
+                let synth: Vec<(String, Uuid, bool)> = vec![(def.to_string(), id, true)];
+                return Ok((render_orchestrator_prompt_stack(&synth), None));
+            }
             return Ok((String::new(), None));
         }
         // Top-of-stack = first non-empty in walk order = queried row if it
@@ -566,11 +594,12 @@ mod tests {
         assert_eq!(chain, vec!["ACME".to_string(), "ACME".to_string()]);
     }
 
-    /// ADR-016 A1: a freshly created project exposes `orchestrator_prompt = ""`.
-    /// The migration's `DEFAULT ''` guarantees the column is set for both
-    /// pre-existing rows (after upgrade) and new rows (the INSERT omits the
-    /// column). Without this the tree's `hasPrompt` dot would render
-    /// `undefined` and the editor's resolve badge would misreport.
+    /// ADR-016 A1 (amended): a freshly created project is pre-filled with
+    /// the baked default (`assets/default_orchestrator_prompt.txt`, git-tracked
+    /// + embedded via `include_str!` so every `npm` install gets pre-filled
+    /// `Project Settings → Instructions & Rules` without a workspace export).
+    /// The migration's `DEFAULT ''` is overridden by `Project::create` which now
+    /// inserts `default_orchestrator_prompt()`.
     #[tokio::test]
     async fn new_project_has_empty_orchestrator_prompt() {
         let pool = pool().await;
@@ -591,13 +620,14 @@ mod tests {
         .await
         .unwrap();
 
+        let expected = Project::default_orchestrator_prompt();
         let fetched = Project::find_by_id(&pool, id).await.unwrap().unwrap();
-        assert_eq!(fetched.orchestrator_prompt, "");
+        assert_eq!(fetched.orchestrator_prompt, expected);
 
         // find_all must also surface the column (the sidebar tree reads it).
         let all = Project::find_all(&pool).await.unwrap();
         assert_eq!(all.len(), 1);
-        assert_eq!(all[0].orchestrator_prompt, "");
+        assert_eq!(all[0].orchestrator_prompt, expected);
     }
 
     /// ADR-016 A2: `update_orchestrator_prompt` round-trips and clears,
@@ -711,6 +741,14 @@ mod tests {
         )
         .await
         .unwrap();
+        // `create` now pre-fills with baked default; clear to start from truly empty
+        // for this test's (a)/(b) steps.
+        Project::update_orchestrator_prompt(&pool, root_id, "")
+            .await
+            .unwrap();
+        Project::update_orchestrator_prompt(&pool, child_id, "")
+            .await
+            .unwrap();
 
         // (a) Root prompt set, child prompt empty → project-only stack,
         // source is the root.
@@ -732,14 +770,19 @@ mod tests {
         assert!(got.contains("<orchestrator_prompt_stack>"));
         assert_eq!(source, Some(root_id));
 
-        // (b) Root prompt whitespace-only → treated as empty → empty stack.
+        // (b) Root prompt whitespace-only → treated as empty → falls back to
+        // baked default (not empty) with `source: None` (wire `default`).
         Project::update_orchestrator_prompt(&pool, root_id, "   \n  ")
             .await
             .unwrap();
         let (got, source) = Project::resolve_orchestrator_prompt(&pool, child_id)
             .await
             .unwrap();
-        assert_eq!(got, "");
+        let expected_def = Project::default_orchestrator_prompt();
+        assert!(
+            got.contains("<orchestrator_prompt_stack>") && got.contains(expected_def.trim()),
+            "whitespace root + empty child must fall back to baked default; got:\n{got}"
+        );
         assert_eq!(source, None);
 
         // (c) Child's own prompt set, root still whitespace-only →
@@ -880,22 +923,37 @@ mod tests {
         )
         .await
         .unwrap();
+        // Clear to truly empty (create now pre-fills with baked default).
+        Project::update_orchestrator_prompt(&pool, root_id, "")
+            .await
+            .unwrap();
+        Project::update_orchestrator_prompt(&pool, child_id, "")
+            .await
+            .unwrap();
 
-        // Both empty.
+        // Both empty → falls back to baked default (`assets/default_orchestrator_prompt.txt`),
+        // still `source: None` (wire `default`) but non-empty stack.
         let (got, source) = Project::resolve_orchestrator_prompt(&pool, child_id)
             .await
             .unwrap();
-        assert_eq!(got, "");
+        let expected_def = Project::default_orchestrator_prompt();
+        assert!(
+            got.contains("<orchestrator_prompt_stack>") && got.contains(expected_def.trim()),
+            "empty chain must fall back to baked default; got:\n{got}"
+        );
         assert_eq!(source, None);
 
-        // Standalone root, empty.
+        // Standalone root, empty → same fallback.
         let (got, source) = Project::resolve_orchestrator_prompt(&pool, root_id)
             .await
             .unwrap();
-        assert_eq!(got, "");
+        assert!(
+            got.contains("<orchestrator_prompt_stack>") && got.contains(expected_def.trim()),
+            "empty root must fall back to baked default; got:\n{got}"
+        );
         assert_eq!(source, None);
 
-        // Id that doesn't exist — returns empty without hanging.
+        // Id that doesn't exist — returns empty without hanging (no fallback, row missing).
         let (got, source) = Project::resolve_orchestrator_prompt(&pool, Uuid::new_v4())
             .await
             .unwrap();

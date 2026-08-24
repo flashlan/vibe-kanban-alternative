@@ -888,9 +888,18 @@ async fn get_project_orchestrator_prompt_with_pool(
     let project = DbProject::find_by_id(pool, id)
         .await?
         .ok_or_else(|| ApiError::BadRequest("project not found".into()))?;
+    // Pre-fill with baked-in default (`assets/default_orchestrator_prompt.txt`,
+    // git-tracked + embedded in `npm` binary) when DB value is empty, so every
+    // fresh `npm` install sees `Project Settings → Instructions & Rules`
+    // already populated without needing a personal `projects.toml` export.
+    let prompt = if project.orchestrator_prompt.trim().is_empty() {
+        DbProject::default_orchestrator_prompt()
+    } else {
+        project.orchestrator_prompt
+    };
     Ok(ok(OrchestratorPromptResponse {
         project_id: project.id,
-        orchestrator_prompt: project.orchestrator_prompt,
+        orchestrator_prompt: prompt,
     }))
 }
 

@@ -1,0 +1,11 @@
+<!-- vk:rules:pre:start -->
+Always use strict TypeScript types. Keep functions small and focused.
+Never modify database migrations directly — create a new migration instead.
+Follow the project's architecture and naming conventions.
+<!-- vk:rules:pre:end -->
+
+<!-- vk:rules:post:start -->
+NEVER compile, build, or run `cargo build`, `pnpm build`, `rebuild`, or `./restart.sh` unless explicitly requested.
+Do not execute heavy test/build commands unless explicitly requested.
+Upon completing the pipeline/task, always report a clear, concise summary of all changes made.
+<!-- vk:rules:post:end -->
