@@ -36,8 +36,11 @@ interface ChatBoxBaseProps {
   // Footer right content (action buttons)
   footerRight: ReactNode;
 
-  // Model selector node (rendered with footer controls)
+  // Model selector node (rendered on top row of footer controls)
   modelSelector?: ReactNode;
+
+  // Agent selector node (rendered on bottom row with send and footerLeft)
+  agentSelector?: ReactNode;
 
   // Banner content (queued message indicator, feedback mode indicator)
   banner?: ReactNode;
@@ -45,7 +48,7 @@ interface ChatBoxBaseProps {
   // visualVariant
   visualVariant: VisualVariant;
 
-  // Whether the workspace is running (shows animated border)
+  // Whether an execution process is running (used to animate the border)
   isRunning?: boolean;
 
   // Dropzone props for drag-and-drop image uploads
@@ -64,6 +67,7 @@ export function ChatBoxBase({
   footerLeft,
   footerRight,
   modelSelector,
+  agentSelector,
   banner,
   visualVariant,
   isRunning,
@@ -135,6 +139,7 @@ export function ChatBoxBase({
           )}
           <div className="flex items-center justify-between gap-base min-w-0">
             <Toolbar className="flex-1 min-w-0 flex-nowrap !gap-half overflow-x-auto no-scrollbar">
+              {agentSelector}
               {footerLeft}
             </Toolbar>
             <div className="flex shrink-0 items-center gap-half">{footerRight}</div>

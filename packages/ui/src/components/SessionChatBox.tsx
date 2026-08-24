@@ -183,6 +183,7 @@ interface SessionChatBoxProps<TExecutor extends string = string> {
   reviewComments?: ReviewCommentsProps;
   toolbarActions?: ToolbarActionsProps;
   modelSelector?: ReactNode;
+  agentSelector?: ReactNode;
   error?: string | null;
   repoIds?: string[];
   agent?: TExecutor | null;
@@ -260,6 +261,7 @@ export function SessionChatBox<TExecutor extends string = string>({
   reviewComments,
   toolbarActions,
   modelSelector,
+  agentSelector,
   error,
   repoIds,
   agent,
@@ -741,6 +743,7 @@ export function SessionChatBox<TExecutor extends string = string>({
       isRunning={showRunningOutline}
       dropzone={disableContentInsert ? undefined : dropzone}
       modelSelector={modelSelector}
+      agentSelector={agentSelector}
       headerLeft={
         <>
           {/* New session mode: agent icon + executor dropdown */}

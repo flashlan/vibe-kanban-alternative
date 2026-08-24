@@ -70,6 +70,7 @@ interface CreateChatBoxProps<TExecutor extends string = string> {
   repoIds?: string[];
   repoId?: string;
   modelSelector?: ReactNode;
+  agentSelector?: ReactNode;
   onPasteFiles?: (files: File[]) => void;
   localAttachments?: LocalAttachmentMetadata[];
   dropzone?: DropzoneProps;
@@ -105,6 +106,7 @@ export function CreateChatBox<TExecutor extends string = string>({
   repoIds,
   repoId,
   modelSelector,
+  agentSelector,
   onPasteFiles,
   localAttachments,
   dropzone,
@@ -115,25 +117,26 @@ export function CreateChatBox<TExecutor extends string = string>({
 }: CreateChatBoxProps<TExecutor>) {
   const { t } = useTranslation(['common', 'tasks']);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
   const isDisabled = disabled || isSending;
   const canSend = editor.value.trim().length > 0 && !isDisabled;
-
-  const handleCmdEnter = () => {
-    if (canSend) {
-      onSend();
-    }
-  };
 
   const handleAttachClick = () => {
     fileInputRef.current?.click();
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length > 0 && onPasteFiles) {
-      onPasteFiles(files);
+    if (e.target.files && e.target.files.length > 0) {
+      onPasteFiles?.(Array.from(e.target.files));
+      // Reset the input value so the same file can be selected again
+      e.target.value = '';
     }
-    e.target.value = '';
+  };
+
+  const handleCmdEnter = () => {
+    if (!isDisabled && editor.value.trim().length > 0) {
+      onSend();
+    }
   };
 
   const executorLabel = executor.selected
@@ -157,6 +160,7 @@ export function CreateChatBox<TExecutor extends string = string>({
       visualVariant={VisualVariant.NORMAL}
       dropzone={dropzone}
       modelSelector={modelSelector}
+      agentSelector={agentSelector}
       headerLeft={
         <>
           {agentIcon}

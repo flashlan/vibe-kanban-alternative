@@ -55,6 +55,7 @@ interface ModelSelectorContainerProps {
   onOverrideChange: (partial: Partial<ExecutorConfig>) => void;
   executorConfig: ExecutorConfig | null;
   presetOptions: ExecutorConfig | null | undefined;
+  slot?: 'model' | 'agent' | 'all';
 }
 
 export function ModelSelectorContainer({
@@ -68,6 +69,7 @@ export function ModelSelectorContainer({
   onOverrideChange,
   executorConfig,
   presetOptions,
+  slot = 'all',
 }: ModelSelectorContainerProps) {
   const { t } = useTranslation('common');
   const { theme } = useTheme();
@@ -430,6 +432,38 @@ export function ModelSelectorContainer({
     : null;
   const permissionIcon = permissionMeta?.icon ?? HandIcon;
 
+  const renderAgentDropdown = () => {
+    if (!config || config.agents.length === 0) return null;
+    return (
+      <DropdownMenu>
+        <DropdownMenuTriggerButton size="sm" label={agentLabel} />
+        <DropdownMenuContent align="start">
+          <DropdownMenuLabel>{t('modelSelector.agent')}</DropdownMenuLabel>
+          <DropdownMenuItem
+            icon={selectedAgentId === null ? CheckIcon : undefined}
+            onClick={() => handleAgentSelect(null)}
+          >
+            {t('modelSelector.default')}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          {config.agents.map((agentOption) => (
+            <DropdownMenuItem
+              key={agentOption.id}
+              icon={agentOption.id === selectedAgentId ? CheckIcon : undefined}
+              onClick={() => handleAgentSelect(agentOption.id)}
+            >
+              {agentOption.label}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
+  if (slot === 'agent') {
+    return renderAgentDropdown();
+  }
+
   return (
     <div className="flex items-center gap-half min-w-0 max-w-full flex-nowrap">
       <DropdownMenu>
@@ -522,32 +556,7 @@ export function ModelSelectorContainer({
         </DropdownMenu>
       )}
 
-      {config.agents.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTriggerButton size="sm" label={agentLabel} />
-          <DropdownMenuContent align="start">
-            <DropdownMenuLabel>{t('modelSelector.agent')}</DropdownMenuLabel>
-            <DropdownMenuItem
-              icon={selectedAgentId === null ? CheckIcon : undefined}
-              onClick={() => handleAgentSelect(null)}
-            >
-              {t('modelSelector.default')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            {config.agents.map((agentOption) => (
-              <DropdownMenuItem
-                key={agentOption.id}
-                icon={
-                  agentOption.id === selectedAgentId ? CheckIcon : undefined
-                }
-                onClick={() => handleAgentSelect(agentOption.id)}
-              >
-                {agentOption.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+      {slot === 'all' && renderAgentDropdown()}
     </div>
   );
 }

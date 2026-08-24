@@ -408,6 +408,23 @@ export function CreateChatBoxContainer({
                   modelSelector={
                     effectiveExecutor ? (
                       <ModelSelectorContainer
+                        slot="model"
+                        agent={effectiveExecutor}
+                        workspaceId={undefined}
+                        onAdvancedSettings={handleCustomise}
+                        presets={variantOptions}
+                        selectedPreset={selectedVariant}
+                        onPresetSelect={handlePresetSelect}
+                        onOverrideChange={setExecutorOverrides}
+                        executorConfig={executorConfig}
+                        presetOptions={presetOptions}
+                      />
+                    ) : undefined
+                  }
+                  agentSelector={
+                    effectiveExecutor ? (
+                      <ModelSelectorContainer
+                        slot="agent"
                         agent={effectiveExecutor}
                         workspaceId={undefined}
                         onAdvancedSettings={handleCustomise}
