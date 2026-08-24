@@ -26,11 +26,11 @@
         justify-content: center;
         gap: 24px;
         background: #121212;
-        transition: opacity 520ms ease;
+        transition: opacity 280ms ease;
       }
       #vk-startup-banner.vk-startup-banner--hide {
         opacity: 0;
-        pointer-events: none;
+        pointer-events: none !important;
       }
       #vk-startup-banner img.vk-startup-icon {
         width: 192px;
@@ -111,30 +111,25 @@
       }
     </script>
     <script>
-      // Startup banner hide helper — persists a bit longer so dark screen isn't exposed mid-load
+      // Startup banner hide helper — dismisses cleanly as soon as React hydrates
       (function () {
-        var bannerShownAt = Date.now();
-        var MIN_VISIBLE_MS = 1400; // keep banner at least 1.4s so spinner doesn't flash then leave dark gap
         function hideVkStartupBanner() {
           var el = document.getElementById('vk-startup-banner');
-          if (!el || el.classList.contains('vk-startup-banner--hide')) return;
-          var elapsed = Date.now() - bannerShownAt;
-          var wait = Math.max(0, MIN_VISIBLE_MS - elapsed);
+          if (!el) return;
+          el.style.pointerEvents = 'none';
+          el.classList.add('vk-startup-banner--hide');
           setTimeout(function () {
-            el.classList.add('vk-startup-banner--hide');
-            setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); }, 560);
-          }, wait);
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+          }, 320);
         }
         window.__vkHideStartupBanner = hideVkStartupBanner;
-        // Fallback: hide after 8s if React fails to mount
-        setTimeout(hideVkStartupBanner, 8000);
-        // Also hide once React root has children (covers cases where Bootstrap doesn't call explicitly)
+        // Fallback: hide after 2.5s if React fails to mount
+        setTimeout(hideVkStartupBanner, 2500);
+        // Also hide once React root has children
         var obs = new MutationObserver(function () {
           var root = document.getElementById('root');
           if (root && root.children.length > 0) {
-            requestAnimationFrame(function () {
-              setTimeout(hideVkStartupBanner, 650);
-            });
+            hideVkStartupBanner();
             obs.disconnect();
           }
         });

@@ -3,11 +3,7 @@ import { Outlet } from '@tanstack/react-router';
 import { XIcon } from '@phosphor-icons/react';
 import { SyncErrorProvider } from '@/shared/providers/SyncErrorProvider';
 import { useIsMobile } from '@/shared/hooks/useIsMobile';
-import {
-  useUiPreferencesStore,
-  clampLeftSidebarWidth,
-  DEFAULT_LEFT_SIDEBAR_WIDTH,
-} from '@/shared/stores/useUiPreferencesStore';
+import { useUiPreferencesStore } from '@/shared/stores/useUiPreferencesStore';
 import { cn } from '@/shared/lib/utils';
 
 import { NavbarContainer } from './NavbarContainer';
@@ -85,10 +81,6 @@ export function SharedAppLayout() {
   const toggleLeftSidebarPinned = useUiPreferencesStore(
     (s) => s.toggleLeftSidebar
   );
-  const leftSidebarWidth = useUiPreferencesStore((s) => s.leftSidebarWidth);
-  const setLeftSidebarWidth = useUiPreferencesStore(
-    (s) => s.setLeftSidebarWidth
-  );
   const [isSidebarHoverOpen, setIsSidebarHoverOpen] = useState(false);
   const hoverCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openSidebarHover = useCallback(() => {
@@ -120,36 +112,6 @@ export function SharedAppLayout() {
       if (hoverCloseTimeoutRef.current) clearTimeout(hoverCloseTimeoutRef.current);
     };
   }, []);
-
-  // Persisted resizable left sidebar width — global for any workspace, survives reload.
-  const handleSidebarResizeStart = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      const startX = e.clientX;
-      const startWidth = leftSidebarWidth;
-      const onMove = (ev: MouseEvent) => {
-        const delta = ev.clientX - startX;
-        const next = clampLeftSidebarWidth(startWidth + delta);
-        setLeftSidebarWidth(next);
-      };
-      const onUp = () => {
-        window.removeEventListener('mousemove', onMove);
-        window.removeEventListener('mouseup', onUp);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-      };
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      window.addEventListener('mousemove', onMove);
-      window.addEventListener('mouseup', onUp);
-    },
-    [leftSidebarWidth, setLeftSidebarWidth]
-  );
-
-  const handleSidebarResizeDoubleClick = useCallback(() => {
-    setLeftSidebarWidth(DEFAULT_LEFT_SIDEBAR_WIDTH);
-  }, [setLeftSidebarWidth]);
-
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   // `selectedIssueIds.size > 1` matches `useIssueMultiSelect`'s
   // `isMultiSelectActive` definition. We don't call the hook from web-core
@@ -824,77 +786,58 @@ export function SharedAppLayout() {
                 'bg-primary',
                 isMobile
                   ? 'flex fixed inset-0 pb-[env(safe-area-inset-bottom)]'
-                  : 'flex h-screen'
+                  : cn(
+                      'grid grid-rows-[minmax(0,1fr)] h-screen',
+                      isLeftSidebarPinned
+                        ? 'grid-cols-[256px_1fr]'
+                        : 'grid-cols-[1fr]'
+                    )
               )}
             >
               {!isMobile && (
                 <>
-                  {/* Pinned: sidebar occupies a fixed flex column with resizable width (global, persists across reload).
-                      Unpinned: sidebar is hidden and revealed via a thin left-edge hover strip — slide animation via translate-x. */}
+                  {/* Pinned: sidebar occupies its grid column. Unpinned:
+                      sidebar is hidden and revealed via a thin left-edge
+                      hover strip — slide animation via translate-x. */}
                   {isLeftSidebarPinned ? (
-                    <>
-                      <div
-                        style={{ width: leftSidebarWidth }}
-                        className="shrink-0 h-full overflow-hidden border-r border-border flex flex-col"
-                      >
-                        <Sidebar
-                          projects={sidebarProjects}
-                          activeProjectId={activeProjectId}
-                          activeProjectPromptId={activeProjectPromptId}
-                          activeWorkspaceId={workspaceId ?? null}
-                          activeIssueId={activeIssueId}
-                          tasksByProject={tasksByProject}
-                          loadingTasksProjectIds={loadingTasksProjectIds}
-                          onSelectIssue={handleSelectIssue}
-                          workspaces={outlinerWorkspaces}
-                          archivedWorkspaces={outlinerArchivedWorkspaces}
-                          membership={membership}
-                          isLoadingProjects={isLoading}
-                          isLoadingWorkspaces={isWorkspacesListLoading}
-                          onSelectWorkspace={(id) =>
-                            appNavigation.goToWorkspace(id)
-                          }
-                          onOpenProjectPage={handleProjectClick}
-                          onOpenWorkspacesPage={handleOpenWorkspacesPage}
-                          onOpenLastWorkspace={handleOpenLastOrchestratorWorkspace}
-                          onSelectOrchestratorPrompt={
-                            handleSelectOrchestratorPrompt
-                          }
-                          onCreateChildBoard={handleCreateChildBoard}
-                          onRenameProject={handleRenameProject}
-                          onChangeProjectColor={handleChangeProjectColor}
-                          onArchiveProject={handleArchiveProject}
-                          archivedProjects={archivedSidebarProjects}
-                          onRestoreProject={handleRestoreProject}
-                          onDeleteArchivedProject={handleDeleteArchivedProject}
-                          isMultiSelectActive={isMultiSelectActive}
-                          isPinned={true}
-                          onTogglePinned={toggleLeftSidebarPinned}
-                          headerActions={
-                            <CreateProjectButton onClick={handleCreateProject} />
-                          }
-                          bottomActions={<SidebarBottomActions />}
-                        />
-                      </div>
-                      {/* Resize handle — drag to change width, double-click to reset. Global for any workspace, persists to localStorage. */}
-                      <div
-                        role="separator"
-                        aria-orientation="vertical"
-                        aria-label="Resize sidebar"
-                        onMouseDown={handleSidebarResizeStart}
-                        onDoubleClick={handleSidebarResizeDoubleClick}
-                        className="w-1 shrink-0 cursor-col-resize bg-transparent hover:bg-brand/40 active:bg-brand/60 transition-colors -ml-px touch-none"
-                        title="Drag to resize sidebar (double-click to reset)"
-                      />
-                      <div className="flex flex-col flex-1 min-w-0 min-h-0">
-                        <NavbarContainer
-                          onOpenDrawer={() => setIsDrawerOpen(true)}
-                        />
-                        <div className="relative flex-1 min-h-0 overflow-hidden">
-                          <Outlet />
-                        </div>
-                      </div>
-                    </>
+                    <Sidebar
+                      projects={sidebarProjects}
+                      activeProjectId={activeProjectId}
+                      activeProjectPromptId={activeProjectPromptId}
+                      activeWorkspaceId={workspaceId ?? null}
+                      activeIssueId={activeIssueId}
+                      tasksByProject={tasksByProject}
+                      loadingTasksProjectIds={loadingTasksProjectIds}
+                      onSelectIssue={handleSelectIssue}
+                      workspaces={outlinerWorkspaces}
+                      archivedWorkspaces={outlinerArchivedWorkspaces}
+                      membership={membership}
+                      isLoadingProjects={isLoading}
+                      isLoadingWorkspaces={isWorkspacesListLoading}
+                      onSelectWorkspace={(id) =>
+                        appNavigation.goToWorkspace(id)
+                      }
+                      onOpenProjectPage={handleProjectClick}
+                      onOpenWorkspacesPage={handleOpenWorkspacesPage}
+                      onOpenLastWorkspace={handleOpenLastOrchestratorWorkspace}
+                      onSelectOrchestratorPrompt={
+                        handleSelectOrchestratorPrompt
+                      }
+                      onCreateChildBoard={handleCreateChildBoard}
+                      onRenameProject={handleRenameProject}
+                      onChangeProjectColor={handleChangeProjectColor}
+                      onArchiveProject={handleArchiveProject}
+                      archivedProjects={archivedSidebarProjects}
+                      onRestoreProject={handleRestoreProject}
+                      onDeleteArchivedProject={handleDeleteArchivedProject}
+                      isMultiSelectActive={isMultiSelectActive}
+                      isPinned={true}
+                      onTogglePinned={toggleLeftSidebarPinned}
+                      headerActions={
+                        <CreateProjectButton onClick={handleCreateProject} />
+                      }
+                      bottomActions={<SidebarBottomActions />}
+                    />
                   ) : (
                     <>
                       {/* Thin vertical hover strip at the extreme left edge */}
@@ -916,9 +859,8 @@ export function SharedAppLayout() {
                       <div
                         onMouseEnter={openSidebarHover}
                         onMouseLeave={closeSidebarHoverDelayed}
-                        style={{ width: leftSidebarWidth }}
                         className={cn(
-                          'fixed left-0 top-0 bottom-0 z-30 overflow-hidden border-r border-border shadow-2xl',
+                          'fixed left-0 top-0 bottom-0 z-30 w-[256px] overflow-hidden border-r border-border shadow-2xl',
                           'transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] will-change-transform',
                           isSidebarHoverOpen ? 'translate-x-0' : '-translate-x-full'
                         )}
@@ -974,17 +916,17 @@ export function SharedAppLayout() {
                           bottomActions={<SidebarBottomActions />}
                         />
                       </div>
-                      {/* Content column when unpinned (full width, sidebar is overlay) */}
-                      <div className="flex flex-col flex-1 min-w-0 min-h-0">
-                        <NavbarContainer
-                          onOpenDrawer={() => setIsDrawerOpen(true)}
-                        />
-                        <div className="relative flex-1 min-h-0 overflow-hidden">
-                          <Outlet />
-                        </div>
-                      </div>
                     </>
                   )}
+                  {/* Content column: Navbar on top, Outlet below. */}
+                  <div className="flex flex-col min-h-0 min-w-0">
+                    <NavbarContainer
+                      onOpenDrawer={() => setIsDrawerOpen(true)}
+                    />
+                    <div className="relative flex-1 min-h-0 overflow-hidden">
+                      <Outlet />
+                    </div>
+                  </div>
                 </>
               )}
 

@@ -527,7 +527,6 @@ type State = {
   // Last visited workspace (client-side localStorage, restored on app launch).
   lastWorkspaceId: string | null;
   createDraftWorkspaceByDefault: boolean;
-
   // Global left sidebar width (px) — persisted to localStorage, global for any workspace and across app reloads.
   leftSidebarWidth: number;
 
@@ -774,8 +773,7 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
   toggleProjectTerminal: () =>
     set((s) => ({ isProjectTerminalOpen: !s.isProjectTerminalOpen })),
 
-  setProjectTerminalOpen: (value) =>
-    set({ isProjectTerminalOpen: value }),
+  setProjectTerminalOpen: (value) => set({ isProjectTerminalOpen: value }),
 
   toggleRightMainPanelMode: (mode, workspaceId) => {
     if (!workspaceId) return;
