@@ -728,7 +728,11 @@ export const Actions = {
       return isOpen ? 'Hide Project Terminal' : 'Show Project Terminal';
     },
     execute: (ctx) => {
-      if (ctx.currentWorkspaceId) {
+      // On the kanban board, kanbanProjectId is set but currentWorkspaceId
+      // is stale from WorkspaceContext. Detect board mode first.
+      if (ctx.kanbanProjectId) {
+        useUiPreferencesStore.getState().toggleProjectTerminal();
+      } else if (ctx.currentWorkspaceId) {
         useUiPreferencesStore
           .getState()
           .toggleRightMainPanelMode(
