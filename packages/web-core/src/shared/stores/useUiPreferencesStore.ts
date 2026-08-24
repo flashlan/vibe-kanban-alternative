@@ -8,6 +8,7 @@ export const RIGHT_MAIN_PANEL_MODES = {
   LOGS: 'logs',
   PREVIEW: 'preview',
   MIRROR: 'mirror',
+  TERMINAL: 'terminal',
 } as const;
 
 export type RightMainPanelMode =

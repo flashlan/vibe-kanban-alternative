@@ -356,19 +356,23 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
   const outerDefaultLayout: Layout = (() => {
     const rawLeft =
       typeof kanbanLeftPanelSize === 'number' ? kanbanLeftPanelSize : 75;
+    const layout: Record<string, number> = {
+      'kanban-left-wrapper': isRightPanelOpen ? rawLeft : 100,
+    };
     if (isRightPanelOpen) {
-      return { 'kanban-left-wrapper': rawLeft, 'kanban-right': 100 - rawLeft };
+      layout['kanban-right'] = 100 - rawLeft;
     }
-    return { 'kanban-left-wrapper': 100 };
+    return layout;
   })();
 
   const innerDefaultLayout: Layout = (() => {
-    if (!isProjectTerminalOpen) return { 'kanban-board': 100 };
-    // Quando workspace também aberto, outer já é 75% — inner 68/32 dá
-    // board ~51% total e terminal ~24% total (25% workspace intacto).
-    // Só terminal aberto (outer 100%): 75/25 clássico.
-    if (isRightPanelOpen) return { 'kanban-board': 68, 'kanban-terminal': 32 };
-    return { 'kanban-board': 75, 'kanban-terminal': 25 };
+    const layout: Record<string, number> = {
+      'kanban-board': !isProjectTerminalOpen ? 100 : isRightPanelOpen ? 68 : 75,
+    };
+    if (isProjectTerminalOpen) {
+      layout['kanban-terminal'] = isRightPanelOpen ? 32 : 25;
+    }
+    return layout;
   })();
 
   const onOuterLayoutChange = (layout: Layout) => {

@@ -152,6 +152,7 @@ impl Project {
     }
 
     pub async fn create(pool: &SqlitePool, project: NewProject<'_>) -> Result<Self, sqlx::Error> {
+        let default_prompt = Self::default_orchestrator_prompt();
         sqlx::query_as!(
             Project,
             r#"INSERT INTO projects (id, name, key, color, sort_order, default_agent_working_dir, parent_id, orchestrator_prompt)
@@ -165,7 +166,7 @@ impl Project {
                          default_agent_working_dir,
                          remote_project_id as "remote_project_id: Uuid",
                          orchestrator_prompt,
-                      archived as "archived!: bool",
+                         archived as "archived!: bool",
                          created_at as "created_at!: DateTime<Utc>",
                          updated_at as "updated_at!: DateTime<Utc>""#,
             project.id,
@@ -175,7 +176,7 @@ impl Project {
             project.sort_order,
             project.default_agent_working_dir,
             project.parent_id,
-            Self::default_orchestrator_prompt(),
+            default_prompt,
         )
         .fetch_one(pool)
         .await

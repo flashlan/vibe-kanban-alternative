@@ -728,7 +728,7 @@ export const Actions = {
       return isOpen ? 'Hide Project Terminal' : 'Show Project Terminal';
     },
     execute: (ctx) => {
-      if (ctx.layoutMode === 'workspaces' && ctx.currentWorkspaceId) {
+      if (ctx.currentWorkspaceId) {
         useUiPreferencesStore
           .getState()
           .toggleRightMainPanelMode(

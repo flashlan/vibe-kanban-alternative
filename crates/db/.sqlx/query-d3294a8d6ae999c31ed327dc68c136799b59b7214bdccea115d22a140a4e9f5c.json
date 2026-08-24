@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "INSERT INTO projects (id, name, key, color, sort_order, default_agent_working_dir, parent_id)\n               VALUES ($1, $2, $3, $4, $5, $6, $7)\n               RETURNING id as \"id!: Uuid\",\n                         name,\n                         key,\n                         color,\n                         sort_order,\n                         parent_id as \"parent_id: Uuid\",\n                         default_agent_working_dir,\n                         remote_project_id as \"remote_project_id: Uuid\",\n                         orchestrator_prompt,\n                      archived as \"archived!: bool\",\n                         created_at as \"created_at!: DateTime<Utc>\",\n                         updated_at as \"updated_at!: DateTime<Utc>\"",
+  "query": "INSERT INTO projects (id, name, key, color, sort_order, default_agent_working_dir, parent_id, orchestrator_prompt)\n               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n               RETURNING id as \"id!: Uuid\",\n                         name,\n                         key,\n                         color,\n                         sort_order,\n                         parent_id as \"parent_id: Uuid\",\n                         default_agent_working_dir,\n                         remote_project_id as \"remote_project_id: Uuid\",\n                         orchestrator_prompt,\n                         archived as \"archived!: bool\",\n                         created_at as \"created_at!: DateTime<Utc>\",\n                         updated_at as \"updated_at!: DateTime<Utc>\"",
   "describe": {
     "columns": [
       {
@@ -65,7 +65,7 @@
       }
     ],
     "parameters": {
-      "Right": 7
+      "Right": 8
     },
     "nullable": [
       true,
@@ -82,5 +82,5 @@
       false
     ]
   },
-  "hash": "a9fd67c510c7df7750c50617600b0120e19647ff1a475f5c9d62cdcaeaedf5cd"
+  "hash": "d3294a8d6ae999c31ed327dc68c136799b59b7214bdccea115d22a140a4e9f5c"
 }
