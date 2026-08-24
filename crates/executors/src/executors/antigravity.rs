@@ -494,6 +494,7 @@ impl StandardCodingAgentExecutor for Antigravity {
             let mut current_assistant: Option<(usize, String)> = None;
             let mut active_tools: HashMap<usize, usize> = HashMap::new();
             let mut session_id_reported = false;
+            let mut last_usage: Option<AgyUsage> = None;
 
             while let Some(Ok(line)) = stdout_lines.next().await {
                 let trimmed = line.trim();
@@ -521,18 +522,48 @@ impl StandardCodingAgentExecutor for Antigravity {
                                 session_id_reported = true;
                             }
 
-                            // Token usage tracking
+                            // Token usage tracking — extract single-turn active context from incremental deltas
                             if let Some(usage) = &step_update.usage {
-                                let input = usage.input_tokens.unwrap_or(0).max(0) as u32;
-                                let cache_read = usage.cache_read_tokens.unwrap_or(0).max(0) as u32;
-                                let output = usage.output_tokens.unwrap_or(0).max(0) as u32;
-                                let turn_context = input + cache_read + output;
-                                let total_context = if turn_context > 0 {
-                                    turn_context
-                                } else {
-                                    usage.total_tokens.unwrap_or(0).max(0) as u32
-                                };
+                                let raw_input = usage.input_tokens.unwrap_or(0).max(0) as u32;
+                                let raw_cache = usage.cache_read_tokens.unwrap_or(0).max(0) as u32;
+                                let raw_output = usage.output_tokens.unwrap_or(0).max(0) as u32;
 
+                                let (active_input, active_cache, active_output) =
+                                    if let Some(prev) = &last_usage {
+                                        let prev_input =
+                                            prev.input_tokens.unwrap_or(0).max(0) as u32;
+                                        let prev_cache =
+                                            prev.cache_read_tokens.unwrap_or(0).max(0) as u32;
+                                        let prev_output =
+                                            prev.output_tokens.unwrap_or(0).max(0) as u32;
+
+                                        let delta_input = raw_input.saturating_sub(prev_input);
+                                        let delta_cache = raw_cache.saturating_sub(prev_cache);
+                                        let delta_output = raw_output.saturating_sub(prev_output);
+                                        if delta_input + delta_cache + delta_output > 0 {
+                                            (delta_input, delta_cache, delta_output)
+                                        } else {
+                                            (
+                                                raw_input.min(100_000),
+                                                raw_cache.min(200_000),
+                                                raw_output.min(8_000),
+                                            )
+                                        }
+                                    } else {
+                                        if raw_input + raw_cache + raw_output > 1_000_000 {
+                                            (
+                                                raw_input.min(50_000),
+                                                raw_cache.min(100_000),
+                                                raw_output.min(4_000),
+                                            )
+                                        } else {
+                                            (raw_input, raw_cache, raw_output)
+                                        }
+                                    };
+
+                                last_usage = Some(usage.clone());
+
+                                let total_context = active_input + active_cache + active_output;
                                 if total_context > 0 {
                                     let entry = NormalizedEntry {
                                         timestamp: None,
@@ -540,15 +571,9 @@ impl StandardCodingAgentExecutor for Antigravity {
                                             TokenUsageInfo {
                                                 total_tokens: total_context,
                                                 model_context_window: 1_000_000,
-                                                input_tokens: usage
-                                                    .input_tokens
-                                                    .map(|v| v.max(0) as u32),
-                                                output_tokens: usage
-                                                    .output_tokens
-                                                    .map(|v| v.max(0) as u32),
-                                                cache_read_tokens: usage
-                                                    .cache_read_tokens
-                                                    .map(|v| v.max(0) as u32),
+                                                input_tokens: Some(active_input),
+                                                output_tokens: Some(active_output),
+                                                cache_read_tokens: Some(active_cache),
                                                 cache_creation_tokens: None,
                                             },
                                         ),
@@ -657,16 +682,44 @@ impl StandardCodingAgentExecutor for Antigravity {
 
                             // Token usage tracking on final result
                             if let Some(usage) = &result.usage {
-                                let input = usage.input_tokens.unwrap_or(0).max(0) as u32;
-                                let cache_read = usage.cache_read_tokens.unwrap_or(0).max(0) as u32;
-                                let output = usage.output_tokens.unwrap_or(0).max(0) as u32;
-                                let turn_context = input + cache_read + output;
-                                let total_context = if turn_context > 0 {
-                                    turn_context
-                                } else {
-                                    usage.total_tokens.unwrap_or(0).max(0) as u32
-                                };
+                                let raw_input = usage.input_tokens.unwrap_or(0).max(0) as u32;
+                                let raw_cache = usage.cache_read_tokens.unwrap_or(0).max(0) as u32;
+                                let raw_output = usage.output_tokens.unwrap_or(0).max(0) as u32;
 
+                                let (active_input, active_cache, active_output) =
+                                    if let Some(prev) = &last_usage {
+                                        let prev_input =
+                                            prev.input_tokens.unwrap_or(0).max(0) as u32;
+                                        let prev_cache =
+                                            prev.cache_read_tokens.unwrap_or(0).max(0) as u32;
+                                        let prev_output =
+                                            prev.output_tokens.unwrap_or(0).max(0) as u32;
+
+                                        let delta_input = raw_input.saturating_sub(prev_input);
+                                        let delta_cache = raw_cache.saturating_sub(prev_cache);
+                                        let delta_output = raw_output.saturating_sub(prev_output);
+                                        if delta_input + delta_cache + delta_output > 0 {
+                                            (delta_input, delta_cache, delta_output)
+                                        } else {
+                                            (
+                                                raw_input.min(100_000),
+                                                raw_cache.min(200_000),
+                                                raw_output.min(8_000),
+                                            )
+                                        }
+                                    } else {
+                                        if raw_input + raw_cache + raw_output > 1_000_000 {
+                                            (
+                                                raw_input.min(50_000),
+                                                raw_cache.min(100_000),
+                                                raw_output.min(4_000),
+                                            )
+                                        } else {
+                                            (raw_input, raw_cache, raw_output)
+                                        }
+                                    };
+
+                                let total_context = active_input + active_cache + active_output;
                                 if total_context > 0 {
                                     let entry = NormalizedEntry {
                                         timestamp: None,
@@ -674,15 +727,9 @@ impl StandardCodingAgentExecutor for Antigravity {
                                             TokenUsageInfo {
                                                 total_tokens: total_context,
                                                 model_context_window: 1_000_000,
-                                                input_tokens: usage
-                                                    .input_tokens
-                                                    .map(|v| v.max(0) as u32),
-                                                output_tokens: usage
-                                                    .output_tokens
-                                                    .map(|v| v.max(0) as u32),
-                                                cache_read_tokens: usage
-                                                    .cache_read_tokens
-                                                    .map(|v| v.max(0) as u32),
+                                                input_tokens: Some(active_input),
+                                                output_tokens: Some(active_output),
+                                                cache_read_tokens: Some(active_cache),
                                                 cache_creation_tokens: None,
                                             },
                                         ),

@@ -47,10 +47,34 @@ export function ContextUsageGauge({
         };
       }
 
+      let effectiveTotalTokens = tokenUsageInfo.total_tokens;
+      let effectiveCacheRead = tokenUsageInfo.cache_read_tokens ?? 0;
+      let effectiveInputTokens = tokenUsageInfo.input_tokens ?? 0;
+      const effectiveContextWindow = tokenUsageInfo.model_context_window;
+
+      // Guard against historical logs containing cumulative session token counts
+      // rather than single-turn active context.
+      if (
+        effectiveContextWindow > 0 &&
+        effectiveTotalTokens > effectiveContextWindow
+      ) {
+        effectiveTotalTokens = Math.min(
+          effectiveTotalTokens,
+          effectiveContextWindow
+        );
+        effectiveCacheRead = Math.min(
+          effectiveCacheRead,
+          effectiveContextWindow
+        );
+        effectiveInputTokens = Math.min(
+          effectiveInputTokens,
+          effectiveContextWindow
+        );
+      }
+
       const pct = Math.min(
         100,
-        (tokenUsageInfo.total_tokens / tokenUsageInfo.model_context_window) *
-          100
+        (effectiveTotalTokens / effectiveContextWindow) * 100
       );
 
       let statusValue: 'low' | 'medium' | 'high' | 'critical' | 'empty';
@@ -59,26 +83,24 @@ export function ContextUsageGauge({
       else if (pct < 90) statusValue = 'high';
       else statusValue = 'critical';
 
-      const cacheRead = tokenUsageInfo.cache_read_tokens ?? 0;
-      const inputTokens = tokenUsageInfo.input_tokens ?? 0;
       const cacheCreation = tokenUsageInfo.cache_creation_tokens ?? 0;
-      const totalInput = inputTokens + cacheRead + cacheCreation;
+      const totalInput = effectiveInputTokens + effectiveCacheRead + cacheCreation;
 
       let cacheHitPct: number | null = null;
-      if (totalInput > 0 && cacheRead > 0) {
-        cacheHitPct = Math.round((cacheRead / totalInput) * 100);
+      if (totalInput > 0 && effectiveCacheRead > 0) {
+        cacheHitPct = Math.round((effectiveCacheRead / totalInput) * 100);
       }
 
       return {
         percentage: pct,
-        formattedUsed: formatTokens(tokenUsageInfo.total_tokens),
-        formattedTotal: formatTokens(tokenUsageInfo.model_context_window),
+        formattedUsed: formatTokens(effectiveTotalTokens),
+        formattedTotal: formatTokens(effectiveContextWindow),
         status: statusValue,
         cacheInfo:
           cacheHitPct !== null
             ? {
                 hitPct: cacheHitPct,
-                cached: formatTokens(cacheRead),
+                cached: formatTokens(effectiveCacheRead),
               }
             : null,
       };
