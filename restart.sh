@@ -4,9 +4,21 @@ set -e
 # Change to repository root directory
 cd "$(dirname "$0")"
 
-echo "🛑 Encerrando instâncias antigas de cargo-watch e server..."
+# Check if window/desktop mode is requested
+WINDOW_MODE=false
+for arg in "$@"; do
+  case $arg in
+    --window|-w|--desktop|-d)
+      WINDOW_MODE=true
+      shift
+      ;;
+  esac
+done
+
+echo "🛑 Encerrando instâncias antigas de cargo-watch, server e tauri..."
 pkill -f "cargo-watch" 2>/dev/null || true
 pkill -f "target/debug/server" 2>/dev/null || true
+pkill -f "vibe-kanban-tauri" 2>/dev/null || true
 
 echo "🛑 Liberando portas 3001, 3002, 3003..."
 for port in 3001 3002 3003; do
@@ -28,5 +40,10 @@ fi
 echo "🔄 Atualizando tipos compartilhados..."
 pnpm run generate-types
 
-echo "🚀 Iniciando servidor Vibe Kanban (Frontend :3001 | Backend :3002)..."
-pnpm run dev
+if [ "$WINDOW_MODE" = true ]; then
+  echo "🚀 Iniciando Vibe Kanban em MODO JANELA DESKTOP (Tauri)..."
+  pnpm run dev:window
+else
+  echo "🚀 Iniciando servidor Vibe Kanban no NAVEGADOR (Frontend :3001 | Backend :3002)..."
+  pnpm run dev
+fi

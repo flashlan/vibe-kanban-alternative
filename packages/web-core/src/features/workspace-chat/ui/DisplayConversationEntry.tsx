@@ -47,6 +47,7 @@ import { ChatSubagentEntry } from '@vibe/ui/components/ChatSubagentEntry';
 import { ChatAggregatedToolEntries } from '@vibe/ui/components/ChatAggregatedToolEntries';
 import { ChatAggregatedDiffEntries } from '@vibe/ui/components/ChatAggregatedDiffEntries';
 import { ChatCollapsedThinking } from '@vibe/ui/components/ChatCollapsedThinking';
+import { ChatCompactionMarker } from '@vibe/ui/components/ChatCompactionMarker';
 import { ChatMarkdown } from '@vibe/ui/components/ChatMarkdown';
 import {
   DiffViewBody,
@@ -423,6 +424,16 @@ function DisplayConversationEntry(props: Props) {
         <UserAnsweredQuestionsEntry
           answers={entryType.answers}
           expansionKey={expansionKey}
+        />
+      );
+
+    case 'compaction_marker':
+      return (
+        <CompactionMarkerEntry
+          entry={entry}
+          expansionKey={expansionKey}
+          workspaceId={workspaceWithSession?.id}
+          sessionId={sessionId}
         />
       );
 
@@ -1056,6 +1067,50 @@ const NOISE_SYSTEM_PATTERNS = [
 
 function isNoiseSystemMessage(content: string): boolean {
   return NOISE_SYSTEM_PATTERNS.some((re) => re.test(content.trim()));
+}
+
+/** Compaction marker entry with collapsible summary and Mem0 sync details. */
+function CompactionMarkerEntry({
+  entry,
+  expansionKey,
+  workspaceId,
+  sessionId,
+}: {
+  entry: NormalizedEntry;
+  expansionKey: string;
+  workspaceId?: string;
+  sessionId?: string;
+}) {
+  const [expanded, toggle] = usePersistedExpanded(
+    `compaction:${expansionKey}`,
+    false
+  );
+
+  const compactionData =
+    entry.entry_type.type === 'compaction_marker'
+      ? entry.entry_type
+      : undefined;
+
+  return (
+    <ChatCompactionMarker
+      content={entry.content}
+      previousTokens={compactionData?.previous_tokens}
+      compactedTokens={compactionData?.compacted_tokens}
+      mem0Synced={compactionData?.mem0_synced ?? true}
+      expanded={expanded}
+      onToggle={toggle}
+      workspaceId={workspaceId}
+      renderMarkdown={({ content, workspaceId, className }) => (
+        <AppChatMarkdown
+          content={content}
+          workspaceId={workspaceId}
+          sessionId={sessionId}
+          className={className}
+          maxWidth={undefined}
+        />
+      )}
+    />
+  );
 }
 
 /** Thinking block — collapsed by default, expandable with a caret. */

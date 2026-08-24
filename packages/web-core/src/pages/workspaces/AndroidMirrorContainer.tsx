@@ -10,6 +10,7 @@ import { cn } from '@/shared/lib/utils';
 import {
   AndroidMirrorView,
   type AndroidMirrorViewHandle,
+  type AndroidMirrorInputMessage,
 } from '@vibe/ui/components/AndroidMirrorView';
 import {
   IconButtonGroup,
@@ -74,7 +75,7 @@ export function AndroidMirrorContainer({
     }
     viewRef.current.pushFrame(data);
   }, []);
-  const { status, errorMessage, retry } = useAndroidMirrorConnection(
+  const { status, errorMessage, retry, send } = useAndroidMirrorConnection(
     deviceSerial,
     !!workspaceId && !manuallyDisconnected,
     onFrame,
@@ -88,6 +89,10 @@ export function AndroidMirrorContainer({
     setManuallyDisconnected(false);
     retry();
   }, [setManuallyDisconnected, retry]);
+  const onInput = useCallback(
+    (msg: AndroidMirrorInputMessage) => send(msg),
+    [send]
+  );
 
   const {
     isSupported: pipSupported,
@@ -168,6 +173,7 @@ export function AndroidMirrorContainer({
               onRetry={onRetry}
               className="min-h-0 flex-1"
               onDetach={!isDetached && pipSupported ? onDetach : undefined}
+              onInput={onInput}
             />
           </div>,
           targetContainer

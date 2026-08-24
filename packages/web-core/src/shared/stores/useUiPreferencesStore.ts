@@ -61,6 +61,30 @@ const loadDefaultPipelineId = (): string | null => {
   return null;
 };
 
+// Persisted auto-compaction threshold ('50' | '65' | '75' | '85' | '95' | 'full').
+export type CompactionThreshold = '50' | '65' | '75' | '85' | '95' | 'full';
+export const DEFAULT_COMPACTION_THRESHOLD: CompactionThreshold = '85';
+const COMPACTION_THRESHOLD_KEY = 'vk-compaction-threshold';
+
+const loadCompactionThreshold = (): CompactionThreshold => {
+  try {
+    const stored = localStorage.getItem(COMPACTION_THRESHOLD_KEY);
+    if (
+      stored === '50' ||
+      stored === '65' ||
+      stored === '75' ||
+      stored === '85' ||
+      stored === '95' ||
+      stored === 'full'
+    ) {
+      return stored;
+    }
+  } catch {
+    // localStorage unavailable
+  }
+  return DEFAULT_COMPACTION_THRESHOLD;
+};
+
 // Combined pipeline selection (pipeline id + ticked stage ids), so a card
 // created with "Quick + memory on" re-opens the same way next time. Stored as
 // JSON `{ "id": "quick", "enabledIds": ["memory", "implement", ...] }`.
@@ -389,6 +413,7 @@ export type PersistKey =
   | `user:${string}`
   | `system:${string}`
   | `thinking:${string}`
+  | `compaction:${string}`
   | `error:${string}`
   | `entry:${string}`
   | `list-section-${string}`;
@@ -444,6 +469,10 @@ type State = {
 
   // Animated border around the working message box (toggleable in settings)
   animateRunningOutline: boolean;
+
+  // Auto-compaction threshold ('75' | '85' | '95' | 'full')
+  compactionThreshold: CompactionThreshold;
+  setCompactionThreshold: (threshold: CompactionThreshold) => void;
 
   // Last selected project (persisted via scratch store).
   // ADR-018 — `selectedOrgId` removed.
@@ -598,6 +627,17 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
 
   // Animated running outline (default on)
   animateRunningOutline: loadAnimateRunningOutline(),
+
+  // Auto-compaction threshold
+  compactionThreshold: loadCompactionThreshold(),
+  setCompactionThreshold: (threshold) => {
+    try {
+      localStorage.setItem(COMPACTION_THRESHOLD_KEY, threshold);
+    } catch {
+      // localStorage unavailable
+    }
+    set({ compactionThreshold: threshold });
+  },
 
   // Last selected project (ADR-018 — `selectedOrgId` removed)
   selectedProjectId: null,
@@ -1213,3 +1253,8 @@ export function useWorkspacePanelState(workspaceId: string | undefined) {
     setLeftSidebarVisible,
   };
 }
+
+export const useCompactionThreshold = () =>
+  useUiPreferencesStore((s) => s.compactionThreshold);
+export const useSetCompactionThreshold = () =>
+  useUiPreferencesStore((s) => s.setCompactionThreshold);

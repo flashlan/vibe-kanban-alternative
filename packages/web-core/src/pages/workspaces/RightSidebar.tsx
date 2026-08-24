@@ -18,6 +18,7 @@ import { useLogsPanel } from '@/shared/hooks/useLogsPanel';
 import { useHeadedSession } from '@/shared/hooks/useHeadedSession';
 import { useTerminal } from '@/shared/hooks/useTerminal';
 import { workspacesApi } from '@/shared/lib/api';
+import { cn } from '@/shared/lib/utils';
 import type { RepoWithTargetBranch, Workspace } from 'shared/types';
 import {
   PERSIST_KEYS,
@@ -39,6 +40,16 @@ type SectionDef = {
   expanded: boolean;
   content: React.ReactNode;
   actions: SectionAction[];
+  // Most sections (Git diffs, terminal output) can grow unboundedly, so
+  // they're capped at `max(50vh, 400px)` with their own internal scrollbar
+  // — otherwise one huge diff could make the whole sidebar unusable. The
+  // mirror section's content is short and fixed (device list, a couple of
+  // dropdown rows), but that same cap was clipping its bottom rows (the
+  // "Quality" controls) below an invisible, easy-to-miss internal
+  // scrollbar — repeatedly reported as "the quality controls disappeared".
+  // Sections that opt out with `compact: true` render at their natural
+  // height instead, relying on the sidebar's own outer scroll.
+  compact?: boolean;
 };
 
 export interface RightSidebarProps {
@@ -240,6 +251,7 @@ export const RightSidebar = memo(function RightSidebar({
               />
             ),
             actions: [],
+            compact: true,
           });
         }
         break;
@@ -281,7 +293,12 @@ export const RightSidebar = memo(function RightSidebar({
           .map((section) => (
             <div
               key={section.persistKey}
-              className="max-h-[max(50vh,400px)] flex flex-col overflow-hidden"
+              className={cn(
+                'flex flex-col',
+                section.compact
+                  ? undefined
+                  : 'max-h-[max(50vh,400px)] overflow-hidden'
+              )}
             >
               <CollapsibleSectionHeader
                 title={section.title}
@@ -289,7 +306,12 @@ export const RightSidebar = memo(function RightSidebar({
                 defaultExpanded={section.expanded}
                 actions={section.actions}
               >
-                <div className="flex flex-1 border-t min-h-[200px] w-full overflow-auto">
+                <div
+                  className={cn(
+                    'flex flex-1 border-t w-full',
+                    section.compact ? 'min-h-0' : 'min-h-[200px] overflow-auto'
+                  )}
+                >
                   {section.content}
                 </div>
               </CollapsibleSectionHeader>

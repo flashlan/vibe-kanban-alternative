@@ -65,6 +65,9 @@ interface SidebarProps {
   onSelectOrchestratorPrompt?: (projectId: string) => void;
   /** Renames the supplied project (sidebar `+` menu → Rename). */
   onRenameProject?: (projectId: string) => void;
+  /** Opens the color editor for the supplied project (sidebar `+` menu →
+   *  Change color). */
+  onChangeProjectColor?: (projectId: string) => void;
   /** Archives the supplied project (sidebar `+` menu → Archive). Archived
    *  boards leave the tree, become read-only, and keep their history. */
   onArchiveProject?: (projectId: string) => void;
@@ -109,6 +112,7 @@ export function Sidebar({
   onCreateChildBoard,
   onSelectOrchestratorPrompt,
   onRenameProject,
+  onChangeProjectColor,
   onArchiveProject,
   isMultiSelectActive,
   headerActions,
@@ -161,6 +165,7 @@ export function Sidebar({
         onCreateChildBoard={onCreateChildBoard}
         onSelectOrchestratorPrompt={onSelectOrchestratorPrompt}
         onRenameProject={onRenameProject}
+        onChangeProjectColor={onChangeProjectColor}
         onArchiveProject={onArchiveProject}
         isMultiSelectActive={isMultiSelectActive}
         ariaLabelledBy={titleId}

@@ -7,20 +7,17 @@ import {
 } from '@vibe/ui/components/KeyboardDialog';
 import { create, useModal } from '@ebay/nice-modal-react';
 import { useTranslation } from 'react-i18next';
-import { FolderGit } from 'lucide-react';
+import { FolderGit, Sparkles } from 'lucide-react';
 import { defineModal } from '@/shared/lib/modals';
 import { cn } from '@/shared/lib/utils';
 import { ProjectRepoSection } from './ProjectRepoSection';
+import { ProjectPromptSection } from './ProjectPromptSection';
 
 export type ProjectSettingsDialogProps = {
   projectId: string;
 };
 
-// A single section for now (repository). Structured as a list so more
-// project-scoped sections (tags, danger zone, ...) can be added here without
-// reworking the shell — see the "Edit project settings" menu item this
-// backs, which previously opened the unrelated global Settings dialog.
-type ProjectSettingsSectionId = 'repository';
+type ProjectSettingsSectionId = 'repository' | 'instructions';
 
 const SECTIONS: {
   id: ProjectSettingsSectionId;
@@ -33,6 +30,12 @@ const SECTIONS: {
     labelKey: 'projectSettingsDialog.sections.repository',
     labelFallback: 'Repository',
     icon: FolderGit,
+  },
+  {
+    id: 'instructions',
+    labelKey: 'projectSettingsDialog.sections.instructions',
+    labelFallback: 'Instructions & Rules',
+    icon: Sparkles,
   },
 ];
 
@@ -86,7 +89,18 @@ const ProjectSettingsDialogImpl = create<ProjectSettingsDialogProps>(
             </nav>
             <div className="flex-1 overflow-y-auto p-4">
               {activeSection === 'repository' && (
-                <ProjectRepoSection projectId={projectId} />
+                <ProjectRepoSection
+                  projectId={projectId}
+                  onSaved={handleClose}
+                  onCancel={handleClose}
+                />
+              )}
+              {activeSection === 'instructions' && (
+                <ProjectPromptSection
+                  projectId={projectId}
+                  onSaved={handleClose}
+                  onCancel={handleClose}
+                />
               )}
             </div>
           </div>

@@ -6,6 +6,8 @@
 
 pub mod client;
 pub mod control;
+pub mod control_socket;
 pub mod device;
+pub mod emulator;
 pub mod protocol;
 pub mod vendor;

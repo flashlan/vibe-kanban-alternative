@@ -211,11 +211,22 @@ function terminalReducer(
     }
 
     case 'CLOSE_TAB': {
-      const { workspaceId, tabId } = action;
-      const tabs = state.tabsByWorkspace[workspaceId] || [];
+      const { tabId } = action;
+      let targetWorkspaceId = action.workspaceId;
+      if (
+        !state.tabsByWorkspace[targetWorkspaceId]?.some((t) => t.id === tabId)
+      ) {
+        for (const [wId, wTabs] of Object.entries(state.tabsByWorkspace)) {
+          if (wTabs.some((t) => t.id === tabId)) {
+            targetWorkspaceId = wId;
+            break;
+          }
+        }
+      }
+      const tabs = state.tabsByWorkspace[targetWorkspaceId] || [];
       const newTabs = tabs.filter((t) => t.id !== tabId);
-      const wasActive = state.activeTabByWorkspace[workspaceId] === tabId;
-      let newActiveTab = state.activeTabByWorkspace[workspaceId];
+      const wasActive = state.activeTabByWorkspace[targetWorkspaceId] === tabId;
+      let newActiveTab = state.activeTabByWorkspace[targetWorkspaceId];
 
       if (wasActive && newTabs.length > 0) {
         const closedIndex = tabs.findIndex((t) => t.id === tabId);
@@ -229,11 +240,11 @@ function terminalReducer(
         ...state,
         tabsByWorkspace: {
           ...state.tabsByWorkspace,
-          [workspaceId]: newTabs,
+          [targetWorkspaceId]: newTabs,
         },
         activeTabByWorkspace: {
           ...state.activeTabByWorkspace,
-          [workspaceId]: newActiveTab,
+          [targetWorkspaceId]: newActiveTab,
         },
       };
     }
@@ -314,11 +325,20 @@ function terminalReducer(
     }
 
     case 'CLOSE_PROJECT_TAB': {
-      const { projectId, tabId } = action;
-      const tabs = state.tabsByProject[projectId] || [];
+      const { tabId } = action;
+      let targetProjectId = action.projectId;
+      if (!state.tabsByProject[targetProjectId]?.some((t) => t.id === tabId)) {
+        for (const [pId, pTabs] of Object.entries(state.tabsByProject)) {
+          if (pTabs.some((t) => t.id === tabId)) {
+            targetProjectId = pId;
+            break;
+          }
+        }
+      }
+      const tabs = state.tabsByProject[targetProjectId] || [];
       const newTabs = tabs.filter((t) => t.id !== tabId);
-      const wasActive = state.activeTabByProject[projectId] === tabId;
-      let newActiveTab = state.activeTabByProject[projectId];
+      const wasActive = state.activeTabByProject[targetProjectId] === tabId;
+      let newActiveTab = state.activeTabByProject[targetProjectId];
 
       if (wasActive && newTabs.length > 0) {
         const closedIndex = tabs.findIndex((t) => t.id === tabId);
@@ -332,11 +352,11 @@ function terminalReducer(
         ...state,
         tabsByProject: {
           ...state.tabsByProject,
-          [projectId]: newTabs,
+          [targetProjectId]: newTabs,
         },
         activeTabByProject: {
           ...state.activeTabByProject,
-          [projectId]: newActiveTab,
+          [targetProjectId]: newActiveTab,
         },
       };
     }

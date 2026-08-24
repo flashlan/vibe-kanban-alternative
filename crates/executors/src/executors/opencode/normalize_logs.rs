@@ -286,7 +286,17 @@ impl LogState {
             }
             SdkEvent::SessionIdle | SdkEvent::SessionUpdated => {}
             SdkEvent::SessionCompacted => {
-                self.add_normalized_entry(system_message("Session compacted".to_string()));
+                let entry = NormalizedEntry {
+                    timestamp: None,
+                    entry_type: NormalizedEntryType::CompactionMarker {
+                        previous_tokens: None,
+                        compacted_tokens: None,
+                        mem0_synced: true,
+                    },
+                    content: "Session context was compacted. Prior conversation details were summarized and indexed into Mem0 project memory. Use `memory_search` to recall specific historical details if needed.".to_string(),
+                    metadata: None,
+                };
+                self.add_normalized_entry(entry);
             }
             SdkEvent::PermissionAsked(event) => {
                 self.handle_permission_asked(event, worktree_path, msg_store);

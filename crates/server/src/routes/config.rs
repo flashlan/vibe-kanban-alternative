@@ -164,22 +164,98 @@ async fn update_config(
     }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ResolveGeneralRulesQuery {
+    pub workspace_id: Option<Uuid>,
+    pub project_id: Option<Uuid>,
+}
+
+fn parse_rules_pre_post(raw: &str) -> (String, String) {
+    const PRE_START: &str = "<!-- vk:rules:pre:start -->";
+    const PRE_END: &str = "<!-- vk:rules:pre:end -->";
+    const POST_START: &str = "<!-- vk:rules:post:start -->";
+    const POST_END: &str = "<!-- vk:rules:post:end -->";
+
+    let mut pre = String::new();
+    let mut post = String::new();
+
+    if let (Some(pre_s), Some(pre_e)) = (raw.find(PRE_START), raw.find(PRE_END)) {
+        if pre_s + PRE_START.len() <= pre_e {
+            pre = raw[pre_s + PRE_START.len()..pre_e].trim().to_string();
+        }
+    }
+
+    if let (Some(post_s), Some(post_e)) = (raw.find(POST_START), raw.find(POST_END)) {
+        if post_s + POST_START.len() <= post_e {
+            post = raw[post_s + POST_START.len()..post_e].trim().to_string();
+        }
+    }
+
+    // If no tags were used (e.g. legacy plain text), treat whole text as pre-work rules
+    if pre.is_empty() && post.is_empty() && !raw.trim().is_empty() {
+        pre = raw.trim().to_string();
+    }
+
+    (pre, post)
+}
+
 /// `GET /api/general-rules/resolve` — resolved by the `get_rules` MCP tool.
-/// Global config only (no per-project stack, unlike orchestrator prompts) —
-/// matches the `commit_reminder_prompt`/`pr_auto_description_prompt`
-/// precedent. `None` in `Config` falls back to the built-in default.
+/// Returns global pre/post rules joined with any project-scoped pre/post rules
+/// resolved from the workspace/project context.
 async fn resolve_general_rules(
     State(deployment): State<DeploymentImpl>,
+    Query(query): Query<ResolveGeneralRulesQuery>,
 ) -> ResponseJson<ApiResponse<api_types::ResolvedGeneralRules>> {
+    let pool = &deployment.db().pool;
     let config = deployment.config().read().await;
-    let pre = config
+    let mut pre = config
         .general_rules_pre
         .clone()
         .unwrap_or_else(|| DEFAULT_GENERAL_RULES_PRE.to_string());
-    let post = config
+    let mut post = config
         .general_rules_post
         .clone()
         .unwrap_or_else(|| DEFAULT_GENERAL_RULES_POST.to_string());
+
+    let target_project_id = match (query.project_id, query.workspace_id) {
+        (Some(pid), _) => Some(pid),
+        (None, Some(wid)) => {
+            if let Ok(Some((_issue_id, project_id))) =
+                db::models::issue_workspace::IssueWorkspace::find_issue_and_project_by_workspace(
+                    pool, wid,
+                )
+                .await
+            {
+                Some(project_id)
+            } else {
+                None
+            }
+        }
+        (None, None) => None,
+    };
+
+    if let Some(pid) = target_project_id {
+        if let Ok((project_prompt, _)) =
+            db::models::project::Project::resolve_orchestrator_prompt(pool, pid).await
+        {
+            let (proj_pre, proj_post) = parse_rules_pre_post(&project_prompt);
+            if !proj_pre.trim().is_empty() {
+                pre = format!(
+                    "{}\n\n---\n## Project Pre-Work Rules\n{}",
+                    pre,
+                    proj_pre.trim()
+                );
+            }
+            if !proj_post.trim().is_empty() {
+                post = format!(
+                    "{}\n\n---\n## Project Closing Checklist & Prohibitions\n{}",
+                    post,
+                    proj_post.trim()
+                );
+            }
+        }
+    }
+
     ResponseJson(ApiResponse::success(api_types::ResolvedGeneralRules {
         pre,
         post,

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   CheckIcon,
   DeviceMobileIcon,
@@ -8,9 +8,11 @@ import {
   StopCircleIcon,
   PlugsIcon,
   PlugsConnectedIcon,
+  RocketLaunchIcon,
 } from '@phosphor-icons/react';
 import { cn } from '@/shared/lib/utils';
 import { useAndroidMirrorDevices } from '@/shared/hooks/useAndroidMirrorDevices';
+import { useAndroidMirrorAvds } from '@/shared/hooks/useAndroidMirrorAvds';
 import { useAndroidMirrorSettings } from '@/shared/hooks/useAndroidMirrorSettings';
 import { androidMirrorApi } from '@/shared/lib/api';
 import {
@@ -75,6 +77,7 @@ export function AndroidMirrorControlsContainer({
   className,
 }: AndroidMirrorControlsContainerProps) {
   const { data: devices, isLoading } = useAndroidMirrorDevices(true);
+  const { data: avds, isLoading: avdsLoading } = useAndroidMirrorAvds(true);
   const {
     deviceSerial,
     setDeviceSerial,
@@ -90,6 +93,23 @@ export function AndroidMirrorControlsContainer({
   const [packageName, setPackageName] = useState(DEFAULT_PACKAGE);
   const [actionError, setActionError] = useState<string | null>(null);
   const [isStopping, setIsStopping] = useState(false);
+  const [selectedAvd, setSelectedAvd] = useState<string | null>(null);
+  const [isLaunchingAvd, setIsLaunchingAvd] = useState(false);
+  const [avdError, setAvdError] = useState<string | null>(null);
+  // The launch request itself returns almost instantly (it only spawns the
+  // emulator process, it doesn't wait for boot) — without this, "Launching…"
+  // would flash by too fast to notice and the button would look like it did
+  // nothing. Cleared on the next launch attempt or after a few seconds.
+  const [justLaunchedAvd, setJustLaunchedAvd] = useState<string | null>(null);
+
+  // Pick a sensible default the moment the list loads, rather than leaving
+  // the select on an empty option the user has to open just to discover
+  // what's available.
+  useEffect(() => {
+    if (selectedAvd === null && avds && avds.length > 0) {
+      setSelectedAvd(avds[0]);
+    }
+  }, [avds, selectedAvd]);
 
   const runNavAction = async (action: 'home' | 'back' | 'recents') => {
     setActionError(null);
@@ -100,6 +120,22 @@ export function AndroidMirrorControlsContainer({
       });
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Action failed');
+    }
+  };
+
+  const runLaunchAvd = async () => {
+    if (!selectedAvd) return;
+    setAvdError(null);
+    setJustLaunchedAvd(null);
+    setIsLaunchingAvd(true);
+    try {
+      await androidMirrorApi.launchAvd({ avd_name: selectedAvd });
+      setJustLaunchedAvd(selectedAvd);
+      setTimeout(() => setJustLaunchedAvd(null), 8000);
+    } catch (e) {
+      setAvdError(e instanceof Error ? e.message : 'Failed to launch emulator');
+    } finally {
+      setIsLaunchingAvd(false);
     }
   };
 
@@ -121,7 +157,7 @@ export function AndroidMirrorControlsContainer({
   };
 
   return (
-    <div className={cn('flex flex-col gap-double p-base', className)}>
+    <div className={cn('flex min-w-0 flex-col gap-double p-base', className)}>
       <div className="flex flex-col gap-half">
         <button
           type="button"
@@ -172,6 +208,45 @@ export function AndroidMirrorControlsContainer({
             )}
           </button>
         ))}
+      </div>
+
+      <div className="flex flex-col gap-half border-t border-border pt-double">
+        <h4 className="px-base text-xs font-medium text-low">Emulator</h4>
+        {!avdsLoading && avds?.length === 0 && (
+          <p className="px-base text-xs text-low">
+            No AVDs found. Create one in Android Studio's Device Manager.
+          </p>
+        )}
+        {(avdsLoading || (avds && avds.length > 0)) && (
+          <div className="flex gap-half px-base">
+            <select
+              value={selectedAvd ?? ''}
+              onChange={(e) => setSelectedAvd(e.target.value)}
+              disabled={avdsLoading}
+              className="min-w-0 flex-1 truncate overflow-hidden text-ellipsis whitespace-nowrap rounded-sm border border-border bg-primary px-half py-half text-xs"
+            >
+              {(avds ?? []).map((avd) => (
+                <option key={avd} value={avd}>
+                  {avd}
+                </option>
+              ))}
+            </select>
+            <PrimaryButton
+              variant="tertiary"
+              value={isLaunchingAvd ? 'Launching…' : 'Launch'}
+              actionIcon={RocketLaunchIcon}
+              disabled={!selectedAvd || isLaunchingAvd}
+              onClick={() => void runLaunchAvd()}
+              className="shrink-0"
+            />
+          </div>
+        )}
+        {avdError && <p className="px-base text-xs text-red-500">{avdError}</p>}
+        {justLaunchedAvd && !avdError && (
+          <p className="px-base text-xs text-low">
+            Launching {justLaunchedAvd}… it'll appear above once booted.
+          </p>
+        )}
       </div>
 
       <div className="flex flex-col gap-half border-t border-border pt-double">
@@ -228,6 +303,7 @@ export function AndroidMirrorControlsContainer({
               actionIcon={StopCircleIcon}
               disabled={isStopping || !packageName.trim()}
               onClick={() => void runForceStop()}
+              className="shrink-0"
             />
           </div>
         </div>
@@ -245,21 +321,17 @@ export function AndroidMirrorControlsContainer({
           Quality
         </h4>
 
-        <div className="flex items-center justify-between gap-half px-base">
-          <label
-            className="shrink-0 text-xs text-low"
-            htmlFor="mirror-max-size"
-          >
-            Resolution
-          </label>
+        <div className="grid grid-cols-3 gap-half px-base">
           <select
             id="mirror-max-size"
+            aria-label="Resolution"
+            title="Resolution"
             value={maxSize ?? 0}
             onChange={(e) => {
               const v = Number(e.target.value);
               setMaxSize(v === 0 ? null : v);
             }}
-            className="min-w-0 flex-1 rounded-sm border border-border bg-primary px-half py-half text-xs"
+            className="min-w-0 rounded-sm border border-border bg-primary px-half py-half text-xs"
           >
             {MAX_SIZE_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -267,23 +339,17 @@ export function AndroidMirrorControlsContainer({
               </option>
             ))}
           </select>
-        </div>
 
-        <div className="flex items-center justify-between gap-half px-base">
-          <label
-            className="shrink-0 text-xs text-low"
-            htmlFor="mirror-bit-rate"
-          >
-            Bitrate
-          </label>
           <select
             id="mirror-bit-rate"
+            aria-label="Bitrate"
+            title="Bitrate"
             value={bitRateKbps ?? 0}
             onChange={(e) => {
               const v = Number(e.target.value);
               setBitRateKbps(v === 0 ? null : v);
             }}
-            className="min-w-0 flex-1 rounded-sm border border-border bg-primary px-half py-half text-xs"
+            className="min-w-0 rounded-sm border border-border bg-primary px-half py-half text-xs"
           >
             {BIT_RATE_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -291,20 +357,17 @@ export function AndroidMirrorControlsContainer({
               </option>
             ))}
           </select>
-        </div>
 
-        <div className="flex items-center justify-between gap-half px-base">
-          <label className="shrink-0 text-xs text-low" htmlFor="mirror-max-fps">
-            Frame rate
-          </label>
           <select
             id="mirror-max-fps"
+            aria-label="Frame rate"
+            title="Frame rate"
             value={maxFps ?? 0}
             onChange={(e) => {
               const v = Number(e.target.value);
               setMaxFps(v === 0 ? null : v);
             }}
-            className="min-w-0 flex-1 rounded-sm border border-border bg-primary px-half py-half text-xs"
+            className="min-w-0 rounded-sm border border-border bg-primary px-half py-half text-xs"
           >
             {MAX_FPS_OPTIONS.map((opt) => (
               <option key={opt.value} value={opt.value}>

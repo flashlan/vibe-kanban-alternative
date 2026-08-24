@@ -361,6 +361,8 @@ export type NavActionRequest = "home" | "back" | "recents";
 
 export type AndroidMirrorForceStopRequest = { device_serial: string | null, package: string, };
 
+export type AndroidMirrorLaunchAvdRequest = { avd_name: string, };
+
 export type CreateFollowUpAttempt = { prompt: string, executor_config: ExecutorConfig, retry_process_id: string | null, force_when_dirty: boolean | null, perform_git_reset: boolean | null, };
 
 export type ResetProcessRequest = { process_id: string, force_when_dirty: boolean | null, perform_git_reset: boolean | null, };
@@ -1141,7 +1143,7 @@ export type CommandCategory = "read" | "search" | "edit" | "fetch" | "other";
 
 export type NormalizedEntry = { timestamp: string | null, entry_type: NormalizedEntryType, content: string, };
 
-export type NormalizedEntryType = { "type": "user_message" } | { "type": "user_feedback", denied_tool: string, } | { "type": "assistant_message" } | { "type": "tool_use", tool_name: string, action_type: ActionType, status: ToolStatus, } | { "type": "system_message" } | { "type": "error_message", error_type: NormalizedEntryError, } | { "type": "thinking" } | { "type": "loading" } | { "type": "turn_complete" } | { "type": "next_action", failed: boolean, execution_processes: number, needs_setup: boolean, } | { "type": "token_usage_info" } & TokenUsageInfo | { "type": "user_answered_questions", answers: Array<AnsweredQuestion>, };
+export type NormalizedEntryType = { "type": "user_message" } | { "type": "user_feedback", denied_tool: string, } | { "type": "assistant_message" } | { "type": "tool_use", tool_name: string, action_type: ActionType, status: ToolStatus, } | { "type": "system_message" } | { "type": "error_message", error_type: NormalizedEntryError, } | { "type": "thinking" } | { "type": "loading" } | { "type": "turn_complete" } | { "type": "next_action", failed: boolean, execution_processes: number, needs_setup: boolean, } | { "type": "token_usage_info" } & TokenUsageInfo | { "type": "user_answered_questions", answers: Array<AnsweredQuestion>, } | { "type": "compaction_marker", previous_tokens?: number | null, compacted_tokens?: number | null, mem0_synced: boolean, };
 
 export type TokenUsageInfo = { total_tokens: number, model_context_window: number, input_tokens?: number | null, output_tokens?: number | null, cache_read_tokens?: number | null, cache_creation_tokens?: number | null, };
 

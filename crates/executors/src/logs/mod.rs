@@ -102,6 +102,14 @@ pub enum NormalizedEntryType {
     UserAnsweredQuestions {
         answers: Vec<AnsweredQuestion>,
     },
+    CompactionMarker {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        previous_tokens: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        compacted_tokens: Option<u32>,
+        #[serde(default)]
+        mem0_synced: bool,
+    },
 }
 
 /// A question–answer pair from a completed AskUserQuestion interaction.

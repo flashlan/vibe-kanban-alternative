@@ -1,7 +1,7 @@
-//! Orchestrates a single view-only scrcpy mirror session: push the vendored
-//! server jar, `adb forward` a local port to the device's abstract socket,
-//! launch the on-device server (video only — no audio, no control), connect,
-//! and read the resulting frame stream.
+//! Orchestrates a single scrcpy mirror session: push the vendored server
+//! jar, `adb forward` a local port to the device's abstract socket, launch
+//! the on-device server (video + control, no audio), connect both channels,
+//! and read the resulting frame stream / write touch-and-key input.
 //!
 //! Launch command verified directly against scrcpy v4.1 source
 //! (`app/src/server.c::execute_server`, `server/.../Options.java` for
@@ -19,16 +19,44 @@ use std::{
 };
 
 use tokio::{
-    io::{AsyncRead, AsyncReadExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     process::{Child, Command},
-    time::sleep,
+    time::{sleep, timeout},
 };
 
-use super::{device, device::DeviceError, protocol, vendor};
+use super::{
+    control_socket::{self, KeyAction, TouchAction},
+    device,
+    device::DeviceError,
+    protocol, vendor,
+};
 
 const CONNECT_ATTEMPTS: u32 = 30;
 const CONNECT_RETRY_DELAY: Duration = Duration::from_millis(100);
+/// Attempt budget for `connect_and_handshake_with_retry` specifically — kept
+/// small (see `HANDSHAKE_ATTEMPT_TIMEOUT` below for why a *retry* here is
+/// actually costly, not just slow).
+const HANDSHAKE_ATTEMPTS: u32 = 2;
+/// Per-attempt cap on `connect_and_handshake_with_retry`'s inner `await`.
+///
+/// Generous on purpose, and increasing this number is the *safe* direction
+/// if it's ever still too short: the on-device server writes the handshake
+/// in two separate syscalls — one dummy byte right on accept
+/// (`DesktopConnection.open`), then the real device-name+codec payload only
+/// once `Server.scrcpy()` gets there, which can be well past encoder/display
+/// setup. Confirmed live (`adb shell` stdout capture + a manual socket
+/// probe) that abandoning a connection *after* the dummy byte but before
+/// that second write — which is exactly what timing out and dropping the
+/// `TcpStream` does — makes the server's later write hit `EPIPE`
+/// (`DesktopConnection.sendDeviceMeta`), which is *uncaught* and kills the
+/// whole `app_process`, not just that one connection. Every subsequent
+/// retry then fails instantly with "early eof" (nothing is listening
+/// anymore) no matter how many attempts are left — so a too-short timeout
+/// here doesn't just fail this attempt, it dooms the entire session, and a
+/// short retry loop makes that worse, not better. A too-long timeout only
+/// costs wall-clock time on a rare truly-dead server.
+const HANDSHAKE_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(25);
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClientError {
@@ -64,6 +92,14 @@ pub struct EncoderOptions {
 
 pub struct MirrorSession {
     stream: TcpStream,
+    // A second connection to the same forwarded port, accepted by the
+    // device as the *control* channel (see `open()` in
+    // `DesktopConnection.java`: accept() calls happen in a fixed
+    // video/audio/control order gated on which are enabled — with audio
+    // off, this is simply the next TCP connection after the video one, no
+    // handshake bytes of its own). Used to inject touch/key/text events;
+    // never read from.
+    control_stream: TcpStream,
     pub device_name: String,
     pub codec_id: i32,
     // Held only for its Drop impl (tears down the adb forward + kills the
@@ -77,6 +113,33 @@ impl MirrorSession {
     /// `protocol` module docs.
     pub async fn read_packet(&mut self) -> io::Result<Vec<u8>> {
         read_packet_raw(&mut self.stream).await
+    }
+
+    pub async fn send_touch(
+        &mut self,
+        action: TouchAction,
+        x: i32,
+        y: i32,
+        screen_width: u16,
+        screen_height: u16,
+    ) -> io::Result<()> {
+        let msg = control_socket::encode_touch_event(action, x, y, screen_width, screen_height);
+        self.control_stream.write_all(&msg).await
+    }
+
+    pub async fn send_key(
+        &mut self,
+        action: KeyAction,
+        keycode: i32,
+        meta_state: i32,
+    ) -> io::Result<()> {
+        let msg = control_socket::encode_key_event(action, keycode, meta_state);
+        self.control_stream.write_all(&msg).await
+    }
+
+    pub async fn send_text(&mut self, text: &str) -> io::Result<()> {
+        let msg = control_socket::encode_text_event(text);
+        self.control_stream.write_all(&msg).await
     }
 }
 
@@ -167,25 +230,26 @@ async fn connect_and_handshake_with_retry(
     port: u16,
 ) -> Result<(TcpStream, String, i32), ClientError> {
     let mut last_err = None;
-    for attempt in 0..CONNECT_ATTEMPTS {
-        let attempt_result = async {
+    for attempt in 0..HANDSHAKE_ATTEMPTS {
+        let attempt_result = timeout(HANDSHAKE_ATTEMPT_TIMEOUT, async {
             let mut stream = TcpStream::connect(("127.0.0.1", port)).await?;
             let (device_name, codec_id) = read_handshake(&mut stream).await?;
             Ok::<_, ClientError>((stream, device_name, codec_id))
-        }
-        .await;
+        })
+        .await
+        .unwrap_or_else(|_elapsed| Err(io::Error::from(io::ErrorKind::TimedOut).into()));
 
         match attempt_result {
             Ok(result) => return Ok(result),
             Err(e) => {
                 last_err = Some(e);
-                if attempt + 1 < CONNECT_ATTEMPTS {
+                if attempt + 1 < HANDSHAKE_ATTEMPTS {
                     sleep(CONNECT_RETRY_DELAY).await;
                 }
             }
         }
     }
-    Err(last_err.unwrap_or(ClientError::ConnectTimeout(CONNECT_ATTEMPTS)))
+    Err(last_err.unwrap_or(ClientError::ConnectTimeout(HANDSHAKE_ATTEMPTS)))
 }
 
 /// Deploy and connect to a view-only scrcpy mirror session.
@@ -212,7 +276,7 @@ pub async fn connect(
     // handles — except retrying never helps here, since the stale process
     // never accepts a second client). Best-effort: nothing to clean up on a
     // fresh device, and a failure here shouldn't block starting the new one.
-    let _ = Command::new(&adb_path)
+    let pkill_output = Command::new(&adb_path)
         .args([
             "-s",
             &serial,
@@ -223,6 +287,38 @@ pub async fn connect(
         ])
         .output()
         .await;
+    // `pkill` returning success only means the signal was *sent* — a JVM
+    // doesn't release its `LocalServerSocket` bind synchronously with that,
+    // so proceeding immediately races the new server's own bind attempt
+    // against the old one's teardown (confirmed live: "Address already in
+    // use" from `LocalServerSocket.<init>`, which then leaves the *new*
+    // launch's connections silently accepted by the dying old process
+    // instead — no bind error surfaces to us since we don't capture the
+    // launched server's stderr in the non-debug path). Poll for the process
+    // to actually disappear instead of a fixed sleep, since JVM teardown
+    // time varies with system load; give up and proceed anyway past the
+    // deadline (best-effort, matching the kill itself).
+    if matches!(&pkill_output, Ok(o) if o.status.success()) {
+        for _ in 0..10 {
+            let still_alive = Command::new(&adb_path)
+                .args([
+                    "-s",
+                    &serial,
+                    "shell",
+                    "pgrep",
+                    "-f",
+                    "com.genymobile.scrcpy.Server",
+                ])
+                .output()
+                .await
+                .map(|o| !o.stdout.is_empty())
+                .unwrap_or(false);
+            if !still_alive {
+                break;
+            }
+            sleep(Duration::from_millis(100)).await;
+        }
+    }
 
     // 0. Wake the screen before capturing: scrcpy only encodes frames the
     // display compositor actually produces, and a dozing/locked screen
@@ -296,7 +392,7 @@ pub async fn connect(
         "com.genymobile.scrcpy.Server".to_string(),
         vendor::SCRCPY_SERVER_VERSION.to_string(),
         "audio=false".to_string(),
-        "control=false".to_string(),
+        "control=true".to_string(),
         "tunnel_forward=true".to_string(),
         "log_level=error".to_string(),
         "stay_awake=true".to_string(),
@@ -337,8 +433,35 @@ pub async fn connect(
         }
     };
 
+    // 5. Connect the control channel: a second TCP connection to the same
+    // forwarded port. The device's `DesktopConnection.open()` calls
+    // `accept()` once per enabled channel in a fixed video/audio/control
+    // order — with audio off, the video connection above already consumed
+    // the first `accept()`, so this one lands on the control role. No
+    // handshake bytes here (those are video-socket-only); a short retry
+    // covers the same "adb forward accepted before the far side is ready"
+    // race `connect_and_handshake_with_retry` handles for video, though
+    // it's far less likely to matter this late — the server was already
+    // running long enough to answer the video handshake.
+    let control_stream = match connect_control_with_retry(local_port).await {
+        Ok(s) => s,
+        Err(e) => {
+            let _ = StdCommand::new(&adb_path)
+                .args([
+                    "-s",
+                    &serial,
+                    "forward",
+                    "--remove",
+                    &format!("tcp:{local_port}"),
+                ])
+                .status();
+            return Err(e);
+        }
+    };
+
     Ok(MirrorSession {
         stream,
+        control_stream,
         device_name,
         codec_id,
         _cleanup: SessionCleanup {
@@ -348,6 +471,22 @@ pub async fn connect(
             server_child,
         },
     })
+}
+
+async fn connect_control_with_retry(port: u16) -> Result<TcpStream, ClientError> {
+    let mut last_err = None;
+    for attempt in 0..CONNECT_ATTEMPTS {
+        match TcpStream::connect(("127.0.0.1", port)).await {
+            Ok(stream) => return Ok(stream),
+            Err(e) => {
+                last_err = Some(e);
+                if attempt + 1 < CONNECT_ATTEMPTS {
+                    sleep(CONNECT_RETRY_DELAY).await;
+                }
+            }
+        }
+    }
+    Err(last_err.unwrap_or(io::ErrorKind::TimedOut.into()).into())
 }
 
 #[cfg(test)]

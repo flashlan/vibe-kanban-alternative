@@ -14,6 +14,7 @@ use tauri::{Emitter, Listener};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 use tauri_plugin_updater::UpdaterExt;
+use tauri_plugin_window_state::{AppHandleExt, StateFlags, WindowExt};
 use tokio::{sync::Mutex, time::sleep};
 use tokio_util::sync::CancellationToken;
 use tracing_subscriber::{EnvFilter, prelude::*};
@@ -137,6 +138,16 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    StateFlags::SIZE
+                        | StateFlags::POSITION
+                        | StateFlags::MAXIMIZED
+                        | StateFlags::FULLSCREEN,
+                )
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             show_system_notification,
             read_clipboard_text
@@ -166,6 +177,12 @@ fn main() {
             windows_notifications::initialize(app.handle().clone());
             #[cfg(target_os = "linux")]
             linux_notifications::initialize(app.handle().clone());
+            #[cfg(target_os = "macos")]
+            set_macos_dock_icon();
+
+            // Initialize native application menu (App/File/Edit/View/Window/Help)
+            let menu = tauri::menu::Menu::default(app.handle())?;
+            let _ = app.set_menu(menu);
 
             if cfg!(debug_assertions) {
                 // Dev mode: frontend dev server (Vite) and backend are started
@@ -272,7 +289,21 @@ fn main() {
         })
         .on_window_event(move |window, event| {
             match event {
+                tauri::WindowEvent::Resized(..) | tauri::WindowEvent::Moved(..) => {
+                    let _ = window.app_handle().save_window_state(
+                        StateFlags::SIZE
+                            | StateFlags::POSITION
+                            | StateFlags::MAXIMIZED
+                            | StateFlags::FULLSCREEN,
+                    );
+                }
                 tauri::WindowEvent::CloseRequested { api, .. } => {
+                    let _ = window.app_handle().save_window_state(
+                        StateFlags::SIZE
+                            | StateFlags::POSITION
+                            | StateFlags::MAXIMIZED
+                            | StateFlags::FULLSCREEN,
+                    );
                     // Hide the window instead of closing it so the app keeps
                     // running in the background (agents/processes stay alive).
                     // The dock icon stays visible so users can click it to reopen.
@@ -298,6 +329,12 @@ fn main() {
             // Install any pending update when the app exits (e.g. Cmd+Q)
             // so the next launch uses the new version.
             if let tauri::RunEvent::Exit = _event {
+                let _ = _app.save_window_state(
+                    StateFlags::SIZE
+                        | StateFlags::POSITION
+                        | StateFlags::MAXIMIZED
+                        | StateFlags::FULLSCREEN,
+                );
                 // block_on is safe here — we're on the main (AppKit) thread,
                 // not inside the tokio runtime.
                 tauri::async_runtime::block_on(install_pending_update(_app, &pending_for_exit));
@@ -368,6 +405,29 @@ fn show_window(app: &tauri::AppHandle) {
     }
 }
 
+#[cfg(target_os = "macos")]
+fn set_macos_dock_icon() {
+    use objc2::{msg_send, runtime::AnyClass};
+    use objc2_foundation::NSData;
+
+    let icon_bytes = include_bytes!("../icons/icon.png");
+    let nsdata = NSData::with_bytes(icon_bytes);
+
+    if let Some(nsimage_cls) = AnyClass::get(c"NSImage") {
+        if let Some(nsapp_cls) = AnyClass::get(c"NSApplication") {
+            unsafe {
+                let alloc_img: *mut objc2::runtime::AnyObject = msg_send![nsimage_cls, alloc];
+                let img: *mut objc2::runtime::AnyObject =
+                    msg_send![alloc_img, initWithData: &*nsdata];
+                let app: *mut objc2::runtime::AnyObject = msg_send![nsapp_cls, sharedApplication];
+                if !app.is_null() && !img.is_null() {
+                    let _: () = msg_send![app, setApplicationIconImage: img];
+                }
+            }
+        }
+    }
+}
+
 fn create_window<R: tauri::Runtime, M: tauri::Manager<R>>(
     manager: &M,
     url: tauri::WebviewUrl,
@@ -381,23 +441,19 @@ fn create_window<R: tauri::Runtime, M: tauri::Manager<R>>(
         .zoom_hotkeys_enabled(false)
         .disable_drag_drop_handler();
 
-    // macOS: overlay title bar keeps traffic lights but removes title bar chrome,
-    // letting web content extend to the top of the window.
-    // Traffic lights are vertically centered within the navbar height (~28px).
-    #[cfg(target_os = "macos")]
-    let builder = builder
-        .title_bar_style(tauri::TitleBarStyle::Overlay)
-        .hidden_title(true)
-        .traffic_light_position(tauri::LogicalPosition::new(8.0, 14.0));
-
-    builder
+    let window = builder
         .on_new_window(move |url, _features| {
             tracing::info!("New window requested for URL: {}", url);
             let url_str = url.to_string();
             let _ = handle.opener().open_url(&url_str, None::<&str>);
             tauri::webview::NewWindowResponse::Deny
         })
-        .build()
+        .build()?;
+
+    let _ = window.restore_state(
+        StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN,
+    );
+    Ok(window)
 }
 
 /// Takes the pending update bytes (if any) and installs them.

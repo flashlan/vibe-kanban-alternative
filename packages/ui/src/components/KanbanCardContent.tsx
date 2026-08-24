@@ -215,9 +215,9 @@ export function KanbanCardContent<TTag extends KanbanTag = KanbanTag>({
 
   return (
     <div className={cn('flex flex-col gap-half min-w-0', className)}>
-      {/* Row 1: Title + loading dots + more actions */}
-      <div className="flex items-center justify-between gap-half">
-        <div className="flex items-center gap-half min-w-0">
+      {/* Row 1: Title + loading dots, with the action buttons grouped on the right */}
+      <div className="flex items-center gap-half">
+        <div className="flex items-center gap-half min-w-0 flex-1">
           {isSubIssue && (
             <span className="text-sm text-low">
               {t('kanban.subIssueIndicator')}
@@ -228,48 +228,50 @@ export function KanbanCardContent<TTag extends KanbanTag = KanbanTag>({
           </span>
           {isLoading && <RunningDots />}
         </div>
-        {onMoreActionsClick && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onMoreActionsClick();
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-            className={cn(
-              'p-half -m-half rounded-sm text-low hover:text-normal hover:bg-secondary shrink-0',
-              isMobile
-                ? ''
-                : 'invisible opacity-0 group-hover:visible group-hover:opacity-100',
-              'transition-[opacity,color,background-color]'
-            )}
-            aria-label="More actions"
-            title="More actions"
-          >
-            <DotsThreeIcon className="size-icon-xs" weight="bold" />
-          </button>
-        )}
-        {onInfoClick && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onInfoClick();
-            }}
-            onMouseDown={(e) => e.stopPropagation()}
-            className={cn(
-              'p-half -m-half rounded-sm text-low hover:text-normal hover:bg-secondary shrink-0',
-              isMobile
-                ? ''
-                : 'invisible opacity-0 group-hover:visible group-hover:opacity-100',
-              'transition-[opacity,color,background-color]'
-            )}
-            aria-label="Card info"
-            title="Card info"
-          >
-            <InfoIcon className="size-icon-xs" weight="bold" />
-          </button>
-        )}
+        <div className="flex items-center gap-half shrink-0">
+          {onMoreActionsClick && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMoreActionsClick();
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              className={cn(
+                'p-half -m-half rounded-sm text-low hover:text-normal hover:bg-secondary shrink-0',
+                isMobile
+                  ? ''
+                  : 'invisible opacity-0 group-hover:visible group-hover:opacity-100',
+                'transition-[opacity,color,background-color]'
+              )}
+              aria-label="More actions"
+              title="More actions"
+            >
+              <DotsThreeIcon className="size-icon-xs" weight="bold" />
+            </button>
+          )}
+          {onInfoClick && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onInfoClick();
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              className={cn(
+                'p-half -m-half rounded-sm text-low hover:text-normal hover:bg-secondary shrink-0',
+                isMobile
+                  ? ''
+                  : 'invisible opacity-0 group-hover:visible group-hover:opacity-100',
+                'transition-[opacity,color,background-color]'
+              )}
+              aria-label="Card info"
+              title="Card info"
+            >
+              <InfoIcon className="size-icon-xs" weight="bold" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Row 2: Description (optional, truncated) */}

@@ -107,10 +107,15 @@ export function TerminalPanel({
                         type="button"
                         title="Close terminal"
                         aria-label="Close terminal"
-                        className="flex items-center justify-center w-6 px-1 text-low hover:text-normal hover:bg-secondary/70 shrink-0 h-full"
-                        onClick={() => handleCloseTab(tab.id)}
+                        className="flex items-center justify-center w-6 px-1 text-low hover:text-normal hover:bg-secondary/70 shrink-0 h-full cursor-pointer"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCloseTab(tab.id);
+                        }}
                       >
-                        <XIcon className="size-icon-xs" weight="bold" />
+                        <XIcon className="size-icon-xs pointer-events-none" weight="bold" />
                       </button>
                     )}
                   </div>
@@ -121,16 +126,16 @@ export function TerminalPanel({
                   type="button"
                   title="New terminal"
                   aria-label="New terminal"
-                  className="flex items-center px-1.5 text-low hover:text-normal shrink-0 h-full"
+                  className="flex items-center px-1.5 text-low hover:text-normal shrink-0 h-full cursor-pointer"
                   onClick={onNewTab}
                 >
-                  <PlusIcon className="size-icon-xs" weight="bold" />
+                  <PlusIcon className="size-icon-xs pointer-events-none" weight="bold" />
                 </button>
               )}
             </div>
           </div>
 
-          {/* Right side controls: [ Painel Terminal ] [ ⚡ TUI ] [ X ] */}
+          {/* Right side controls: [ Project Terminal ] [ ⚡ TUI ] [ X ] */}
           <div className="flex items-stretch shrink-0 border-l border-border">
             {title && (
               <div className="flex items-center px-2.5 text-xs font-medium text-low select-none">
@@ -142,7 +147,7 @@ export function TerminalPanel({
                 type="button"
                 title="Open Cockpit TUI (vibe-tui)"
                 aria-label="Open Cockpit TUI"
-                className="flex items-center gap-1 px-2 text-xs font-medium text-amber-500 hover:text-amber-400 hover:bg-secondary border-l border-border h-full transition-colors"
+                className="flex items-center gap-1 px-2 text-xs font-medium text-amber-500 hover:text-amber-400 hover:bg-secondary border-l border-border h-full transition-colors cursor-pointer"
                 onClick={onNewTuiTab}
               >
                 <span>⚡</span>
@@ -154,17 +159,30 @@ export function TerminalPanel({
                 type="button"
                 title="Close panel"
                 aria-label="Close panel"
-                className="flex items-center justify-center px-2 text-low hover:text-normal hover:bg-secondary border-l border-border h-full transition-colors"
+                className="flex items-center justify-center px-2 text-low hover:text-normal hover:bg-secondary border-l border-border h-full transition-colors cursor-pointer"
                 onClick={onClose}
               >
-                <XIcon className="size-icon-xs" weight="bold" />
+                <XIcon className="size-icon-xs pointer-events-none" weight="bold" />
               </button>
             )}
           </div>
         </div>
       )}
-      <div className="flex-1 min-h-0 w-full">
-        {activeTab && renderTab(activeTab.id, true)}
+      <div className="flex-1 min-h-0 w-full relative">
+        {tabs.map((tab) => {
+          const isActive = tab.id === activeTab?.id;
+          return (
+            <div
+              key={tab.id}
+              className={cn(
+                'absolute inset-0 w-full h-full',
+                isActive ? 'block' : 'hidden'
+              )}
+            >
+              {renderTab(tab.id, isActive)}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

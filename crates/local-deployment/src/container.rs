@@ -1863,7 +1863,7 @@ impl LocalContainerService {
         };
 
         let command = agh
-            .build_interactive_command(&prompt, conversation_id.as_deref())
+            .build_interactive_command(&prompt, conversation_id.as_deref(), Some(current_dir))
             .map_err(|e| {
                 ContainerError::Other(anyhow!(
                     "Failed to build antigravity interactive command: {e}"

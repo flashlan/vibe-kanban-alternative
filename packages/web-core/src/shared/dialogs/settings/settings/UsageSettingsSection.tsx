@@ -2,6 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { makeRequest } from '@/shared/lib/remoteApi';
 import { handleApiResponse } from '@/shared/lib/api';
+import {
+  useCompactionThreshold,
+  useSetCompactionThreshold,
+  type CompactionThreshold,
+} from '@/shared/stores/useUiPreferencesStore';
+import { ScissorsIcon, SparkleIcon } from '@phosphor-icons/react';
 
 export interface DailyAgentActivity {
   day: string;
@@ -285,6 +291,25 @@ export function UsageSettingsSection() {
     issueCompleted.set(row.day, row.completed);
     maxIssues = Math.max(maxIssues, row.created, row.completed);
   }
+
+  const compactionThreshold = useCompactionThreshold();
+  const setCompactionThreshold = useSetCompactionThreshold();
+
+  const THRESHOLD_OPTIONS: Array<{
+    id: CompactionThreshold;
+    label: string;
+    sublabel: string;
+    isIdeal?: boolean;
+    isEco?: boolean;
+    isFocus?: boolean;
+  }> = [
+    { id: '50', label: '50%', sublabel: 'Focus', isFocus: true },
+    { id: '65', label: '65%', sublabel: 'Eco', isEco: true },
+    { id: '75', label: '75%', sublabel: 'Early' },
+    { id: '85', label: '85%', sublabel: 'Ideal (Recommended)', isIdeal: true },
+    { id: '95', label: '95%', sublabel: 'Late' },
+    { id: 'full', label: 'Full', sublabel: 'Reactive on error' },
+  ];
 
   return (
     <div className="flex flex-col gap-6 overflow-y-auto p-4">
@@ -843,6 +868,145 @@ export function UsageSettingsSection() {
               {t('settings.usage.reExtractRelations', 'relations')} extracted
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Context Compaction & Token Limit Management */}
+      <section>
+        <h3 className="mb-2 text-sm font-medium text-high">
+          {t(
+            'settings.usage.contextCompaction',
+            'Context Compaction & Token Limits'
+          )}
+        </h3>
+        <div className="rounded-sm border border-border bg-panel p-3.5 space-y-3">
+          {/* Threshold Selector with Green Highlight on 85% */}
+          <div className="rounded-sm border border-border/70 bg-secondary/30 p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-high flex items-center gap-1.5">
+                <ScissorsIcon className="size-3.5 text-warning" weight="bold" />
+                <span>
+                  {t(
+                    'settings.usage.thresholdTitle',
+                    'Context Auto-Compaction Threshold'
+                  )}
+                </span>
+              </span>
+              <span className="text-[11px] text-low">
+                {compactionThreshold === '85'
+                  ? '✨ 85% rule active (Recommended)'
+                  : compactionThreshold === 'full'
+                    ? '⚡ Reactive on error only'
+                    : `Triggers at ${compactionThreshold}%`}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-6 gap-2 pt-1">
+              {THRESHOLD_OPTIONS.map((opt) => {
+                const isSelected = compactionThreshold === opt.id;
+                return (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    onClick={() => setCompactionThreshold(opt.id)}
+                    className={`relative flex flex-col items-center justify-center rounded-sm p-2 text-center transition-all border cursor-pointer ${
+                      isSelected
+                        ? opt.isIdeal
+                          ? 'border-emerald-500 bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/50 shadow-xs'
+                          : 'border-brand bg-brand/15 text-brand ring-1 ring-brand/50 shadow-xs'
+                        : opt.isIdeal
+                          ? 'border-emerald-500/50 bg-emerald-500/5 text-normal hover:bg-emerald-500/10'
+                          : 'border-border bg-panel hover:bg-secondary text-normal'
+                    }`}
+                  >
+                    {opt.isIdeal && (
+                      <span className="absolute -top-2 right-2 rounded-full bg-emerald-600 px-1.5 py-0.2 text-[9px] font-bold text-white uppercase tracking-wider shadow-xs flex items-center gap-0.5">
+                        <SparkleIcon className="size-2.5" weight="fill" />
+                        Ideal
+                      </span>
+                    )}
+                    <span className="text-sm font-bold">{opt.label}</span>
+                    <span className="text-[10px] text-low mt-0.5">
+                      {opt.sublabel}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="text-[11px] text-low pt-1">
+              {compactionThreshold === '50' && (
+                <span className="text-normal font-medium">
+                  🎯 Focus (50%): Maintains the model at peak attention and
+                  reasoning fidelity (the 40–60% sweet spot), avoiding context
+                  degradation on complex code tasks.
+                </span>
+              )}
+              {compactionThreshold === '65' && (
+                <span className="text-normal font-medium">
+                  🌱 Eco (65%): Compacts frequently to save tokens/credits and
+                  keep responses fast and concise.
+                </span>
+              )}
+              {compactionThreshold === '85' && (
+                <span className="text-emerald-400 font-medium">
+                  ✓ Ideal (85%): Retains a safe 15% margin for long outputs and
+                  new file context, preventing slow downs and limit errors.
+                </span>
+              )}
+              {compactionThreshold === '75' && (
+                <span>
+                  75%: Compacts earlier for sessions that perform heavy
+                  multi-file reads in a single turn.
+                </span>
+              )}
+              {compactionThreshold === '95' && (
+                <span>
+                  95%: Retains maximum context before generating a summary.
+                </span>
+              )}
+              {compactionThreshold === 'full' && (
+                <span>
+                  Full: No proactive compaction. Waits for the provider to
+                  return a token limit error before triggering auto-recovery.
+                </span>
+              )}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div className="rounded-sm border border-border/60 bg-secondary/40 p-2.5 space-y-1">
+              <div className="font-semibold text-normal flex items-center gap-1.5">
+                <span>⚡ Auto-Recovery (OpenRouter / APIs)</span>
+              </div>
+              <p className="text-low text-[11px]">
+                When a provider rejects a prompt due to token limits (e.g. 141k
+                tokens), the session is compacted automatically and retried
+                seamlessly.
+              </p>
+            </div>
+
+            <div className="rounded-sm border border-border/60 bg-secondary/40 p-2.5 space-y-1">
+              <div className="font-semibold text-normal flex items-center gap-1.5">
+                <span>🧠 Mem0 Memory Sync</span>
+              </div>
+              <p className="text-low text-[11px]">
+                Before compaction, durable facts and decisions are indexed in
+                Mem0. The model can recall details anytime via{' '}
+                <code className="text-accent">memory_search</code>.
+              </p>
+            </div>
+          </div>
+
+          <div className="border-t border-border/50 pt-2.5 flex items-center justify-between text-xs text-low">
+            <span>
+              💡 Tip: You can type{' '}
+              <code className="rounded bg-secondary px-1.5 py-0.5 font-mono text-normal">
+                /compact
+              </code>{' '}
+              in the chat anytime to trigger manual session compaction.
+            </span>
+          </div>
         </div>
       </section>
 

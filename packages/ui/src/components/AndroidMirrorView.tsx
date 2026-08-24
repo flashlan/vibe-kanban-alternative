@@ -26,6 +26,23 @@ export interface AndroidMirrorViewHandle {
   pushFrame: (data: ArrayBuffer) => void;
 }
 
+// Mirrors the backend's `AndroidMirrorInboundMessage` (server/routes/
+// android_mirror.rs) field-for-field — this is what gets JSON.stringify'd
+// and sent over the same WS the video comes in on. `x`/`y` are absolute
+// device pixels; this component does the canvas-CSS-size -> device-pixel
+// mapping itself since it's the one that knows the canvas's rendered size.
+export type AndroidMirrorInputMessage =
+  | {
+      type: 'touch';
+      action: 'down' | 'up' | 'move';
+      x: number;
+      y: number;
+      screen_width: number;
+      screen_height: number;
+    }
+  | { type: 'key'; action: 'down' | 'up'; keycode: number }
+  | { type: 'text'; text: string };
+
 export interface AndroidMirrorViewProps {
   status: AndroidMirrorStatus;
   errorMessage: string | null;
@@ -35,6 +52,45 @@ export interface AndroidMirrorViewProps {
    * this instance is already the detached copy rendered inside the
    * floating window — see `AndroidMirrorContainer`). */
   onDetach?: () => void;
+  /** Omit to disable touch/keyboard forwarding entirely (view-only). */
+  onInput?: (msg: AndroidMirrorInputMessage) => void;
+}
+
+// Physical keys forwarded as Android `KEYCODE_*` injection (navigation/
+// editing keys with no single-character text representation). Everything
+// else with `e.key.length === 1` goes through as `TYPE_INJECT_TEXT`
+// instead — that gets shift/dead-key/composition handling for free from
+// the browser, which reproducing via raw keycode+metastate emulation
+// would not.
+const CONTROL_KEYCODES: Record<string, number> = {
+  Backspace: 67,
+  Enter: 66,
+  Tab: 61,
+  Escape: 111,
+  ArrowLeft: 21,
+  ArrowRight: 22,
+  ArrowUp: 19,
+  ArrowDown: 20,
+  Delete: 112,
+  Home: 122, // AKEYCODE_MOVE_HOME (cursor movement, not the device Home key)
+  End: 123, // AKEYCODE_MOVE_END
+};
+
+/** Map a pointer event's CSS-pixel position to the canvas's actual device
+ * pixel resolution (`canvas.width`/`height`, set to the decoded frame's
+ * size) — the canvas is very likely displayed at a different (scaled)
+ * on-screen size via `max-w-full max-h-full`. */
+function toDevicePosition(
+  canvas: HTMLCanvasElement,
+  clientX: number,
+  clientY: number
+): { x: number; y: number } {
+  const rect = canvas.getBoundingClientRect();
+  const relX = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
+  const relY = rect.height > 0 ? (clientY - rect.top) / rect.height : 0;
+  const x = Math.min(canvas.width - 1, Math.max(0, Math.round(relX * canvas.width)));
+  const y = Math.min(canvas.height - 1, Math.max(0, Math.round(relY * canvas.height)));
+  return { x, y };
 }
 
 // Wire format verified against scrcpy v4.1 source (Apache-2.0,
@@ -128,7 +184,7 @@ export const AndroidMirrorView = forwardRef<
   AndroidMirrorViewHandle,
   AndroidMirrorViewProps
 >(function AndroidMirrorView(
-  { status, errorMessage, onRetry, className, onDetach },
+  { status, errorMessage, onRetry, className, onDetach, onInput },
   ref
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -146,6 +202,7 @@ export const AndroidMirrorView = forwardRef<
   // their own; they have to be prepended onto the first keyframe's payload
   // as one combined Annex-B access unit instead.
   const pendingConfigPayloadRef = useRef<Uint8Array | null>(null);
+  const isPointerDownRef = useRef(false);
   const [hasDrawnFrame, setHasDrawnFrame] = useState(false);
   // Separate from the `status`/`errorMessage` props (which only know about
   // the WS connection) — the decoder can fail entirely independently of a
@@ -365,6 +422,85 @@ export const AndroidMirrorView = forwardRef<
   // message arrives, which says nothing about whether video has decoded yet.
   const showCanvas = status === 'streaming' && hasDrawnFrame && !decoderError;
 
+  const handlePointerDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !onInput || !showCanvas) return;
+    e.preventDefault();
+    // `preventDefault()` on mousedown suppresses the browser's default
+    // focus-on-click behavior in some engines — focus explicitly so
+    // keyboard forwarding (below) actually has something to attach to.
+    canvas.focus();
+    isPointerDownRef.current = true;
+    const { x, y } = toDevicePosition(canvas, e.clientX, e.clientY);
+    onInput({
+      type: 'touch',
+      action: 'down',
+      x,
+      y,
+      screen_width: canvas.width,
+      screen_height: canvas.height,
+    });
+  };
+
+  const handlePointerMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !onInput || !isPointerDownRef.current) return;
+    const { x, y } = toDevicePosition(canvas, e.clientX, e.clientY);
+    onInput({
+      type: 'touch',
+      action: 'move',
+      x,
+      y,
+      screen_width: canvas.width,
+      screen_height: canvas.height,
+    });
+  };
+
+  const handlePointerUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas || !onInput || !isPointerDownRef.current) return;
+    isPointerDownRef.current = false;
+    const { x, y } = toDevicePosition(canvas, e.clientX, e.clientY);
+    onInput({
+      type: 'touch',
+      action: 'up',
+      x,
+      y,
+      screen_width: canvas.width,
+      screen_height: canvas.height,
+    });
+  };
+
+  // A drag that ends by leaving the canvas (rather than a mouseup inside
+  // it) would otherwise leave the device thinking a finger is still down —
+  // release it here too.
+  const handlePointerLeave = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isPointerDownRef.current) handlePointerUp(e);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+    if (!onInput) return;
+    const keycode = CONTROL_KEYCODES[e.key];
+    if (keycode !== undefined) {
+      e.preventDefault();
+      onInput({ type: 'key', action: 'down', keycode });
+      return;
+    }
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      onInput({ type: 'text', text: e.key });
+    }
+  };
+
+  const handleKeyUp = (e: React.KeyboardEvent<HTMLCanvasElement>) => {
+    if (!onInput) return;
+    const keycode = CONTROL_KEYCODES[e.key];
+    if (keycode !== undefined) {
+      e.preventDefault();
+      onInput({ type: 'key', action: 'up', keycode });
+    }
+  };
+
   return (
     <div
       className={cn(
@@ -384,7 +520,18 @@ export const AndroidMirrorView = forwardRef<
       )}
       <canvas
         ref={canvasRef}
-        className={cn('max-w-full max-h-full', !showCanvas && 'hidden')}
+        tabIndex={onInput ? 0 : undefined}
+        onMouseDown={handlePointerDown}
+        onMouseMove={handlePointerMove}
+        onMouseUp={handlePointerUp}
+        onMouseLeave={handlePointerLeave}
+        onKeyDown={handleKeyDown}
+        onKeyUp={handleKeyUp}
+        className={cn(
+          'max-w-full max-h-full outline-none',
+          onInput && showCanvas && 'cursor-pointer',
+          !showCanvas && 'hidden'
+        )}
       />
       {!showCanvas && (
         <div className="flex flex-col items-center gap-base text-low">
@@ -421,6 +568,16 @@ export const AndroidMirrorView = forwardRef<
             <>
               <SpinnerIcon className="size-icon-lg animate-spin text-brand" />
               <p className="text-sm">Connecting to device…</p>
+              {/* Set (and kept non-null) while `useAndroidMirrorConnection`
+                  is auto-retrying a boot-time connection failure — e.g. a
+                  cold-booting or `-no-window` emulator whose scrcpy server
+                  isn't reachable yet. Status stays 'connecting' the whole
+                  time on purpose (see that hook), so this is the only
+                  visible sign a retry is happening rather than the panel
+                  being silently stuck. */}
+              {errorMessage && (
+                <p className="text-xs text-low">{errorMessage}</p>
+              )}
               {/* No error is guaranteed to ever fire here: the connection
                   itself can be perfectly healthy (WS open, "ready" received)
                   while the phone simply never sends a frame — e.g. the

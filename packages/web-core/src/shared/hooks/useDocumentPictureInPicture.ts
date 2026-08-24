@@ -1,3 +1,4 @@
+/// <reference path="../types/document-picture-in-picture.d.ts" />
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface UseDocumentPictureInPictureResult {

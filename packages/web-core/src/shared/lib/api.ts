@@ -4,6 +4,7 @@ import {
   AndroidMirrorDevice,
   AndroidMirrorNavRequest,
   AndroidMirrorForceStopRequest,
+  AndroidMirrorLaunchAvdRequest,
   ApprovalStatus,
   ApiResponse,
   Config,
@@ -953,6 +954,19 @@ export const androidMirrorApi = {
 
   forceStop: async (req: AndroidMirrorForceStopRequest): Promise<void> => {
     const response = await makeRequest('/api/android-mirror/force-stop', {
+      method: 'POST',
+      body: JSON.stringify(req),
+    });
+    return handleApiResponse<void>(response);
+  },
+
+  listAvds: async (): Promise<string[]> => {
+    const response = await makeRequest('/api/android-mirror/avds');
+    return handleApiResponse<string[]>(response);
+  },
+
+  launchAvd: async (req: AndroidMirrorLaunchAvdRequest): Promise<void> => {
+    const response = await makeRequest('/api/android-mirror/avds/launch', {
       method: 'POST',
       body: JSON.stringify(req),
     });

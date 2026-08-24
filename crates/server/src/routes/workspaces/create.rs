@@ -236,9 +236,24 @@ pub async fn create_and_start_workspace(
         }
     }
 
+    let mut final_prompt = workspace_prompt;
+    if let Some(issue) = &linked_local_issue {
+        if let Ok((project_prompt, _)) =
+            db::models::project::Project::resolve_orchestrator_prompt(pool, issue.project_id).await
+        {
+            let trimmed = project_prompt.trim();
+            if !trimmed.is_empty() {
+                final_prompt = format!(
+                    "{}\n\n---\n## Project Specifications & Instructions\n{}",
+                    final_prompt, trimmed
+                );
+            }
+        }
+    }
+
     let execution_process = deployment
         .container()
-        .start_workspace(&workspace, executor_config.clone(), workspace_prompt)
+        .start_workspace(&workspace, executor_config.clone(), final_prompt)
         .await?;
 
     Ok(ResponseJson(ApiResponse::success(

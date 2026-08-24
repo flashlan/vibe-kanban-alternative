@@ -17,6 +17,7 @@
     "check": "pnpm run local-web:legacy-path-guard && pnpm run check:db && pnpm run local-web:check && pnpm run web-core:check && pnpm run ui:check && pnpm run backend:check",
     "check:db": "bash scripts/check-migration-frozen.sh",
     "dev": "export FRONTEND_PORT=3001 && export BACKEND_PORT=3002 && export PREVIEW_PROXY_PORT=3003 && export VK_ALLOWED_ORIGINS=\"http://localhost:${FRONTEND_PORT}\" && concurrently \"pnpm run backend:dev:watch\" \"pnpm run local-web:dev\"",
+    "dev:window": "export FRONTEND_PORT=3001 && export BACKEND_PORT=3002 && export PREVIEW_PROXY_PORT=3003 && export VK_ALLOWED_ORIGINS=\"http://localhost:${FRONTEND_PORT}\" && export DISABLE_WORKTREE_CLEANUP=1 && export RUST_LOG=debug && concurrently \"pnpm run backend:dev:watch\" \"pnpm run local-web:dev\" \"cargo run -p vibe-kanban-tauri\"",
     "tui": "cargo run -p tui --bin vibe-tui",
     "test:npm": "./test-npm-package.sh",
     "local-web:lint": "pnpm --filter @vibe/local-web run lint",

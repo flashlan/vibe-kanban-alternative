@@ -153,12 +153,17 @@ impl Antigravity {
         &self,
         prompt: &str,
         conversation_id: Option<&str>,
+        current_dir: Option<&Path>,
     ) -> Result<CommandBuilder, CommandBuildError> {
         let mut builder = CommandBuilder::new(&Self::agy_binary());
 
         builder = builder.extend_params(["--print", prompt]);
         builder = builder.extend_params(["--output-format", "stream-json"]);
         builder = builder.extend_params(["--print-timeout", "30m"]);
+
+        if let Some(dir) = current_dir {
+            builder = builder.extend_params(["--add-dir", &dir.to_string_lossy()]);
+        }
 
         if let Some(conv_id) = conversation_id {
             builder = builder.extend_params(["--conversation", conv_id]);
@@ -259,7 +264,7 @@ impl Antigravity {
     ) -> Result<SpawnedChild, ExecutorError> {
         let combined_prompt = self.append_prompt.combine_prompt(prompt);
         let command = self
-            .build_command_builder(&combined_prompt, conversation_id)?
+            .build_command_builder(&combined_prompt, conversation_id, Some(current_dir))?
             .build_initial()?;
         let (program_path, args) = command.into_resolved().await?;
 
@@ -517,34 +522,44 @@ impl StandardCodingAgentExecutor for Antigravity {
                             }
 
                             // Token usage tracking
-                            if let Some(usage) = &step_update.usage
-                                && let Some(total) = usage.total_tokens
-                            {
-                                let entry = NormalizedEntry {
-                                    timestamp: None,
-                                    entry_type: NormalizedEntryType::TokenUsageInfo(
-                                        TokenUsageInfo {
-                                            total_tokens: total as u32,
-                                            model_context_window: 1_000_000,
-                                            input_tokens: usage
-                                                .input_tokens
-                                                .map(|v| v.max(0) as u32),
-                                            output_tokens: usage
-                                                .output_tokens
-                                                .map(|v| v.max(0) as u32),
-                                            cache_read_tokens: usage
-                                                .cache_read_tokens
-                                                .map(|v| v.max(0) as u32),
-                                            cache_creation_tokens: None,
-                                        },
-                                    ),
-                                    content: format!(
-                                        "Tokens used: {} / Context window: 1000000",
-                                        total
-                                    ),
-                                    metadata: None,
+                            if let Some(usage) = &step_update.usage {
+                                let input = usage.input_tokens.unwrap_or(0).max(0) as u32;
+                                let cache_read = usage.cache_read_tokens.unwrap_or(0).max(0) as u32;
+                                let output = usage.output_tokens.unwrap_or(0).max(0) as u32;
+                                let turn_context = input + cache_read + output;
+                                let total_context = if turn_context > 0 {
+                                    turn_context
+                                } else {
+                                    usage.total_tokens.unwrap_or(0).max(0) as u32
                                 };
-                                add_normalized_entry(&msg_store, &entry_index, entry);
+
+                                if total_context > 0 {
+                                    let entry = NormalizedEntry {
+                                        timestamp: None,
+                                        entry_type: NormalizedEntryType::TokenUsageInfo(
+                                            TokenUsageInfo {
+                                                total_tokens: total_context,
+                                                model_context_window: 1_000_000,
+                                                input_tokens: usage
+                                                    .input_tokens
+                                                    .map(|v| v.max(0) as u32),
+                                                output_tokens: usage
+                                                    .output_tokens
+                                                    .map(|v| v.max(0) as u32),
+                                                cache_read_tokens: usage
+                                                    .cache_read_tokens
+                                                    .map(|v| v.max(0) as u32),
+                                                cache_creation_tokens: None,
+                                            },
+                                        ),
+                                        content: format!(
+                                            "Tokens used: {} / Context window: 1000000",
+                                            total_context
+                                        ),
+                                        metadata: None,
+                                    };
+                                    add_normalized_entry(&msg_store, &entry_index, entry);
+                                }
                             }
 
                             let step_type = step_update.step_type.as_deref().unwrap_or("");
@@ -641,34 +656,44 @@ impl StandardCodingAgentExecutor for Antigravity {
                             }
 
                             // Token usage tracking on final result
-                            if let Some(usage) = &result.usage
-                                && let Some(total) = usage.total_tokens
-                            {
-                                let entry = NormalizedEntry {
-                                    timestamp: None,
-                                    entry_type: NormalizedEntryType::TokenUsageInfo(
-                                        TokenUsageInfo {
-                                            total_tokens: total as u32,
-                                            model_context_window: 1_000_000,
-                                            input_tokens: usage
-                                                .input_tokens
-                                                .map(|v| v.max(0) as u32),
-                                            output_tokens: usage
-                                                .output_tokens
-                                                .map(|v| v.max(0) as u32),
-                                            cache_read_tokens: usage
-                                                .cache_read_tokens
-                                                .map(|v| v.max(0) as u32),
-                                            cache_creation_tokens: None,
-                                        },
-                                    ),
-                                    content: format!(
-                                        "Tokens used: {} / Context window: 1000000",
-                                        total
-                                    ),
-                                    metadata: None,
+                            if let Some(usage) = &result.usage {
+                                let input = usage.input_tokens.unwrap_or(0).max(0) as u32;
+                                let cache_read = usage.cache_read_tokens.unwrap_or(0).max(0) as u32;
+                                let output = usage.output_tokens.unwrap_or(0).max(0) as u32;
+                                let turn_context = input + cache_read + output;
+                                let total_context = if turn_context > 0 {
+                                    turn_context
+                                } else {
+                                    usage.total_tokens.unwrap_or(0).max(0) as u32
                                 };
-                                add_normalized_entry(&msg_store, &entry_index, entry);
+
+                                if total_context > 0 {
+                                    let entry = NormalizedEntry {
+                                        timestamp: None,
+                                        entry_type: NormalizedEntryType::TokenUsageInfo(
+                                            TokenUsageInfo {
+                                                total_tokens: total_context,
+                                                model_context_window: 1_000_000,
+                                                input_tokens: usage
+                                                    .input_tokens
+                                                    .map(|v| v.max(0) as u32),
+                                                output_tokens: usage
+                                                    .output_tokens
+                                                    .map(|v| v.max(0) as u32),
+                                                cache_read_tokens: usage
+                                                    .cache_read_tokens
+                                                    .map(|v| v.max(0) as u32),
+                                                cache_creation_tokens: None,
+                                            },
+                                        ),
+                                        content: format!(
+                                            "Tokens used: {} / Context window: 1000000",
+                                            total_context
+                                        ),
+                                        metadata: None,
+                                    };
+                                    add_normalized_entry(&msg_store, &entry_index, entry);
+                                }
                             }
 
                             if let Some(response) = result.response {
@@ -767,11 +792,7 @@ impl StandardCodingAgentExecutor for Antigravity {
     }
 
     fn default_mcp_config_path(&self) -> Option<std::path::PathBuf> {
-        dirs::home_dir().map(|home| {
-            home.join(".gemini")
-                .join("antigravity-cli")
-                .join("settings.json")
-        })
+        dirs::home_dir().map(|home| home.join(".gemini").join("config").join("mcp_config.json"))
     }
 
     fn get_availability_info(&self) -> AvailabilityInfo {
@@ -781,7 +802,10 @@ impl StandardCodingAgentExecutor for Antigravity {
             .unwrap_or(false);
 
         let installation_indicator_found = dirs::home_dir()
-            .map(|home| home.join(".gemini").join("antigravity-cli").exists())
+            .map(|home| {
+                home.join(".gemini").join("antigravity-cli").exists()
+                    || home.join(".gemini").join("config").exists()
+            })
             .unwrap_or(false);
 
         if settings_found || installation_indicator_found {
@@ -883,8 +907,13 @@ impl AntigravityHeaded {
         &self,
         prompt: &str,
         conversation_id: Option<&str>,
+        current_dir: Option<&Path>,
     ) -> Result<CommandParts, CommandBuildError> {
         let mut builder = CommandBuilder::new(&Antigravity::agy_binary());
+
+        if let Some(dir) = current_dir {
+            builder = builder.extend_params(["--add-dir", &dir.to_string_lossy()]);
+        }
 
         if let Some(conv_id) = conversation_id {
             builder = builder.extend_params(["--conversation", conv_id]);
@@ -1101,9 +1130,15 @@ mod tests {
 
         assert!(headed.open_terminal_enabled());
         let cmd = headed
-            .build_interactive_command("Fix login bug", Some("conv-test-123"))
+            .build_interactive_command(
+                "Fix login bug",
+                Some("conv-test-123"),
+                Some(std::path::Path::new("/workspace")),
+            )
             .unwrap();
 
+        assert!(cmd.args().contains(&"--add-dir".to_string()));
+        assert!(cmd.args().contains(&"/workspace".to_string()));
         assert!(cmd.args().contains(&"--conversation".to_string()));
         assert!(cmd.args().contains(&"conv-test-123".to_string()));
         assert!(cmd.args().contains(&"--model".to_string()));

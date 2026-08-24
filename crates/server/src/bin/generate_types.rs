@@ -90,6 +90,7 @@ fn generate_types_content() -> String {
         server::routes::android_mirror::AndroidMirrorNavRequest::decl(),
         server::routes::android_mirror::NavActionRequest::decl(),
         server::routes::android_mirror::AndroidMirrorForceStopRequest::decl(),
+        server::routes::android_mirror::AndroidMirrorLaunchAvdRequest::decl(),
         server::routes::sessions::CreateFollowUpAttempt::decl(),
         server::routes::sessions::ResetProcessRequest::decl(),
         server::routes::workspaces::git::ChangeTargetBranchRequest::decl(),

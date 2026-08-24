@@ -27,6 +27,7 @@ import {
   CreateProjectDialog,
   type CreateProjectResult,
 } from '@/shared/dialogs/CreateProjectDialog';
+import { ProjectColorDialog } from '@/shared/dialogs/ProjectColorDialog';
 import { CreateProjectButton } from './CreateProjectButton';
 import { useCommandBarShortcut } from '@/shared/hooks/useCommandBarShortcut';
 import { useShape } from '@/shared/integrations/electric/hooks';
@@ -70,6 +71,9 @@ export function SharedAppLayout() {
   const { issueId: activeIssueId } = useCurrentKanbanRouteState();
   const isMobile = useIsMobile();
   const mobileFontScale = useUiPreferencesStore((s) => s.mobileFontScale);
+  const isLeftSidebarVisible = useUiPreferencesStore(
+    (s) => s.isLeftSidebarVisible
+  );
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   // `selectedIssueIds.size > 1` matches `useIssueMultiSelect`'s
   // `isMultiSelectActive` definition. We don't call the hook from web-core
@@ -267,6 +271,27 @@ export function SharedAppLayout() {
         await updateProject(projectId, { name: trimmed });
       } catch {
         // Swallow — the shape collection surfaces errors via the row state.
+      }
+    },
+    [updateProject]
+  );
+
+  // Change a project's color from the sidebar `+` menu. The color tints the
+  // project row and its whole subtree (sections, workspaces, tasks, cards).
+  const handleChangeProjectColor = useCallback(
+    async (projectId: string) => {
+      const project = projectsByIdRef.current.get(projectId);
+      if (!project) return;
+      try {
+        await ProjectColorDialog.show({
+          projectName: project.name,
+          currentColor: project.color,
+          onSave: async (color) => {
+            await updateProject(projectId, { color });
+          },
+        });
+      } catch {
+        // Dialog cancelled — no-op.
       }
     },
     [updateProject]
@@ -723,7 +748,12 @@ export function SharedAppLayout() {
                 'bg-primary',
                 isMobile
                   ? 'flex fixed inset-0 pb-[env(safe-area-inset-bottom)]'
-                  : 'grid grid-cols-[256px_1fr] grid-rows-[minmax(0,1fr)] h-screen'
+                  : cn(
+                      'grid grid-rows-[minmax(0,1fr)] h-screen',
+                      isLeftSidebarVisible
+                        ? 'grid-cols-[256px_1fr]'
+                        : 'grid-cols-[1fr]'
+                    )
               )}
             >
               {!isMobile && (
@@ -731,37 +761,44 @@ export function SharedAppLayout() {
                   {/* Desktop sidebar: project tree + bottom notification/user
                 slots. Spans the full left column; the top drag-region strip
                 lives inside the Sidebar itself. */}
-                  <Sidebar
-                    projects={sidebarProjects}
-                    activeProjectId={activeProjectId}
-                    activeProjectPromptId={activeProjectPromptId}
-                    activeWorkspaceId={workspaceId ?? null}
-                    activeIssueId={activeIssueId}
-                    tasksByProject={tasksByProject}
-                    loadingTasksProjectIds={loadingTasksProjectIds}
-                    onSelectIssue={handleSelectIssue}
-                    workspaces={outlinerWorkspaces}
-                    archivedWorkspaces={outlinerArchivedWorkspaces}
-                    membership={membership}
-                    isLoadingProjects={isLoading}
-                    isLoadingWorkspaces={isWorkspacesListLoading}
-                    onSelectWorkspace={(id) => appNavigation.goToWorkspace(id)}
-                    onOpenProjectPage={handleProjectClick}
-                    onOpenWorkspacesPage={handleOpenWorkspacesPage}
-                    onOpenLastWorkspace={handleOpenLastOrchestratorWorkspace}
-                    onSelectOrchestratorPrompt={handleSelectOrchestratorPrompt}
-                    onCreateChildBoard={handleCreateChildBoard}
-                    onRenameProject={handleRenameProject}
-                    onArchiveProject={handleArchiveProject}
-                    archivedProjects={archivedSidebarProjects}
-                    onRestoreProject={handleRestoreProject}
-                    onDeleteArchivedProject={handleDeleteArchivedProject}
-                    isMultiSelectActive={isMultiSelectActive}
-                    headerActions={
-                      <CreateProjectButton onClick={handleCreateProject} />
-                    }
-                    bottomActions={<SidebarBottomActions />}
-                  />
+                  {isLeftSidebarVisible && (
+                    <Sidebar
+                      projects={sidebarProjects}
+                      activeProjectId={activeProjectId}
+                      activeProjectPromptId={activeProjectPromptId}
+                      activeWorkspaceId={workspaceId ?? null}
+                      activeIssueId={activeIssueId}
+                      tasksByProject={tasksByProject}
+                      loadingTasksProjectIds={loadingTasksProjectIds}
+                      onSelectIssue={handleSelectIssue}
+                      workspaces={outlinerWorkspaces}
+                      archivedWorkspaces={outlinerArchivedWorkspaces}
+                      membership={membership}
+                      isLoadingProjects={isLoading}
+                      isLoadingWorkspaces={isWorkspacesListLoading}
+                      onSelectWorkspace={(id) =>
+                        appNavigation.goToWorkspace(id)
+                      }
+                      onOpenProjectPage={handleProjectClick}
+                      onOpenWorkspacesPage={handleOpenWorkspacesPage}
+                      onOpenLastWorkspace={handleOpenLastOrchestratorWorkspace}
+                      onSelectOrchestratorPrompt={
+                        handleSelectOrchestratorPrompt
+                      }
+                      onCreateChildBoard={handleCreateChildBoard}
+                      onRenameProject={handleRenameProject}
+                      onChangeProjectColor={handleChangeProjectColor}
+                      onArchiveProject={handleArchiveProject}
+                      archivedProjects={archivedSidebarProjects}
+                      onRestoreProject={handleRestoreProject}
+                      onDeleteArchivedProject={handleDeleteArchivedProject}
+                      isMultiSelectActive={isMultiSelectActive}
+                      headerActions={
+                        <CreateProjectButton onClick={handleCreateProject} />
+                      }
+                      bottomActions={<SidebarBottomActions />}
+                    />
+                  )}
                   {/* Content column: Navbar on top, Outlet below. */}
                   <div className="flex flex-col min-h-0 min-w-0">
                     <NavbarContainer
@@ -842,6 +879,10 @@ export function SharedAppLayout() {
                       onCreateChildBoard={handleCreateChildBoard}
                       onRenameProject={(id) => {
                         void handleRenameProject(id);
+                        setIsDrawerOpen(false);
+                      }}
+                      onChangeProjectColor={(id) => {
+                        void handleChangeProjectColor(id);
                         setIsDrawerOpen(false);
                       }}
                       onArchiveProject={(id) => {

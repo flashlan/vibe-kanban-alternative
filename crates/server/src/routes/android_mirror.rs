@@ -1,15 +1,16 @@
-//! Live Android screen mirror (view-only) — see
-//! `services::services::android_mirror` for the scrcpy deploy/protocol
-//! client this route wraps. Two endpoints:
+//! Live Android screen mirror — see `services::services::android_mirror`
+//! for the scrcpy deploy/protocol client this route wraps. Two endpoints:
 //!
 //! - `GET /api/android-mirror/devices` — REST, lists `adb`-visible devices
 //!   for the frontend's device picker.
-//! - `GET /api/android-mirror/ws?device_serial=<optional>` — WS, streams raw
-//!   scrcpy video-socket packets (12-byte header, +payload for frame
-//!   packets) to the browser byte-for-byte as binary frames. No
-//!   `workspace_id` here: which phone is plugged into this machine has
-//!   nothing to do with which workspace is open. Per-workspace device
-//!   pinning (which serial to request) is a frontend-only concern.
+//! - `GET /api/android-mirror/ws?device_serial=<optional>` — WS. Outbound:
+//!   raw scrcpy video-socket packets (12-byte header, +payload for frame
+//!   packets), byte-for-byte as binary frames. Inbound: JSON touch/key/text
+//!   messages (see `AndroidMirrorInboundMessage`), forwarded to the scrcpy
+//!   control socket. No `workspace_id` here: which phone is plugged into
+//!   this machine has nothing to do with which workspace is open.
+//!   Per-workspace device pinning (which serial to request) is a
+//!   frontend-only concern.
 
 use axum::{
     Router,
@@ -22,9 +23,11 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use services::services::android_mirror::{
-    client::{self, EncoderOptions},
+    client::{self, EncoderOptions, MirrorSession},
     control::{self, NavAction},
+    control_socket::{KeyAction, TouchAction},
     device::DeviceError,
+    emulator::{self, EmulatorError},
 };
 use ts_rs::TS;
 use utils::response::ApiResponse;
@@ -57,6 +60,36 @@ async fn list_devices(
         })
         .collect();
     Ok(ResponseJson(ApiResponse::success(devices)))
+}
+
+async fn list_avds(
+    State(_deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<Vec<String>>>, ApiError> {
+    let emulator_path = emulator::resolve_emulator()
+        .await
+        .map_err(|e: EmulatorError| ApiError::BadRequest(e.to_string()))?;
+    let avds = emulator::list_avds(&emulator_path)
+        .await
+        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+    Ok(ResponseJson(ApiResponse::success(avds)))
+}
+
+#[derive(Debug, Deserialize, TS)]
+pub struct AndroidMirrorLaunchAvdRequest {
+    avd_name: String,
+}
+
+async fn launch_avd(
+    State(_deployment): State<DeploymentImpl>,
+    axum::Json(req): axum::Json<AndroidMirrorLaunchAvdRequest>,
+) -> Result<ResponseJson<ApiResponse<()>>, ApiError> {
+    let emulator_path = emulator::resolve_emulator()
+        .await
+        .map_err(|e: EmulatorError| ApiError::BadRequest(e.to_string()))?;
+    emulator::launch_avd(&emulator_path, &req.avd_name)
+        .await
+        .map_err(|e| ApiError::BadRequest(e.to_string()))?;
+    Ok(ResponseJson(ApiResponse::success(())))
 }
 
 #[derive(Debug, Deserialize)]
@@ -146,6 +179,101 @@ enum AndroidMirrorMessage {
     Error { message: String },
 }
 
+/// Inbound WS messages from the browser — touch/key input to inject via the
+/// control socket (see `client::MirrorSession::send_touch`/`send_key`/
+/// `send_text`). `x`/`y`/`screen_width`/`screen_height` are already in
+/// absolute device pixels; the browser computes that mapping since it's the
+/// one that knows the canvas's on-screen size vs. the decoded frame's actual
+/// resolution.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum AndroidMirrorInboundMessage {
+    Touch {
+        action: TouchActionWire,
+        x: i32,
+        y: i32,
+        screen_width: u16,
+        screen_height: u16,
+    },
+    Key {
+        action: KeyActionWire,
+        keycode: i32,
+        #[serde(default)]
+        meta_state: i32,
+    },
+    Text {
+        text: String,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum TouchActionWire {
+    Down,
+    Up,
+    Move,
+}
+
+impl From<TouchActionWire> for TouchAction {
+    fn from(a: TouchActionWire) -> Self {
+        match a {
+            TouchActionWire::Down => TouchAction::Down,
+            TouchActionWire::Up => TouchAction::Up,
+            TouchActionWire::Move => TouchAction::Move,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum KeyActionWire {
+    Down,
+    Up,
+}
+
+impl From<KeyActionWire> for KeyAction {
+    fn from(a: KeyActionWire) -> Self {
+        match a {
+            KeyActionWire::Down => KeyAction::Down,
+            KeyActionWire::Up => KeyAction::Up,
+        }
+    }
+}
+
+/// Best-effort: a single malformed/dropped input event shouldn't tear down
+/// the whole mirror session the way a video-stream error does.
+async fn handle_inbound_control_message(session: &mut MirrorSession, text: &str) {
+    let msg: AndroidMirrorInboundMessage = match serde_json::from_str(text) {
+        Ok(m) => m,
+        Err(e) => {
+            tracing::debug!("[android-mirror] bad inbound message: {e}");
+            return;
+        }
+    };
+    let result = match msg {
+        AndroidMirrorInboundMessage::Touch {
+            action,
+            x,
+            y,
+            screen_width,
+            screen_height,
+        } => {
+            session
+                .send_touch(action.into(), x, y, screen_width, screen_height)
+                .await
+        }
+        AndroidMirrorInboundMessage::Key {
+            action,
+            keycode,
+            meta_state,
+        } => session.send_key(action.into(), keycode, meta_state).await,
+        AndroidMirrorInboundMessage::Text { text } => session.send_text(&text).await,
+    };
+    if let Err(e) = result {
+        tracing::debug!("[android-mirror] failed to send control message: {e}");
+    }
+}
+
 async fn handle_android_mirror_ws(
     mut socket: MaybeSignedWebSocket,
     device_serial: Option<String>,
@@ -184,7 +312,10 @@ async fn handle_android_mirror_ws(
             inbound = socket.recv() => {
                 match inbound {
                     Ok(Some(Message::Close(_))) | Ok(None) | Err(_) => break,
-                    Ok(Some(_)) => {} // view-only in v1: no inbound control messages yet
+                    Ok(Some(Message::Text(text))) => {
+                        handle_inbound_control_message(&mut session, &text).await;
+                    }
+                    Ok(Some(_)) => {} // no binary/ping inbound messages expected
                 }
             }
         }
@@ -215,6 +346,8 @@ async fn close_with_error(socket: &mut MaybeSignedWebSocket, message: &str) {
 pub(super) fn router() -> Router<DeploymentImpl> {
     Router::new()
         .route("/android-mirror/devices", get(list_devices))
+        .route("/android-mirror/avds", get(list_avds))
+        .route("/android-mirror/avds/launch", post(launch_avd))
         .route("/android-mirror/ws", get(android_mirror_ws))
         .route("/android-mirror/nav", post(send_nav_action))
         .route("/android-mirror/force-stop", post(force_stop_app))

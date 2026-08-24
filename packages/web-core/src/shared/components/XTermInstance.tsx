@@ -265,8 +265,11 @@ export function XTermInstance({
   }, [fitTerminal]);
 
   useEffect(() => {
-    if (isActive) terminalRef.current?.focus();
-  }, [isActive]);
+    if (isActive) {
+      fitTerminal();
+      terminalRef.current?.focus();
+    }
+  }, [isActive, fitTerminal]);
 
   useEffect(() => {
     if (terminalRef.current) {

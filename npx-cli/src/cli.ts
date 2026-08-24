@@ -17,6 +17,8 @@ const CLI_VERSION: string = require("../package.json").version;
 
 type RootOptions = {
   desktop?: boolean;
+  window?: boolean;
+  w?: boolean;
 };
 
 // Resolve effective arch for our published 64-bit binaries only.
@@ -310,9 +312,10 @@ async function main(): Promise<void> {
   cli
     .command("[...args]", "Launch the local vibe-kanban app")
     .option("--desktop", "Launch the desktop app instead of browser mode")
+    .option("--window, -w", "Launch in desktop window mode (alias for --desktop)")
     .allowUnknownOptions()
     .action((_args: string[], options: RootOptions) => {
-      runOrExit(runMain(Boolean(options.desktop)));
+      runOrExit(runMain(Boolean(options.desktop || options.window || options.w)));
     });
 
   cli

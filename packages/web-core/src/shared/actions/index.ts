@@ -568,7 +568,7 @@ export const Actions = {
     icon: SidebarSimpleIcon,
     shortcut: 'V S',
     requiresTarget: ActionTargetType.NONE,
-    isVisible: (ctx) => ctx.layoutMode === 'workspaces',
+    isVisible: () => true,
     isActive: (ctx) => ctx.isLeftSidebarVisible,
     execute: () => {
       useUiPreferencesStore.getState().toggleLeftSidebar();

@@ -18,11 +18,35 @@ interface UseAndroidMirrorConnectionResult {
   status: AndroidMirrorStatus;
   errorMessage: string | null;
   retry: () => void;
+  /** Send a JSON message over the WS (e.g. touch/key input) — a no-op if
+   * the socket isn't currently open. */
+  send: (data: object) => void;
 }
 
 const MAX_RETRIES = 6;
 const MAX_RETRY_DELAY_MS = 8000;
 const BASE_RETRY_DELAY_MS = 500;
+
+// A cold-booting (or `-no-window` headless) emulator can take a good while
+// before its scrcpy server is even reachable — every attempt in that window
+// fails with one of these on the *very first* connect, before any WS
+// packets flow, which `close_with_error`'s clean 1000 close otherwise turns
+// into a hard `'error'` requiring a manual click. That's the wrong default
+// for something that resolves on its own once the device finishes booting:
+// retry automatically instead, on a fixed interval (not exponential —
+// there's no server load to back off from, just a boot clock to wait out).
+//
+// The interval can't be short: each retry re-runs `client::connect()`'s
+// *entire* deploy sequence (push the jar, `adb forward`, launch a fresh
+// on-device server), not a lightweight reconnect. Firing that too often
+// races a still-shutting-down previous attempt's server process against the
+// next one's launch — confirmed live as the same "orphan squats the
+// abstract socket" failure mode `client.rs`'s pre-launch `pkill` already
+// exists to avoid, just self-inflicted by retrying too fast instead of by a
+// leftover session.
+const TRANSIENT_CONNECT_ERROR_RE = /early eof|timed out|connection refused/i;
+const BOOT_RETRY_MAX = 15;
+const BOOT_RETRY_DELAY_MS = 7000;
 
 /**
  * Connects to `GET /api/android-mirror/ws`, streaming binary scrcpy packets.
@@ -56,6 +80,7 @@ export function useAndroidMirrorConnection(
 
   const generationRef = useRef(0);
   const retryCountRef = useRef(0);
+  const bootRetryCountRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const onFrameRef = useRef(onFrame);
@@ -104,8 +129,26 @@ export function useAndroidMirrorConnection(
                 if (msg.type === 'ready') {
                   setStatus('streaming');
                 } else if (msg.type === 'error' && msg.message) {
-                  setErrorMessage(msg.message);
-                  setStatus('error');
+                  if (
+                    TRANSIENT_CONNECT_ERROR_RE.test(msg.message) &&
+                    bootRetryCountRef.current < BOOT_RETRY_MAX
+                  ) {
+                    bootRetryCountRef.current += 1;
+                    // Status deliberately stays 'connecting' — this isn't a
+                    // failure from the user's point of view, just a longer
+                    // wait. `errorMessage` doubles as the hint text shown
+                    // under the spinner in that state (see
+                    // AndroidMirrorView).
+                    setErrorMessage(
+                      'Waiting for the device to finish booting…'
+                    );
+                    retryTimerRef.current = setTimeout(() => {
+                      connect(generation);
+                    }, BOOT_RETRY_DELAY_MS);
+                  } else {
+                    setErrorMessage(msg.message);
+                    setStatus('error');
+                  }
                 }
               } catch {
                 // ignore
@@ -134,8 +177,12 @@ export function useAndroidMirrorConnection(
             if (event.code === 1000 && event.wasClean) {
               // Server sends a `{type: 'error'}` text message before a clean
               // close on deploy/connect failure — status is already 'error'
-              // in that case. A clean close with no prior error is just a
-              // normal end of session.
+              // in that case (or a boot-retry is already scheduled, in
+              // which case `retryTimerRef` is already set — leave it alone
+              // rather than clobbering 'connecting' back to 'idle'). A
+              // clean close with no prior error is just a normal end of
+              // session.
+              if (retryTimerRef.current) return;
               setStatus((prev) => (prev === 'error' ? prev : 'idle'));
               return;
             }
@@ -196,6 +243,7 @@ export function useAndroidMirrorConnection(
 
     generationRef.current += 1;
     retryCountRef.current = 0;
+    bootRetryCountRef.current = 0;
     connect(generationRef.current);
 
     return () => {
@@ -216,9 +264,20 @@ export function useAndroidMirrorConnection(
     if (!enabled || !isSupported) return;
     generationRef.current += 1;
     retryCountRef.current = 0;
+    bootRetryCountRef.current = 0;
     teardown();
     connect(generationRef.current);
   }, [enabled, isSupported, teardown, connect]);
 
-  return { status, errorMessage, retry };
+  // Fire-and-forget: a dropped touch/key event isn't worth surfacing as a
+  // connection error, and the socket briefly not being open (still
+  // connecting, or a reconnect in flight) is routine, not exceptional.
+  const send = useCallback((data: object) => {
+    const socket = wsRef.current;
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify(data));
+    }
+  }, []);
+
+  return { status, errorMessage, retry, send };
 }

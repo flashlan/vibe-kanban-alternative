@@ -324,7 +324,7 @@ async fn run_session_inner(
         config.model_variant.clone(),
         config.agent.clone(),
     ));
-    let prompt_result = run_request_with_control(
+    let mut prompt_result = run_request_with_control(
         prompt_fut,
         &mut control_rx,
         &pending_approvals,
@@ -336,6 +336,73 @@ async fn run_session_inner(
         send_abort(&client, &config.base_url, &config.directory, &session_id).await;
         event_handle.abort();
         return Ok(());
+    }
+
+    if let Err(ref err) = prompt_result {
+        let err_str = err.to_string();
+        let err_lower = err_str.to_lowercase();
+        let is_context_limit = err_str.contains("Prompt tokens limit exceeded")
+            || err_str.contains("tokens limit exceeded")
+            || err_str.contains("context_length_exceeded")
+            || err_str.contains("maximum context length")
+            || err_lower.contains("requires more credits")
+            || err_lower.contains("fewer max_tokens")
+            || err_lower.contains("can only afford")
+            || (err_lower.contains("credits") && err_lower.contains("tokens"))
+            || (err_lower.contains("max_tokens") && err_lower.contains("afford"));
+
+        if is_context_limit && !cancel.is_cancelled() {
+            tracing::warn!(
+                target: "opencode",
+                "Context token limit exceeded ({err_str}). Triggering auto-compaction and retrying prompt..."
+            );
+
+            let _ = log_writer
+                .log_event(&OpencodeExecutorEvent::SystemMessage {
+                    content: "⚡ Provider context token limit reached. Compacting session context and syncing memory...".to_string(),
+                })
+                .await;
+
+            if let Ok(compaction_model) = resolve_compaction_model(
+                &client,
+                &config.base_url,
+                &config.directory,
+                config.model.as_deref(),
+            )
+            .await
+            {
+                if let Err(compact_err) = session_summarize(
+                    &client,
+                    &config.base_url,
+                    &config.directory,
+                    &session_id,
+                    compaction_model,
+                )
+                .await
+                {
+                    tracing::warn!(target: "opencode", "Auto-compaction failed: {compact_err}");
+                } else {
+                    tracing::info!(target: "opencode", "Auto-compaction succeeded. Retrying prompt...");
+                    let retry_fut = Box::pin(prompt(
+                        &client,
+                        &config.base_url,
+                        &config.directory,
+                        &session_id,
+                        &config.prompt,
+                        model.clone(),
+                        config.model_variant.clone(),
+                        config.agent.clone(),
+                    ));
+                    prompt_result = run_request_with_control(
+                        retry_fut,
+                        &mut control_rx,
+                        &pending_approvals,
+                        cancel.clone(),
+                    )
+                    .await;
+                }
+            }
+        }
     }
 
     if let Err(err) = prompt_result {

@@ -13,6 +13,7 @@
     "shell:allow-open",
     "opener:default",
     "updater:default",
-    "notification:default"
+    "notification:default",
+    "window-state:default"
   ]
 }

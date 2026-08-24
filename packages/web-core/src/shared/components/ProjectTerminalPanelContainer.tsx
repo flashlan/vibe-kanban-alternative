@@ -87,7 +87,7 @@ export function ProjectTerminalPanelContainer({
 
   return (
     <TerminalPanel
-      title="Painel Terminal"
+      title="Project Terminal"
       tabs={tabs.map((t) => ({
         id: t.id,
         title: t.title,
