@@ -44,12 +44,13 @@ export function TerminalPanel({
 }: TerminalPanelProps) {
   const handleCloseTab = useCallback(
     (tabId: string) => {
-      // Closing a tab only removes that tab. The whole panel/window is closed
-      // separately via its own close button — not when an individual tab is
-      // closed — so the remaining tabs (and the window) stay open.
+      if (tabs.length <= 1 && onClose) {
+        onClose();
+        return;
+      }
       onCloseTab?.(tabId);
     },
-    [onCloseTab]
+    [onCloseTab, tabs.length, onClose]
   );
   // Render only the active terminal. Inactive ones stay alive in the provider
   // (their xterm instance and WebSocket persist), so switching back re-attaches
