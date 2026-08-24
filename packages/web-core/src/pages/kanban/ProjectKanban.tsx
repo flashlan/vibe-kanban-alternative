@@ -355,8 +355,9 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
     if (isProjectTerminalOpen && isRightPanelOpen) {
       // Ambos paineis laterais abertos precisam respeitar minSize 20% cada.
       // Se left persistido for 75, sobrariam 12.5% p/ cada e o terminal fica
-      // espremido atrás do workspace. Força left a no máx 50% nesse caso.
-      const leftSize = Math.min(rawLeft, 50);
+      // espremido atrás do workspace. Força left a no máx 60% nesse caso
+      // (board continua prioritário) e divide o restante igualmente.
+      const leftSize = Math.min(rawLeft, 60);
       const remaining = 100 - leftSize;
       const terminal = Math.round(remaining / 2);
       const right = remaining - terminal;
@@ -382,6 +383,16 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
   })();
 
   const onKanbanLayoutChange = (layout: Layout) => {
+    // Quando ambos paineis estão abertos o left é clampado temporariamente
+    // (60%) para caber os dois minSize 20%. Não persistir esse clamp inicial —
+    // senão ao fechar um dos paineis o board continuaria pequeno (60)
+    // e o outro painel assumiria o espaço do que fechou, em vez do board
+    // reclamar o espaço (bug reportado). Só persistir se o usuário arrastou
+    // (layout difere do default clampado).
+    if (isProjectTerminalOpen && isRightPanelOpen) {
+      const defaultLeft = kanbanDefaultLayout['kanban-left'];
+      if (layout['kanban-left'] === defaultLeft) return;
+    }
     if (layout['kanban-left'] != null) {
       setKanbanLeftPanelSize(layout['kanban-left']);
     }
