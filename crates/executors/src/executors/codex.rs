@@ -60,7 +60,10 @@ use serde_json::Value;
 use strum_macros::{AsRefStr, EnumString};
 use tokio::process::Command;
 use ts_rs::TS;
-use workspace_utils::{command_ext::GroupSpawnNoWindowExt, msg_store::MsgStore};
+use workspace_utils::{
+    command_ext::GroupSpawnNoWindowExt, msg_store::MsgStore,
+    shell::resolve_executable_path_blocking,
+};
 
 use self::{
     client::{AppServerClient, LogWriter},
@@ -279,7 +282,9 @@ impl StandardCodingAgentExecutor for Codex {
             .map(|home| home.join("version.json").exists())
             .unwrap_or(false);
 
-        if mcp_config_found || installation_indicator_found {
+        let binary_found = resolve_executable_path_blocking("codex").is_some();
+
+        if mcp_config_found || installation_indicator_found || binary_found {
             AvailabilityInfo::InstallationFound
         } else {
             AvailabilityInfo::NotFound
@@ -388,7 +393,11 @@ impl StandardCodingAgentExecutor for Codex {
 
 impl Codex {
     pub fn base_command() -> &'static str {
-        "npx -y @openai/codex@0.124.0"
+        if resolve_executable_path_blocking("codex").is_some() {
+            "codex"
+        } else {
+            "npx -y @openai/codex"
+        }
     }
 
     fn build_command_builder(&self) -> Result<CommandBuilder, CommandBuildError> {

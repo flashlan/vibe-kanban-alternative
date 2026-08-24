@@ -20,16 +20,6 @@
   A self-hosted cockpit for single-developer AI orchestration — persistent graph memory (mem0), 10+ coding agents, Gitea/Forgejo PRs, a terminal cockpit, a Telegram bridge, and usage observability.
 </p>
 
-<div align="center">
-
-### ⭐ Curtiu o projeto?
-
-Se este projeto foi útil para você, considere deixar uma **Star**! Isso ajuda a dar visibilidade e incentiva a continuidade do desenvolvimento.
-
-[![Give a Star](https://img.shields.io/badge/Dar%20uma%20Star-%E2%AD%90-yellow?style=for-the-badge)](https://github.com/flashlan/vibe-kanban-alternative/stargazers)
-
-</div>
-
 ## Table of Contents
 
 - [Background](#background)

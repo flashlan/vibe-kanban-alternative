@@ -7,6 +7,12 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-alternat
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.40] - 2026-08-24
+
+### Fixed
+
+- **Codex executor spawn and model listing**: automatically detect and prioritize locally-installed `codex` CLI binaries on `PATH` (e.g. `/opt/homebrew/bin/codex`) over pinned npx downloads. This resolves `I/O error: server was shutdown while waiting for initialize response` errors and ensures models like `gpt-5.5` and `gpt-5.4` load seamlessly.
+
 ## [0.2.39] - 2026-08-24
 
 ### Fixed
