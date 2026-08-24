@@ -22,7 +22,6 @@ use crate::{
     logs::{
         ActionType, CommandRunResult, FileChange, NormalizedEntry, NormalizedEntryError,
         NormalizedEntryType, TokenUsageInfo, ToolResult, ToolStatus,
-        stderr_processor::normalize_stderr_logs,
         utils::{
             EntryIndexProvider, patch,
             patch::{add_normalized_entry, replace_normalized_entry},
@@ -435,6 +434,54 @@ fn map_tool_action(
     }
 }
 
+fn should_suppress_antigravity_stderr(line: &str) -> bool {
+    let lower = line.to_lowercase();
+    lower.contains("declaring permissions")
+        || lower.contains("cortex tool")
+        || lower.contains("convert tool call")
+        || lower.contains("invalid tool call error")
+        || lower.contains("not a valid artifact path")
+        || lower.contains("model output error")
+        || lower.contains("gemini-")
+        || lower.contains("loaded skill")
+        || lower.contains("reading skill")
+}
+
+fn normalize_antigravity_stderr(
+    msg_store: Arc<MsgStore>,
+    entry_index_provider: EntryIndexProvider,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        use crate::logs::plain_text_processor::PlainTextLogProcessor;
+        use futures::StreamExt;
+        use std::time::Duration;
+
+        let mut stderr = msg_store.stderr_chunked_stream();
+
+        let mut processor = PlainTextLogProcessor::builder()
+            .normalized_entry_producer(Box::new(|content: String| NormalizedEntry {
+                timestamp: None,
+                entry_type: NormalizedEntryType::ErrorMessage {
+                    error_type: NormalizedEntryError::Other,
+                },
+                content: strip_ansi_escapes::strip_str(&content),
+                metadata: None,
+            }))
+            .time_gap(Duration::from_secs(2))
+            .index_provider(entry_index_provider)
+            .build();
+
+        while let Some(Ok(chunk)) = stderr.next().await {
+            if should_suppress_antigravity_stderr(&chunk) {
+                continue;
+            }
+            for patch in processor.process(chunk) {
+                msg_store.push_patch(patch);
+            }
+        }
+    })
+}
+
 #[async_trait]
 impl StandardCodingAgentExecutor for Antigravity {
     fn apply_overrides(&mut self, executor_config: &ExecutorConfig) {
@@ -487,7 +534,7 @@ impl StandardCodingAgentExecutor for Antigravity {
         let worktree = worktree_path.to_string_lossy().to_string();
         let entry_index = EntryIndexProvider::start_from(&msg_store);
 
-        let h_stderr = normalize_stderr_logs(msg_store.clone(), entry_index.clone());
+        let h_stderr = normalize_antigravity_stderr(msg_store.clone(), entry_index.clone());
 
         let h_stdout = tokio::spawn(async move {
             let mut stdout_lines = msg_store.stdout_lines_stream();

@@ -18,6 +18,7 @@ import {
   ChatsTeardropIcon,
   GitDiffIcon,
   TerminalIcon,
+  TerminalWindowIcon,
   CaretDoubleUpIcon,
   CaretDoubleDownIcon,
   PlayIcon,
@@ -700,6 +701,43 @@ export const Actions = {
           RIGHT_MAIN_PANEL_MODES.MIRROR,
           ctx.currentWorkspaceId ?? undefined
         );
+    },
+  },
+
+  // Embedded (not a floating overlay) — the workspace view toggles it into
+  // the right-main-panel slot (alongside Changes/Logs/Preview/Mirror); the
+  // kanban board has no such slot, so it gets its own dedicated panel next
+  // to the board (toggled via `isProjectTerminalOpen`).
+  ToggleProjectTerminal: {
+    id: 'toggle-project-terminal',
+    label: 'Project Terminal',
+    icon: TerminalWindowIcon,
+    shortcut: 'Ctrl Shift `',
+    requiresTarget: ActionTargetType.NONE,
+    isVisible: (ctx) => !ctx.isCreateMode,
+    isActive: (ctx) =>
+      ctx.layoutMode === 'workspaces'
+        ? ctx.rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.TERMINAL
+        : useUiPreferencesStore.getState().isProjectTerminalOpen,
+    isEnabled: (ctx) => !ctx.isCreateMode,
+    getLabel: (ctx) => {
+      const isOpen =
+        ctx.layoutMode === 'workspaces'
+          ? ctx.rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.TERMINAL
+          : useUiPreferencesStore.getState().isProjectTerminalOpen;
+      return isOpen ? 'Hide Project Terminal' : 'Show Project Terminal';
+    },
+    execute: (ctx) => {
+      if (ctx.currentWorkspaceId) {
+        useUiPreferencesStore
+          .getState()
+          .toggleRightMainPanelMode(
+            RIGHT_MAIN_PANEL_MODES.TERMINAL,
+            ctx.currentWorkspaceId
+          );
+      } else {
+        useUiPreferencesStore.getState().toggleProjectTerminal();
+      }
     },
   },
 
@@ -1604,6 +1642,7 @@ export const NavbarActionGroups = {
     Actions.ToggleLogsMode,
     Actions.TogglePreviewMode,
     Actions.ToggleMirrorMode,
+    Actions.ToggleProjectTerminal,
     Actions.ToggleRightSidebar,
     NavbarDivider,
     Actions.SpawnOrchestrator,

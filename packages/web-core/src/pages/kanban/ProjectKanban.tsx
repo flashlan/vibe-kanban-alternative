@@ -12,9 +12,11 @@ import { KanbanContainer } from '@/features/kanban/ui/KanbanContainer';
 import { useIsMobile } from '@/shared/hooks/useIsMobile';
 import { useHostId } from '@/shared/providers/HostIdProvider';
 import { ProjectRightSidebarContainer } from './ProjectRightSidebarContainer';
+import { ProjectTerminalPanelContainer } from '@/shared/components/ProjectTerminalPanelContainer';
 import {
   PERSIST_KEYS,
   usePaneSize,
+  useUiPreferencesStore,
 } from '@/shared/stores/useUiPreferencesStore';
 import { useAppNavigation } from '@/shared/hooks/useAppNavigation';
 import { useCurrentKanbanRouteState } from '@/shared/hooks/useCurrentKanbanRouteState';
@@ -299,6 +301,27 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
     PERSIST_KEYS.kanbanLeftPanel,
     75
   );
+  const isProjectTerminalOpen = useUiPreferencesStore(
+    (s) => s.isProjectTerminalOpen
+  );
+  const toggleProjectTerminal = useUiPreferencesStore(
+    (s) => s.toggleProjectTerminal
+  );
+  const setProjectTerminalOpen = useUiPreferencesStore(
+    (s) => s.setProjectTerminalOpen
+  );
+
+  // Toggle the embedded project terminal panel with Ctrl+Shift+`.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.shiftKey && event.key === '`') {
+        event.preventDefault();
+        toggleProjectTerminal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleProjectTerminal]);
 
   const isRightPanelOpen = isPanelOpen;
 
@@ -342,6 +365,26 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
       >
         <ProjectKanbanBoard />
       </Panel>
+
+      {isProjectTerminalOpen && (
+        <Separator
+          id="kanban-terminal-separator"
+          className="w-1 bg-panel outline-none hover:bg-brand/50 transition-colors cursor-col-resize"
+        />
+      )}
+
+      {isProjectTerminalOpen && (
+        <Panel
+          id="kanban-terminal"
+          minSize="400px"
+          maxSize="800px"
+          className="min-w-0 h-full overflow-hidden bg-secondary"
+        >
+          <ProjectTerminalPanelContainer
+            onClose={() => setProjectTerminalOpen(false)}
+          />
+        </Panel>
+      )}
 
       {isRightPanelOpen && (
         <Separator

@@ -68,6 +68,18 @@ function toConversationSemanticProcessKind(
   return 'unknown';
 }
 
+function isInternalDiagnosticNoise(content: string): boolean {
+  const lower = content.toLowerCase();
+  return (
+    lower.includes('declaring permissions') ||
+    lower.includes('cortex tool') ||
+    lower.includes('convert tool call') ||
+    lower.includes('invalid tool call error') ||
+    lower.includes('not a valid artifact path') ||
+    lower.includes('model output error')
+  );
+}
+
 export function deriveConversationSemanticTimeline(
   source: ConversationTimelineSource
 ): ConversationSemanticTimeline {
@@ -92,15 +104,26 @@ export function deriveConversationSemanticTimeline(
             entry.content.entry_type.type === 'token_usage_info'
         ) ?? null;
 
-      const visibleEntries = processState.entries.filter(
-        (entry) =>
-          entry.type !== 'NORMALIZED_ENTRY' ||
-          (entry.content.entry_type.type !== 'user_message' &&
-            entry.content.entry_type.type !== 'token_usage_info' &&
-            // Non-visible per-turn marker; kept in rawEntries for the spinner
-            // derivation (see deriveConversationTurns) but never rendered.
-            entry.content.entry_type.type !== 'turn_complete')
-      );
+      const visibleEntries = processState.entries.filter((entry) => {
+        if (entry.type !== 'NORMALIZED_ENTRY') return true;
+        const entryType = entry.content.entry_type;
+        if (
+          entryType.type === 'user_message' ||
+          entryType.type === 'token_usage_info' ||
+          // Non-visible per-turn marker; kept in rawEntries for the spinner
+          // derivation (see deriveConversationTurns) but never rendered.
+          entryType.type === 'turn_complete'
+        ) {
+          return false;
+        }
+        if (
+          entryType.type === 'error_message' &&
+          isInternalDiagnosticNoise(entry.content.content)
+        ) {
+          return false;
+        }
+        return true;
+      });
 
       const hasPendingApprovalEntry = visibleEntries.some((entry) => {
         if (entry.type !== 'NORMALIZED_ENTRY') return false;
