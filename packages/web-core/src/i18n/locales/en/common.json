@@ -552,6 +552,14 @@
     "openProjectPage": "Open project board",
     "openWorkspacesPage": "Open workspaces",
     "openIssuePage": "Open task",
-    "openOrchestratorWorkspace": "Open last workspace"
+    "openOrchestratorWorkspace": "Open last workspace",
+    "pinSidebar": "Pin sidebar",
+    "unpinSidebar": "Unpin sidebar — hover edge to reveal",
+    "pinned": "Pinned",
+    "unpinned": "Auto",
+    "archivedProjects": "Archived",
+    "archivedReadOnly": "Archived — read-only",
+    "restoreProject": "Restore",
+    "deleteArchivedProject": "Delete"
   }
 }

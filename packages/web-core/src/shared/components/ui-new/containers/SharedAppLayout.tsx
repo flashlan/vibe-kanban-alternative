@@ -74,6 +74,44 @@ export function SharedAppLayout() {
   const isLeftSidebarVisible = useUiPreferencesStore(
     (s) => s.isLeftSidebarVisible
   );
+  // Pinned mode: isLeftSidebarVisible === true means the sidebar is docked.
+  // When false, the sidebar auto-hides and is revealed via a thin left-edge
+  // hover strip with a slide animation.
+  const isLeftSidebarPinned = isLeftSidebarVisible;
+  const toggleLeftSidebarPinned = useUiPreferencesStore(
+    (s) => s.toggleLeftSidebar
+  );
+  const [isSidebarHoverOpen, setIsSidebarHoverOpen] = useState(false);
+  const hoverCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openSidebarHover = useCallback(() => {
+    if (hoverCloseTimeoutRef.current) {
+      clearTimeout(hoverCloseTimeoutRef.current);
+      hoverCloseTimeoutRef.current = null;
+    }
+    setIsSidebarHoverOpen(true);
+  }, []);
+  const closeSidebarHoverDelayed = useCallback(() => {
+    if (hoverCloseTimeoutRef.current) clearTimeout(hoverCloseTimeoutRef.current);
+    hoverCloseTimeoutRef.current = setTimeout(
+      () => setIsSidebarHoverOpen(false),
+      120
+    );
+  }, []);
+  const closeSidebarHoverImmediate = useCallback(() => {
+    if (hoverCloseTimeoutRef.current) {
+      clearTimeout(hoverCloseTimeoutRef.current);
+      hoverCloseTimeoutRef.current = null;
+    }
+    setIsSidebarHoverOpen(false);
+  }, []);
+  useEffect(() => {
+    if (isLeftSidebarPinned) setIsSidebarHoverOpen(false);
+  }, [isLeftSidebarPinned]);
+  useEffect(() => {
+    return () => {
+      if (hoverCloseTimeoutRef.current) clearTimeout(hoverCloseTimeoutRef.current);
+    };
+  }, []);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   // `selectedIssueIds.size > 1` matches `useIssueMultiSelect`'s
   // `isMultiSelectActive` definition. We don't call the hook from web-core
@@ -750,7 +788,7 @@ export function SharedAppLayout() {
                   ? 'flex fixed inset-0 pb-[env(safe-area-inset-bottom)]'
                   : cn(
                       'grid grid-rows-[minmax(0,1fr)] h-screen',
-                      isLeftSidebarVisible
+                      isLeftSidebarPinned
                         ? 'grid-cols-[256px_1fr]'
                         : 'grid-cols-[1fr]'
                     )
@@ -758,10 +796,10 @@ export function SharedAppLayout() {
             >
               {!isMobile && (
                 <>
-                  {/* Desktop sidebar: project tree + bottom notification/user
-                slots. Spans the full left column; the top drag-region strip
-                lives inside the Sidebar itself. */}
-                  {isLeftSidebarVisible && (
+                  {/* Pinned: sidebar occupies its grid column. Unpinned:
+                      sidebar is hidden and revealed via a thin left-edge
+                      hover strip — slide animation via translate-x. */}
+                  {isLeftSidebarPinned ? (
                     <Sidebar
                       projects={sidebarProjects}
                       activeProjectId={activeProjectId}
@@ -793,11 +831,92 @@ export function SharedAppLayout() {
                       onRestoreProject={handleRestoreProject}
                       onDeleteArchivedProject={handleDeleteArchivedProject}
                       isMultiSelectActive={isMultiSelectActive}
+                      isPinned={true}
+                      onTogglePinned={toggleLeftSidebarPinned}
                       headerActions={
                         <CreateProjectButton onClick={handleCreateProject} />
                       }
                       bottomActions={<SidebarBottomActions />}
                     />
+                  ) : (
+                    <>
+                      {/* Thin vertical hover strip at the extreme left edge */}
+                      <div
+                        aria-hidden="true"
+                        onMouseEnter={openSidebarHover}
+                        className="group fixed left-0 top-0 bottom-0 z-20 flex w-[10px] cursor-pointer items-stretch justify-center"
+                      >
+                        <div className="w-px bg-border/40 transition-all duration-200 group-hover:w-[3px] group-hover:bg-brand/60" />
+                      </div>
+                      {/* Overlay backdrop when expanded */}
+                      {isSidebarHoverOpen && (
+                        <div
+                          className="fixed inset-0 z-20 bg-black/10 backdrop-blur-[1px] animate-in fade-in duration-200"
+                          onClick={closeSidebarHoverImmediate}
+                          aria-hidden="true"
+                        />
+                      )}
+                      <div
+                        onMouseEnter={openSidebarHover}
+                        onMouseLeave={closeSidebarHoverDelayed}
+                        className={cn(
+                          'fixed left-0 top-0 bottom-0 z-30 w-[256px] overflow-hidden border-r border-border shadow-2xl',
+                          'transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] will-change-transform',
+                          isSidebarHoverOpen ? 'translate-x-0' : '-translate-x-full'
+                        )}
+                      >
+                        <Sidebar
+                          projects={sidebarProjects}
+                          activeProjectId={activeProjectId}
+                          activeProjectPromptId={activeProjectPromptId}
+                          activeWorkspaceId={workspaceId ?? null}
+                          activeIssueId={activeIssueId}
+                          tasksByProject={tasksByProject}
+                          loadingTasksProjectIds={loadingTasksProjectIds}
+                          onSelectIssue={handleSelectIssue}
+                          workspaces={outlinerWorkspaces}
+                          archivedWorkspaces={outlinerArchivedWorkspaces}
+                          membership={membership}
+                          isLoadingProjects={isLoading}
+                          isLoadingWorkspaces={isWorkspacesListLoading}
+                          onSelectWorkspace={(id) => {
+                            appNavigation.goToWorkspace(id);
+                            closeSidebarHoverImmediate();
+                          }}
+                          onOpenProjectPage={(id) => {
+                            handleProjectClick(id);
+                            closeSidebarHoverImmediate();
+                          }}
+                          onOpenWorkspacesPage={(pid) => {
+                            handleOpenWorkspacesPage(pid);
+                            closeSidebarHoverImmediate();
+                          }}
+                          onOpenLastWorkspace={() => {
+                            handleOpenLastOrchestratorWorkspace();
+                            closeSidebarHoverImmediate();
+                          }}
+                          onSelectOrchestratorPrompt={(id) => {
+                            handleSelectOrchestratorPrompt(id);
+                            closeSidebarHoverImmediate();
+                          }}
+                          onCreateChildBoard={handleCreateChildBoard}
+                          onRenameProject={handleRenameProject}
+                          onChangeProjectColor={handleChangeProjectColor}
+                          onArchiveProject={handleArchiveProject}
+                          archivedProjects={archivedSidebarProjects}
+                          onRestoreProject={handleRestoreProject}
+                          onDeleteArchivedProject={handleDeleteArchivedProject}
+                          isMultiSelectActive={isMultiSelectActive}
+                          isPinned={false}
+                          onTogglePinned={toggleLeftSidebarPinned}
+                          className="h-full w-full"
+                          headerActions={
+                            <CreateProjectButton onClick={handleCreateProject} />
+                          }
+                          bottomActions={<SidebarBottomActions />}
+                        />
+                      </div>
+                    </>
                   )}
                   {/* Content column: Navbar on top, Outlet below. */}
                   <div className="flex flex-col min-h-0 min-w-0">

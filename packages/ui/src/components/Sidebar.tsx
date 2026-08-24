@@ -85,6 +85,9 @@ interface SidebarProps {
    *  a shared SidebarBar pinned to the bottom. */
   bottomActions?: ReactNode;
   className?: string;
+  /** Pin/lock control for the left sidebar — mirrors ToggleLeftSidebar as a pinned flag. */
+  isPinned?: boolean;
+  onTogglePinned?: () => void;
 }
 
 export function Sidebar({
@@ -118,6 +121,8 @@ export function Sidebar({
   headerActions,
   bottomActions,
   className,
+  isPinned,
+  onTogglePinned,
 }: SidebarProps) {
   const { t } = useTranslation('common');
   const titleId = useId();
@@ -134,6 +139,8 @@ export function Sidebar({
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
         onSelectWorkspace={onSelectWorkspace}
+        isPinned={isPinned}
+        onTogglePinned={onTogglePinned}
       />
 
       <SidebarSeparator />

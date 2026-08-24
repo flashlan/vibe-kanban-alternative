@@ -1636,7 +1636,6 @@ export const NavbarActionGroups = {
     Actions.ToggleDiffViewMode,
     Actions.ToggleAllDiffs,
     NavbarDivider,
-    Actions.ToggleLeftSidebar,
     Actions.ToggleLeftMainPanel,
     Actions.ToggleChangesMode,
     Actions.ToggleLogsMode,

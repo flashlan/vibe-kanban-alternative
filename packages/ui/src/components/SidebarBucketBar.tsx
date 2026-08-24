@@ -16,6 +16,7 @@ import {
 import { cn } from '../lib/cn';
 import { SidebarBar } from './SidebarBar';
 import { SidebarBarButton } from './SidebarBarButton';
+import { PushPinIcon } from '@phosphor-icons/react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,6 +34,9 @@ interface SidebarBucketBarProps {
   activeWorkspaceId: string | null;
   onSelectWorkspace: (id: string) => void;
   className?: string;
+  /** Pin/lock control — when provided renders a pin button alongside the buckets. */
+  isPinned?: boolean;
+  onTogglePinned?: () => void;
 }
 
 const BUCKET_PREDICATE: Record<BarBucketId, (w: OutlinerWorkspace) => boolean> =
@@ -54,6 +58,8 @@ export function SidebarBucketBar({
   activeWorkspaceId,
   onSelectWorkspace,
   className,
+  isPinned,
+  onTogglePinned,
 }: SidebarBucketBarProps) {
   const { t } = useTranslation('common');
 
@@ -80,7 +86,7 @@ export function SidebarBucketBar({
   return (
     <SidebarBar
       aria-label={t('workspaces.bucketBarLabel')}
-      className={className}
+      className={cn('gap-0.5', className)}
     >
       {BAR_BUCKET_ORDER.map((id) => (
         <BucketButton
@@ -92,6 +98,41 @@ export function SidebarBucketBar({
           emptyLabel={t('workspaces.bucketEmpty')}
         />
       ))}
+      {onTogglePinned !== undefined && (
+        <button
+          type="button"
+          onClick={onTogglePinned}
+          aria-label={
+            isPinned
+              ? t('sidebar.unpinSidebar', 'Desafixar painel lateral')
+              : t('sidebar.pinSidebar', 'Fixar painel lateral')
+          }
+          title={
+            isPinned
+              ? t('sidebar.unpinSidebar', 'Desafixar painel lateral')
+              : t('sidebar.pinSidebar', 'Fixar painel lateral')
+          }
+          aria-pressed={isPinned}
+          className={cn(
+            'flex flex-col items-center justify-center gap-0.5 rounded-sm',
+            'h-10 w-10 shrink-0 cursor-pointer transition-colors',
+            'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand',
+            isPinned
+              ? 'bg-accent text-high'
+              : 'text-low hover:bg-accent hover:text-high'
+          )}
+        >
+          <PushPinIcon
+            className={cn('size-4 shrink-0', isPinned && 'text-brand')}
+            weight={isPinned ? 'fill' : 'bold'}
+          />
+          <span className="text-2xs font-medium leading-none">
+            {isPinned
+              ? t('sidebar.pinned', 'Fixo')
+              : t('sidebar.unpinned', 'Auto')}
+          </span>
+        </button>
+      )}
     </SidebarBar>
   );
 }
