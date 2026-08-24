@@ -12,6 +12,7 @@ import {
   type SidebarTreeNode,
   type WorkspaceProjectMembership,
 } from './outliner/types';
+import { BUCKET_ORDER } from '../lib/buckets';
 import {
   buildSidebarTreeInitialOpenState,
   findTreeNodeById,
@@ -265,7 +266,7 @@ export function SidebarProjectTree({
   }, []);
 
   const treeRef = useRef<TreeApi<SidebarTreeNode> | null>(null);
-  const seenProjectIdsRef = useRef<Set<string> | null>(null);
+  const seenProjectIdsRef = useRef<Set<string>>(new Set());
   const { containerRef, width: containerWidth, height } = useContainerHeight();
   // Latches true the first time the tree mounts (height > 0). The auto-open
   // and replay effects depend on `height` purely as a "tree is mounted"
@@ -291,16 +292,25 @@ export function SidebarProjectTree({
   // (no persisted state) stays collapsed per the default. The persisted
   // state is read FRESH from storage here (not the mount-time openStateRef,
   // which may be empty when projects land after mount).
+  //
+  // BUGFIX (2026-08-24): previously this effect bailed on the FIRST batch of
+  // projects (`seen === null → set seen and return`) and checked
+  // `treeReadyRef` without depending on `height`, so if projects arrived
+  // before the container was measured (height === 0) the effect never re-ran
+  // and persisted OPEN states were silently dropped — the tree always
+  // appeared collapsed after reload ("nunca salvam estado"). It also never
+  // restored bucket open states. Fixed by (1) seeding `seen` as empty set and
+  // processing the first batch, (2) depending on `height` and gating on
+  // `height === 0` so the restore re-runs once the tree is measurable, and
+  // (3) restoring bucket nodes as well.
   useEffect(() => {
+    if (height === 0) return;
     if (!treeReadyRef.current) return;
     const api = treeRef.current;
     if (!api) return;
 
     const currentProjectIds = new Set(projectKey ? projectKey.split(',') : []);
-    if (seenProjectIdsRef.current === null) {
-      seenProjectIdsRef.current = currentProjectIds;
-      return;
-    }
+    if (currentProjectIds.size === 0) return;
 
     // Read FRESH persisted state for the current project set.
     const stored = readSidebarTreeOpenState(currentProjectIds);
@@ -316,6 +326,16 @@ export function SidebarProjectTree({
       const wsNodeId = makeWorkspacesSectionId(projectId);
       if (liveTreeNodeIdsSet.has(wsNodeId) && stored[wsNodeId] === true) {
         api.open(wsNodeId);
+      }
+      // Restore bucket open states inside the Workspaces section.
+      for (const bucketId of BUCKET_ORDER) {
+        const bucketNodeId = `${projectId}:bucket:${bucketId}`;
+        if (
+          liveTreeNodeIdsSet.has(bucketNodeId) &&
+          stored[bucketNodeId] === true
+        ) {
+          api.open(bucketNodeId);
+        }
       }
       const tasksId = makeTasksSectionId(projectId);
       if (isTasksSectionOpen(stored, projectId)) {
@@ -333,7 +353,7 @@ export function SidebarProjectTree({
         ...stored,
       };
     }
-  }, [projectKey, liveTreeNodeIdsSet]);
+  }, [projectKey, liveTreeNodeIdsSet, height]);
 
   // Replay persisted status/card open state onto lazily-loaded nodes. Statuses
   // only mount after the Tasks section opens (lazy gate), so their ids are not
@@ -343,6 +363,7 @@ export function SidebarProjectTree({
   // still-collapsed status is still found and opened. `appliedOpenRef` guards
   // against reopening a node the user collapsed after it was first restored.
   useEffect(() => {
+    if (height === 0) return;
     if (!treeReadyRef.current) return;
     const api = treeRef.current;
     if (!api) return;
@@ -355,7 +376,7 @@ export function SidebarProjectTree({
       api.open(id);
       appliedOpenRef.current.add(id);
     }
-  }, [treeData]);
+  }, [treeData, height]);
 
   // Prune persisted entries for projects that no longer exist (deleted /
   // no longer visible). The read-time GC only filters on next load; without
