@@ -135,16 +135,22 @@ export function WorkspacesLayout() {
 
   const [rightMainPanelSize, setRightMainPanelSize] = usePaneSize(
     PERSIST_KEYS.rightMainPanel,
-    50
+    '36%'
   );
 
-  const defaultLayout: Layout =
-    typeof rightMainPanelSize === 'number'
-      ? {
-          'left-main': 100 - rightMainPanelSize,
-          'right-main': rightMainPanelSize,
-        }
-      : { 'left-main': 50, 'right-main': 50 };
+  const defaultLayout: Layout = (() => {
+    const raw = rightMainPanelSize;
+    const parsed =
+      typeof raw === 'string'
+        ? parseFloat(raw.replace('%', ''))
+        : typeof raw === 'number'
+          ? raw
+          : 36;
+    // Clamp para caber os dois mins 36% cada (80% maior que 20% original) sem estourar 100%
+    const right = Math.min(Math.max(parsed, 36), 64);
+    const left = 100 - right;
+    return { 'left-main': left, 'right-main': right };
+  })();
 
   const layoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -300,6 +306,7 @@ export function WorkspacesLayout() {
       <ChangesViewProvider>
         <div className="flex h-full">
           <Group
+            key={`${isLeftMainPanelVisible}-${rightMainPanelMode}`}
             orientation="horizontal"
             className="flex-1 min-w-0 h-full"
             defaultLayout={defaultLayout}
@@ -308,8 +315,8 @@ export function WorkspacesLayout() {
             {isLeftMainPanelVisible && (
               <Panel
                 id="left-main"
-                minSize="380px"
-                className="min-w-[380px] h-full overflow-hidden"
+                minSize="36%"
+                className="min-w-0 h-full overflow-hidden"
               >
                 {isCreateMode ? (
                   <CreateChatBoxContainer
@@ -343,8 +350,8 @@ export function WorkspacesLayout() {
             {rightMainPanelMode !== null && (
               <Panel
                 id="right-main"
-                minSize="360px"
-                className="min-w-[360px] h-full overflow-hidden"
+                minSize="36%"
+                className="min-w-0 h-full overflow-hidden"
               >
                 {rightMainPanelMode === RIGHT_MAIN_PANEL_MODES.CHANGES &&
                   selectedWorkspace?.id && (
