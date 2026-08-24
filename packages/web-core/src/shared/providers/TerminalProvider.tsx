@@ -212,40 +212,33 @@ function terminalReducer(
 
     case 'CLOSE_TAB': {
       const { tabId } = action;
-      let targetWorkspaceId = action.workspaceId;
-      if (
-        !state.tabsByWorkspace[targetWorkspaceId]?.some((t) => t.id === tabId)
-      ) {
-        for (const [wId, wTabs] of Object.entries(state.tabsByWorkspace)) {
-          if (wTabs.some((t) => t.id === tabId)) {
-            targetWorkspaceId = wId;
-            break;
-          }
-        }
-      }
-      const tabs = state.tabsByWorkspace[targetWorkspaceId] || [];
-      const newTabs = tabs.filter((t) => t.id !== tabId);
-      const wasActive = state.activeTabByWorkspace[targetWorkspaceId] === tabId;
-      let newActiveTab = state.activeTabByWorkspace[targetWorkspaceId];
+      const newTabsByWorkspace: Record<string, TerminalTab[]> = {};
+      const newActiveTabByWorkspace: Record<string, string | null> = {};
 
-      if (wasActive && newTabs.length > 0) {
-        const closedIndex = tabs.findIndex((t) => t.id === tabId);
-        const newIndex = Math.min(closedIndex, newTabs.length - 1);
-        newActiveTab = newTabs[newIndex]?.id ?? null;
-      } else if (newTabs.length === 0) {
-        newActiveTab = null;
+      for (const [wId, wTabs] of Object.entries(state.tabsByWorkspace)) {
+        const filtered = wTabs.filter((t) => t.id !== tabId);
+        newTabsByWorkspace[wId] = filtered;
+
+        const wasActive = state.activeTabByWorkspace[wId] === tabId;
+        if (wasActive && filtered.length > 0) {
+          const closedIndex = wTabs.findIndex((t) => t.id === tabId);
+          const newIndex = Math.max(
+            0,
+            Math.min(closedIndex, filtered.length - 1)
+          );
+          newActiveTabByWorkspace[wId] = filtered[newIndex]?.id ?? null;
+        } else if (filtered.length === 0) {
+          newActiveTabByWorkspace[wId] = null;
+        } else {
+          newActiveTabByWorkspace[wId] =
+            state.activeTabByWorkspace[wId] ?? null;
+        }
       }
 
       return {
         ...state,
-        tabsByWorkspace: {
-          ...state.tabsByWorkspace,
-          [targetWorkspaceId]: newTabs,
-        },
-        activeTabByWorkspace: {
-          ...state.activeTabByWorkspace,
-          [targetWorkspaceId]: newActiveTab,
-        },
+        tabsByWorkspace: newTabsByWorkspace,
+        activeTabByWorkspace: newActiveTabByWorkspace,
       };
     }
 
@@ -326,38 +319,32 @@ function terminalReducer(
 
     case 'CLOSE_PROJECT_TAB': {
       const { tabId } = action;
-      let targetProjectId = action.projectId;
-      if (!state.tabsByProject[targetProjectId]?.some((t) => t.id === tabId)) {
-        for (const [pId, pTabs] of Object.entries(state.tabsByProject)) {
-          if (pTabs.some((t) => t.id === tabId)) {
-            targetProjectId = pId;
-            break;
-          }
-        }
-      }
-      const tabs = state.tabsByProject[targetProjectId] || [];
-      const newTabs = tabs.filter((t) => t.id !== tabId);
-      const wasActive = state.activeTabByProject[targetProjectId] === tabId;
-      let newActiveTab = state.activeTabByProject[targetProjectId];
+      const newTabsByProject: Record<string, TerminalTab[]> = {};
+      const newActiveTabByProject: Record<string, string | null> = {};
 
-      if (wasActive && newTabs.length > 0) {
-        const closedIndex = tabs.findIndex((t) => t.id === tabId);
-        const newIndex = Math.min(closedIndex, newTabs.length - 1);
-        newActiveTab = newTabs[newIndex]?.id ?? null;
-      } else if (newTabs.length === 0) {
-        newActiveTab = null;
+      for (const [pId, pTabs] of Object.entries(state.tabsByProject)) {
+        const filtered = pTabs.filter((t) => t.id !== tabId);
+        newTabsByProject[pId] = filtered;
+
+        const wasActive = state.activeTabByProject[pId] === tabId;
+        if (wasActive && filtered.length > 0) {
+          const closedIndex = pTabs.findIndex((t) => t.id === tabId);
+          const newIndex = Math.max(
+            0,
+            Math.min(closedIndex, filtered.length - 1)
+          );
+          newActiveTabByProject[pId] = filtered[newIndex]?.id ?? null;
+        } else if (filtered.length === 0) {
+          newActiveTabByProject[pId] = null;
+        } else {
+          newActiveTabByProject[pId] = state.activeTabByProject[pId] ?? null;
+        }
       }
 
       return {
         ...state,
-        tabsByProject: {
-          ...state.tabsByProject,
-          [targetProjectId]: newTabs,
-        },
-        activeTabByProject: {
-          ...state.activeTabByProject,
-          [targetProjectId]: newActiveTab,
-        },
+        tabsByProject: newTabsByProject,
+        activeTabByProject: newActiveTabByProject,
       };
     }
 
