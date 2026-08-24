@@ -21,7 +21,7 @@ Rules:
 - [x] **Done** — Add image attachment to create issue dialog description (`vk/5f5b-feature-adicioan`)
 - [x] **Done** — Add urgency and tags buttons to create-issue dialog (`vk/160b-feature-definir`)
 - [x] **Done** — Browser cache for workspace conversations to skip re-stream on switch (`vk/f804-poss-vel-cache-d`)
-- [ ] **In Review** — Livro Vibe Kanban na Amazon — checklist + manuscrito completo (15 caps + apêndice, 1.749 linhas, 12 âncoras) (`vk/1f98-livre-vibo-kanba`)
+- [ ] **In Review** — Livro Vibe Kanban na Amazon — checklist + manuscrito completo (15 caps + apêndice, ~1.866 linhas, 12 âncoras) (`vk/1f98-livre-vibo-kanba`)
 
 ## Card Pipeline Protocol (MCP)
 

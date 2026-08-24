@@ -126,13 +126,33 @@ A partir do capítulo 08 você constrói um SaaS de verdade — **AssinaFácil**
 
 Vibe coding é **codar por intenção**: você descreve o resultado que quer em linguagem natural e um agente escreve, roda e corrige o código. O termo foi popularizado por Andrej Karpathy em fev/2025 e pegou porque descreve bem a sensação — você "vibe" a ideia, a máquina materializa.
 
+### O que vibe coding **não** é
+
+Para usar a ferramenta bem, vale desarmar três expectativas erradas:
+
+- **Não é "no-code".** Você continua sendo o dono da arquitetura, da revisão e do merge. O agente é um desenvolvedor júnior que trabalha na velocidade dos tokens — rápido, mas que precisa de um sênior (você) para aprovar e direcionar.
+- **Não é "pedir e torcer".** Um prompt solto no chat sem contexto gera código que *parece* certo e quebra em runtime. Vibe coding de verdade é um fluxo com **artefatos** que tornam a intenção auditável.
+- **Não é mágica sem custo.** O agente tem memória finita (a *context window*) e atenção seletiva. Se você não gerir o que ele vê e o que ele lembra, ele alucina, esquece ou repete trabalho. Daí as práticas deste capítulo (e a seção 6: contexto, memória, autocompact).
+
+### O que vibe coding **é**, no Vibe Kanban
+
 No Vibe Kanban, vibe coding não é prompt solto no chat. É um fluxo com artefatos — **cards (spec), pipelines (receita), workspaces (worktrees isolados)** — que tornam a intenção auditável, repetível e paralelizável. Sem artefatos, o agente alucina; com artefatos, ele entrega.
 
 ```
 intenção (você) → spec (card) → pipeline (receita) → workspace (worktree) → loop (agente) → review (você)
 ```
 
-Este capítulo apresenta os três pilares que sustentam esse fluxo.
+### Níveis de maturidade do vibe coding
+
+| Nível | Como você trabalha | Onde este livro mora |
+| --- | --- | --- |
+| 1 — Chat solto | Você pede e copia o resultado | — (ponto de partida, frágil) |
+| 2 — Spec-driven | Cada tarefa vira card com spec forte + critério de pronto (caps. 2–5) | Parte I |
+| 3 — Orquestrado | Vários agentes em paralelo, pipelines, memória e autocompact cuidando do estado (caps. 6, 10–14) | Parte II |
+
+Este livro te leva do nível 1 ao 3. O cap. 2 todo é o vocabulário; a seção 6 (abaixo) é o que separa um usuário que "pede" de um que "dirige".
+
+Este capítulo apresenta os três pilares que sustentam esse fluxo e, em seguida, as boas práticas operacionais.
 
 ## 2. Spec Development — a spec vem antes do código
 
@@ -288,7 +308,91 @@ Cada um roda seu próprio `pnpm run check` no seu worktree, sem conflito. Quando
 | **Squash-merge** | Pipeline `quick` junta os commits da workspace num só commit no target branch. |
 | **ADR** | Architecture Decision Record em `docs/ADR/` — a spec arquitetural versionada. |
 
-## 6. Como tudo se encontra em 2 minutos
+## 6. Boas práticas — contexto, memória e autocompact
+
+Vibe coding de nível 3 não é escrever prompts melhores; é **gerir o estado cognitivo do agente**. Três alavancas: o que ele *vê* (contexto), o que ele *lembra* entre sessões (memória) e como ele *sobrevive* a runs longos (autocompact). Dominar as três é o que separa "pedir" de "dirigir".
+
+### 6.1 Context engineering — o contexto é o código-fonte da IA
+
+**Context engineering** é a disciplina de escolher o que o agente enxerga a cada turno. O agente só é tão bom quanto o que está na janela dele; tudo fora dela, para ele, não existe.
+
+No Vibe Kanban, o contexto é montado por camadas (cap. 10):
+
+- `AGENTS.md` raiz (identidade, mapa, comandos) + `docs/AGENTS.md` (docs) + `packages/local-web/AGENTS.md` (UI) — cada camada só carrega quando o agente toca naquela pasta, economizando tokens.
+- `get_rules` (MCP) traz as regras gerais no início de cada card; `get_pipeline` traz **só o estágio atual**, não o pipeline inteiro.
+- Cards carregam apenas um **ponteiro** de pipeline (`<!-- vk:pipeline:start -->`), não o prompt pesado — o conteúdo entra na janela só quando o card roda.
+
+**Manipulação de contexto** (o que você, humano, faz):
+
+- **Injete contexto com intenção.** Anexe uma screenshot ou um trecho de log no chat (`POST /api/attachments/upload`, cap. 05 §4) em vez de descrever "o erro" por extenso — a imagem vale como mil palavras de contexto.
+- **Reduza ruído.** Use subagentes (multi-agente, §4) para que o trabalho lateral não suje a janela principal; não enfie o board inteiro no prompt.
+- **Podc contexto morto.** Quando o transcript fica grande, force `VK-PIPELINE-STAGE` a avançar e deixe o **OrchestratorCompactor** (§6.3) cortar o que não importa.
+
+> Regra de ouro: trate a *context window* como orçamento finito. Cada linha que você coloca no card é uma linha a menos para o agente raciocinar.
+
+### 6.2 Autocompact — como o agente não "esquece" em runs longos
+
+**Autocompact** é a compactação automática do transcript quando a janela de contexto está prestes a estourar. Sem isso, em runs de horas o agente "perde o início" — esquece a spec e começa a contradizer o que fez.
+
+No Vibe Kanban, o watchdog é o **OrchestratorCompactor** (`crates/services/src/services/orchestrator_compactor.rs`):
+
+- Mede os tokens do transcript **a cada 60s**.
+- Se passar de **400k tokens** (ou 1h sem compactar, com pelo menos 50k), ele digita `/compact` na sessão tmux.
+- Digita **pelo caminho de teclas** (`tmux send-keys`), não como texto colado — porque slash commands não funcionam como texto colado numa sessão interativa.
+- **Cooldown de 10min** entre envios; **3 falhas seguidas** escalam para o Telegram (`crates/telegram-bridge`).
+
+Para você: não precisa vigiar o tamanho do contexto — o watchdog cuida. Para o seu SaaS (cap. 08): aplique o mesmo princípio — corte contexto morto antes de estourar, não depois.
+
+> **Compact manual vs autocompact:** `/compact` é o comando que o agente (ou o watchdog) dispara; "autocompact" é esse disparo acontecendo sozinho. Em agentes sem watchdog, você mesmo manda `/compact` quando o transcript cresce.
+
+### 6.3 Memória de agentes — mem0 (semântica + grafo)
+
+**Memória de agente** é o que permite que o agente *lembre entre sessões* fatos verificados, em vez de reapprender tudo a cada card. No Vibe Kanban isso é o **mem0**, exposto como tools MCP (`crates/mcp/src/task_server/tools/mem0.rs`):
+
+| Tool | O que faz | Quando usar |
+| --- | --- | --- |
+| `memory_search` | Busca por **similaridade semântica** (não palavra-chave) | "Como o pipeline de stage funciona?" antes de tocar código |
+| `memory_save` | Persiste um fato **verificado e durável** | Depois de confirmar uma decisão de arquitetura |
+| `memory_graph_traverse` | Atravessa arestas de dependência a partir de uma entidade | "O que consome o marcador `VK-PIPELINE-STAGE`?" |
+| `memory_check_staleness` | Checa se uma entidade salva ainda existe no código (diff `commit_sha` → HEAD) | Antes de confiar em uma memória antiga |
+
+**Memória semântica** (`memory_search`): responde por *proximidade de significado*. Você pergunta "qual o fluxo do card até produção?" e ela ranqueia os trechos mais relevantes — mesmo que nenhum contenha a palavra exata "fluxo". Dica do `AGENTS.md`: se os resultados não cobrem o que você precisa, **re-pesquise com query mais afiada** em vez de pedir mais hits — iterar vence buscar amplo.
+
+**Memória de grafo** (`memory_graph_traverse`): segue a *estrutura* real do código. De um nó inicial (`start`, ex.: `pipeline_stage.rs`), você vai `out` (o que depende dele), `in` (do que ele depende) ou `both`, até `hops` passos (máx. 3). É como maps de "quem usa isso?" — útil quando a semântica não bate mas a dependência é clara.
+
+**O que salvar (e o que não salvar):**
+
+- ✅ Salve factos **verificados** e duráveis (decisões de ADR, contratos, onde mora cada crate). O `memory_save` é *best-effort*: retorna `stored=false` se o mem0 estiver indisponível — não é erro, apenas persista depois.
+- ❌ Não salve especulação, segredos, ou fatos efêmeros (o `target branch` de hoje pode mudar amanhã).
+- ❌ Não salve o que está no `AGENTS.md` — duplicar contexto é desperdício.
+
+**Staleness:** `memory_check_staleness` olha o `commit_sha` capturado quando a memória foi salva e diffa o repo até HEAD. Se o texto da entidade some do código removido, ela está **stale**. `checked=false` significa "não consegui verificar" — trate como *desconhecido*, nunca como "confirmado fresco".
+
+### 6.4 Outros termos que você verá
+
+| Termo | Tradução prática |
+| --- | --- |
+| **Context window** | Tamanho máximo (em tokens) do que o agente enxerga de uma vez. É o seu orçamento (§6.1). |
+| **Context engineering** | Escolher o que entra nessa janela — o trabalho do `AGENTS.md`, `get_rules` e da poda. |
+| **Autocompact** | Compactação automática do transcript quando a janela estoura (§6.2). |
+| **Compact (manual)** | Comando `/compact` que corta o transcript mantendo o essencial. |
+| **Semantic memory** | Memória por similaridade de significado (`memory_search`). |
+| **Graph memory** | Memória por arestas de dependência (`memory_graph_traverse`). |
+| **Embeddings** | Como o mem0 transforma texto em vetor para comparar significado (detalhe interno; você só usa a busca). |
+| **Retrieval / RAG** | Recuperar memória ou docs relevantes para injetar no contexto. |
+| **Staleness** | Se uma memória ainda bate com o código atual (`memory_check_staleness`). |
+| **Scratch / Notes** | Rascunho efêmero por workspace (painel Notes, cap. 04) — não confunda com memória persistente. |
+
+### 6.5 Regras de ouro das boas práticas
+
+- Trate a *context window* como orçamento: injete o essencial, corte o ruído.
+- Compacte cedo — autocompact ou `/compact` — em runs longos, antes de estourar.
+- Salve na memória **só fatos verificados e duráveis**; deixe especulação e segredos de fora.
+- Use **grafo** para descobrir vizinhança (quem usa o quê) e **semântica** para recordar *como* algo funciona.
+- **Verifique staleness** antes de confiar em memória antiga — `checked=false` não é "fresco".
+- Memória e contexto não substituem o `AGENTS.md`: a fonte canônica fica no arquivo, não na memória volátil.
+
+## 7. Como tudo se encontra em 2 minutos
 
 Um fluxo típico, com o vocabulário certo:
 
@@ -306,7 +410,11 @@ Nos próximos capítulos você vai viver esse fluxo na prática, começando pela
 - [ ] Sei transformar "Fazer página de planos" em spec forte com onde/validar/restrições.
 - [ ] Sei descrever o loop `escrever → check → ler erro → corrigir` com um exemplo real (`TS2322`).
 - [ ] Sei por que worktrees permitem multi-agente sem conflito (e o que é target vs working branch).
-- [ ] Reconheço os 15 jargões da tabela quando eles aparecerem nos caps. 03–08.
+- [ ] Reconheço os jargões das tabelas (spec, multi-agente, glossário e boas práticas) quando eles aparecerem nos caps. 03–08.
+- [ ] Sei o que é context engineering e como o Vibe Kanban injeta/poda contexto (camadas de AGENTS.md, pipeline pointer, anexos).
+- [ ] Sei o que é autocompact e qual watchdog cuida disso (OrchestratorCompactor, 400k tokens, /compact via teclas).
+- [ ] Sei a diferença entre memória semântica (memory_search) e de grafo (memory_graph_traverse), e o que salvar vs não salvar.
+- [ ] Sei usar memory_check_staleness antes de confiar em memória antiga.
 - [ ] Consigo narrar o fluxo de 2 minutos (spec → workspace → loop → review → merge) sem consultar o livro.
 
 ---
