@@ -160,6 +160,36 @@ const saveWorkspaceColors = (colors: Record<string, string>): void => {
 
 const WORKSPACE_COLORS_LIMIT = 500;
 
+// Left sidebar width (global, for any workspace, persists across reloads)
+const LEFT_SIDEBAR_WIDTH_KEY = 'vk-left-sidebar-width';
+export const DEFAULT_LEFT_SIDEBAR_WIDTH = 256;
+export const MIN_LEFT_SIDEBAR_WIDTH = 180;
+export const MAX_LEFT_SIDEBAR_WIDTH = 480;
+
+export const clampLeftSidebarWidth = (v: number): number =>
+  Math.min(MAX_LEFT_SIDEBAR_WIDTH, Math.max(MIN_LEFT_SIDEBAR_WIDTH, Math.round(v)));
+
+const loadLeftSidebarWidth = (): number => {
+  try {
+    const stored = localStorage.getItem(LEFT_SIDEBAR_WIDTH_KEY);
+    if (stored !== null) {
+      const n = Number(stored);
+      if (Number.isFinite(n)) return clampLeftSidebarWidth(n);
+    }
+  } catch {
+    // localStorage may be unavailable
+  }
+  return DEFAULT_LEFT_SIDEBAR_WIDTH;
+};
+
+const saveLeftSidebarWidth = (w: number): void => {
+  try {
+    localStorage.setItem(LEFT_SIDEBAR_WIDTH_KEY, String(clampLeftSidebarWidth(w)));
+  } catch {
+    // localStorage may be unavailable
+  }
+};
+
 // Animated (shimmering) border around the message box while the workspace is
 // working. A subtle pulsating dot always shows; this toggles the border on top.
 const ANIMATE_RUNNING_OUTLINE_KEY = 'vk-animate-running-outline';
@@ -481,6 +511,9 @@ type State = {
   selectedProjectId: string | null;
   createDraftWorkspaceByDefault: boolean;
 
+  // Global left sidebar width (px) — persisted to localStorage, global for any workspace and across app reloads.
+  leftSidebarWidth: number;
+
   // Auto-move kanban cards between columns on workspace create / pipeline / merge.
   autoMoveCardsEnabled: boolean;
 
@@ -585,6 +618,7 @@ type State = {
   setSelectedProjectId: (projectId: string | null) => void;
   setCreateDraftWorkspaceByDefault: (value: boolean) => void;
   setAutoMoveCardsEnabled: (value: boolean) => void;
+  setLeftSidebarWidth: (width: number) => void;
 };
 
 export const useUiPreferencesStore = create<State>()((set, get) => ({
@@ -648,6 +682,9 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
   selectedProjectId: null,
   createDraftWorkspaceByDefault: DEFAULT_CREATE_DRAFT_WORKSPACE_BY_DEFAULT,
   autoMoveCardsEnabled: true,
+
+  // Global left sidebar width (px) — global for any workspace, persists across reloads.
+  leftSidebarWidth: loadLeftSidebarWidth(),
 
   // Workspaces dashboard project filter (in-memory only).
   workspacesDashboardProjectId: null,
@@ -1053,6 +1090,11 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
   setCreateDraftWorkspaceByDefault: (value) =>
     set({ createDraftWorkspaceByDefault: value }),
   setAutoMoveCardsEnabled: (value) => set({ autoMoveCardsEnabled: value }),
+  setLeftSidebarWidth: (width) => {
+    const clamped = clampLeftSidebarWidth(width);
+    saveLeftSidebarWidth(clamped);
+    set({ leftSidebarWidth: clamped });
+  },
 }));
 
 // Hook for repo action preference

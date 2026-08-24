@@ -8,8 +8,10 @@ use uuid::Uuid;
 /// and baked into the binary via `include_str!`, so every `npm` install gets the same
 /// pre-filled `Project Settings → Instructions & Rules` (pre = `vk:rules:pre`, post = `vk:rules:post`)
 /// without needing a user-specific `projects.toml` export.
-pub const DEFAULT_ORCHESTRATOR_PROMPT: &str =
-    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/default_orchestrator_prompt.txt"));
+pub const DEFAULT_ORCHESTRATOR_PROMPT: &str = include_str!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../assets/default_orchestrator_prompt.txt"
+));
 
 /// Project-key derivation, single source of truth. Caller passes the project
 /// `name`; this strips non-alphanumeric chars, uppercases the first four
