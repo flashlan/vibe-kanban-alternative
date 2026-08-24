@@ -50,9 +50,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   </React.StrictMode>
 );
 
-// Hide the startup banner once React has painted the first frame (the app's own loading UI takes over)
+// Hide the startup banner after React paints — delay keeps it visible a bit longer to avoid dark gap mid-load
 requestAnimationFrame(() => {
   setTimeout(() => {
     (window as unknown as { __vkHideStartupBanner?: () => void }).__vkHideStartupBanner?.();
-  }, 80);
+  }, 700);
 });

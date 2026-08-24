@@ -26,19 +26,19 @@
         justify-content: center;
         gap: 24px;
         background: #121212;
-        transition: opacity 320ms ease;
+        transition: opacity 520ms ease;
       }
       #vk-startup-banner.vk-startup-banner--hide {
         opacity: 0;
         pointer-events: none;
       }
       #vk-startup-banner img.vk-startup-icon {
-        width: 96px;
-        height: 96px;
+        width: 192px;
+        height: 192px;
         object-fit: contain;
-        border-radius: 20px;
+        border-radius: 36px;
         animation: vk-startup-pulse 1.6s ease-in-out infinite;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        box-shadow: 0 12px 48px rgba(0,0,0,0.6);
       }
       #vk-startup-banner .vk-startup-spinner {
         width: 22px;
@@ -78,7 +78,7 @@
 
 <body>
     <div id="vk-startup-banner" aria-hidden="true">
-      <img class="vk-startup-icon" src="/vk-icon-app.png" alt="" width="96" height="96" />
+      <img class="vk-startup-icon" src="/vk-icon-app.png" alt="" width="192" height="192" />
       <div class="vk-startup-spinner" aria-hidden="true"></div>
     </div>
     <div id="root"></div>
@@ -111,13 +111,19 @@
       }
     </script>
     <script>
-      // Startup banner hide helper — called by React once the app has rendered
+      // Startup banner hide helper — persists a bit longer so dark screen isn't exposed mid-load
       (function () {
+        var bannerShownAt = Date.now();
+        var MIN_VISIBLE_MS = 1400; // keep banner at least 1.4s so spinner doesn't flash then leave dark gap
         function hideVkStartupBanner() {
           var el = document.getElementById('vk-startup-banner');
           if (!el || el.classList.contains('vk-startup-banner--hide')) return;
-          el.classList.add('vk-startup-banner--hide');
-          setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); }, 360);
+          var elapsed = Date.now() - bannerShownAt;
+          var wait = Math.max(0, MIN_VISIBLE_MS - elapsed);
+          setTimeout(function () {
+            el.classList.add('vk-startup-banner--hide');
+            setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); }, 560);
+          }, wait);
         }
         window.__vkHideStartupBanner = hideVkStartupBanner;
         // Fallback: hide after 8s if React fails to mount
@@ -126,9 +132,8 @@
         var obs = new MutationObserver(function () {
           var root = document.getElementById('root');
           if (root && root.children.length > 0) {
-            // Give React a frame to paint its own loading UI before fading the banner
             requestAnimationFrame(function () {
-              setTimeout(hideVkStartupBanner, 120);
+              setTimeout(hideVkStartupBanner, 650);
             });
             obs.disconnect();
           }
