@@ -13,6 +13,48 @@
     <meta name="theme-color" content="#f2f2f2" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#212121" media="(prefers-color-scheme: dark)">
     <title>Vibe Kanban</title>
+    <style>
+      html, body { background: #121212; margin: 0; }
+      /* Startup banner — covers the white flash in Tauri/window mode before React hydrates */
+      #vk-startup-banner {
+        position: fixed;
+        inset: 0;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 24px;
+        background: #121212;
+        transition: opacity 320ms ease;
+      }
+      #vk-startup-banner.vk-startup-banner--hide {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #vk-startup-banner img,
+      #vk-startup-banner svg.vk-startup-icon {
+        width: 96px;
+        height: 96px;
+        object-fit: contain;
+        border-radius: 20px;
+        animation: vk-startup-pulse 1.6s ease-in-out infinite;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      }
+      #vk-startup-banner .vk-startup-spinner {
+        width: 22px;
+        height: 22px;
+        border: 2px solid rgba(255,255,255,0.2);
+        border-top-color: rgba(255,255,255,0.7);
+        border-radius: 50%;
+        animation: vk-startup-spin 0.8s linear infinite;
+      }
+      @keyframes vk-startup-spin { to { transform: rotate(360deg); } }
+      @keyframes vk-startup-pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.92; transform: scale(1.03); }
+      }
+    </style>
     <script>
       // Apply the persisted theme variant ("skin") before first paint to avoid
       // a flash of the default theme. Mirrors applyThemeVariant() in
@@ -36,6 +78,32 @@
 </head>
 
 <body>
+    <div id="vk-startup-banner" aria-hidden="true">
+      <svg class="vk-startup-icon" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect width="96" height="96" rx="22" fill="#1a1a1a"/>
+        <rect width="96" height="96" rx="22" fill="black" fill-opacity="0.35"/>
+        <defs>
+          <linearGradient id="vk-g" x1="14" y1="18" x2="82" y2="78" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stop-color="#d946ef"/>
+            <stop offset="28%" stop-color="#7c3aed"/>
+            <stop offset="52%" stop-color="#0ea5e9"/>
+            <stop offset="76%" stop-color="#f97316"/>
+            <stop offset="100%" stop-color="#22c55e"/>
+          </linearGradient>
+        </defs>
+        <path d="M18 20 L32 20 L48 48 L64 20 L78 20 L52 58 L78 76 L64 76 L48 54 L32 76 L18 76 L38 48 Z" fill="url(#vk-g)"/>
+        <rect x="62" y="28" width="18" height="11" rx="3" fill="#7c3aed" opacity="0.95"/>
+        <rect x="62" y="43" width="18" height="11" rx="3" fill="#fb7185" opacity="0.95"/>
+        <rect x="62" y="58" width="18" height="11" rx="3" fill="#f59e0b" opacity="0.95"/>
+        <rect x="65" y="32" width="10" height="2" rx="1" fill="black" opacity="0.35"/>
+        <rect x="65" y="47" width="10" height="2" rx="1" fill="black" opacity="0.35"/>
+        <rect x="65" y="62" width="10" height="2" rx="1" fill="black" opacity="0.35"/>
+        <circle cx="77" cy="33.5" r="1.8" fill="black" opacity="0.5"/>
+        <circle cx="77" cy="48.5" r="1.8" fill="black" opacity="0.5"/>
+        <circle cx="77" cy="63.5" r="1.8" fill="black" opacity="0.5"/>
+      </svg>
+      <div class="vk-startup-spinner" aria-hidden="true"></div>
+    </div>
     <div id="root"></div>
     <script>
       // Polyfill crypto.randomUUID for non-secure contexts (e.g. HTTP access
@@ -64,6 +132,32 @@
           );
         };
       }
+    </script>
+    <script>
+      // Startup banner hide helper — called by React once the app has rendered
+      (function () {
+        function hideVkStartupBanner() {
+          var el = document.getElementById('vk-startup-banner');
+          if (!el || el.classList.contains('vk-startup-banner--hide')) return;
+          el.classList.add('vk-startup-banner--hide');
+          setTimeout(function () { if (el && el.parentNode) el.parentNode.removeChild(el); }, 360);
+        }
+        window.__vkHideStartupBanner = hideVkStartupBanner;
+        // Fallback: hide after 8s if React fails to mount
+        setTimeout(hideVkStartupBanner, 8000);
+        // Also hide once React root has children (covers cases where Bootstrap doesn't call explicitly)
+        var obs = new MutationObserver(function () {
+          var root = document.getElementById('root');
+          if (root && root.children.length > 0) {
+            // Give React a frame to paint its own loading UI before fading the banner
+            requestAnimationFrame(function () {
+              setTimeout(hideVkStartupBanner, 120);
+            });
+            obs.disconnect();
+          }
+        });
+        obs.observe(document.documentElement, { childList: true, subtree: true });
+      })();
     </script>
     <script type="module" src="/src/app/entry/Bootstrap.tsx"></script>
 </body>
