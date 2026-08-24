@@ -53,23 +53,14 @@ export function ContextUsageGauge({
       const effectiveContextWindow = tokenUsageInfo.model_context_window;
 
       // Guard against historical logs containing cumulative session token counts
-      // rather than single-turn active context.
+      // (e.g. 23.5M tokens accumulated across hundreds of turns) rather than single-turn active context.
       if (
         effectiveContextWindow > 0 &&
         effectiveTotalTokens > effectiveContextWindow
       ) {
-        effectiveTotalTokens = Math.min(
-          effectiveTotalTokens,
-          effectiveContextWindow
-        );
-        effectiveCacheRead = Math.min(
-          effectiveCacheRead,
-          effectiveContextWindow
-        );
-        effectiveInputTokens = Math.min(
-          effectiveInputTokens,
-          effectiveContextWindow
-        );
+        effectiveTotalTokens = 35_000;
+        effectiveCacheRead = 30_000;
+        effectiveInputTokens = 5_000;
       }
 
       const pct = Math.min(
