@@ -350,11 +350,15 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
   }
 
   const kanbanDefaultLayout: Layout = (() => {
-    const leftSize =
+    const rawLeft =
       typeof kanbanLeftPanelSize === 'number' ? kanbanLeftPanelSize : 75;
     if (isProjectTerminalOpen && isRightPanelOpen) {
+      // Ambos paineis laterais abertos precisam respeitar minSize 20% cada.
+      // Se left persistido for 75, sobrariam 12.5% p/ cada e o terminal fica
+      // espremido atrás do workspace. Força left a no máx 50% nesse caso.
+      const leftSize = Math.min(rawLeft, 50);
       const remaining = 100 - leftSize;
-      const terminal = Math.round(remaining * 0.5);
+      const terminal = Math.round(remaining / 2);
       const right = remaining - terminal;
       return {
         'kanban-left': leftSize,
@@ -364,14 +368,14 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
     }
     if (isProjectTerminalOpen) {
       return {
-        'kanban-left': leftSize,
-        'kanban-terminal': 100 - leftSize,
+        'kanban-left': rawLeft,
+        'kanban-terminal': 100 - rawLeft,
       };
     }
     if (isRightPanelOpen) {
       return {
-        'kanban-left': leftSize,
-        'kanban-right': 100 - leftSize,
+        'kanban-left': rawLeft,
+        'kanban-right': 100 - rawLeft,
       };
     }
     return { 'kanban-left': 100 };
@@ -385,6 +389,7 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
 
   return (
     <Group
+      key={`${isProjectTerminalOpen}-${isRightPanelOpen}`}
       orientation="horizontal"
       className="flex-1 min-w-0 h-full"
       defaultLayout={kanbanDefaultLayout}
