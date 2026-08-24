@@ -349,91 +349,82 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
     );
   }
 
-  const kanbanDefaultLayout: Layout = (() => {
+  // Layout aninhado: terminal divide espaço com o BOARD, nunca com o
+  // workspace. Estrutura: [ leftWrapper [ board | terminal ] | right ]
+  // - leftWrapper = board+terminal juntos vs workspace
+  // - inner split board/terminal fica dentro do leftWrapper
+  const outerDefaultLayout: Layout = (() => {
     const rawLeft =
       typeof kanbanLeftPanelSize === 'number' ? kanbanLeftPanelSize : 75;
-    if (isProjectTerminalOpen && isRightPanelOpen) {
-      // Ambos paineis laterais abertos precisam respeitar minSize 20% cada.
-      // Se left persistido for 75, sobrariam 12.5% p/ cada e o terminal fica
-      // espremido atrás do workspace. Força left a no máx 60% nesse caso
-      // (board continua prioritário) e divide o restante igualmente.
-      const leftSize = Math.min(rawLeft, 60);
-      const remaining = 100 - leftSize;
-      const terminal = Math.round(remaining / 2);
-      const right = remaining - terminal;
-      return {
-        'kanban-left': leftSize,
-        'kanban-terminal': terminal,
-        'kanban-right': right,
-      };
-    }
-    if (isProjectTerminalOpen) {
-      return {
-        'kanban-left': rawLeft,
-        'kanban-terminal': 100 - rawLeft,
-      };
-    }
     if (isRightPanelOpen) {
-      return {
-        'kanban-left': rawLeft,
-        'kanban-right': 100 - rawLeft,
-      };
+      return { 'kanban-left-wrapper': rawLeft, 'kanban-right': 100 - rawLeft };
     }
-    return { 'kanban-left': 100 };
+    return { 'kanban-left-wrapper': 100 };
   })();
 
-  const onKanbanLayoutChange = (layout: Layout) => {
-    // Quando ambos paineis estão abertos o left é clampado temporariamente
-    // (60%) para caber os dois minSize 20%. Não persistir esse clamp inicial —
-    // senão ao fechar um dos paineis o board continuaria pequeno (60)
-    // e o outro painel assumiria o espaço do que fechou, em vez do board
-    // reclamar o espaço (bug reportado). Só persistir se o usuário arrastou
-    // (layout difere do default clampado).
-    if (isProjectTerminalOpen && isRightPanelOpen) {
-      const defaultLeft = kanbanDefaultLayout['kanban-left'];
-      if (layout['kanban-left'] === defaultLeft) return;
-    }
-    if (layout['kanban-left'] != null) {
-      setKanbanLeftPanelSize(layout['kanban-left']);
+  const innerDefaultLayout: Layout = (() => {
+    if (!isProjectTerminalOpen) return { 'kanban-board': 100 };
+    // Quando workspace também aberto, outer já é 75% — inner 68/32 dá
+    // board ~51% total e terminal ~24% total (25% workspace intacto).
+    // Só terminal aberto (outer 100%): 75/25 clássico.
+    if (isRightPanelOpen) return { 'kanban-board': 68, 'kanban-terminal': 32 };
+    return { 'kanban-board': 75, 'kanban-terminal': 25 };
+  })();
+
+  const onOuterLayoutChange = (layout: Layout) => {
+    if (layout['kanban-left-wrapper'] != null) {
+      setKanbanLeftPanelSize(layout['kanban-left-wrapper']);
     }
   };
 
   return (
     <Group
-      key={`${isProjectTerminalOpen}-${isRightPanelOpen}`}
+      key={`outer-${isRightPanelOpen}`}
       orientation="horizontal"
       className="flex-1 min-w-0 h-full"
-      defaultLayout={kanbanDefaultLayout}
-      onLayoutChange={onKanbanLayoutChange}
+      defaultLayout={outerDefaultLayout}
+      onLayoutChange={onOuterLayoutChange}
     >
       <Panel
-        id="kanban-left"
-        minSize="20%"
-        className="min-w-0 h-full overflow-hidden bg-primary"
+        id="kanban-left-wrapper"
+        minSize="30%"
+        className="min-w-0 h-full overflow-hidden"
       >
-        <ProjectKanbanBoard />
+        {isProjectTerminalOpen ? (
+          <Group
+            key={`inner-${isProjectTerminalOpen}`}
+            orientation="horizontal"
+            className="h-full w-full"
+            defaultLayout={innerDefaultLayout}
+          >
+            <Panel
+              id="kanban-board"
+              minSize="30%"
+              className="min-w-0 h-full overflow-hidden bg-primary"
+            >
+              <ProjectKanbanBoard />
+            </Panel>
+            <Separator
+              id="kanban-terminal-separator"
+              className="w-1 bg-panel outline-none hover:bg-brand/50 transition-colors cursor-col-resize"
+            />
+            <Panel
+              id="kanban-terminal"
+              minSize="20%"
+              maxSize="50%"
+              className="min-w-0 h-full overflow-hidden bg-secondary"
+            >
+              <ProjectTerminalPanelContainer
+                onClose={() => setProjectTerminalOpen(false)}
+              />
+            </Panel>
+          </Group>
+        ) : (
+          <div className="h-full w-full bg-primary overflow-hidden">
+            <ProjectKanbanBoard />
+          </div>
+        )}
       </Panel>
-
-      {isProjectTerminalOpen && (
-        <Separator
-          id="kanban-terminal-separator"
-          className="w-1 bg-panel outline-none hover:bg-brand/50 transition-colors cursor-col-resize"
-        />
-      )}
-
-      {isProjectTerminalOpen && (
-        <Panel
-          id="kanban-terminal"
-          minSize="20%"
-          maxSize="45%"
-          defaultSize="28%"
-          className="min-w-0 h-full overflow-hidden bg-secondary"
-        >
-          <ProjectTerminalPanelContainer
-            onClose={() => setProjectTerminalOpen(false)}
-          />
-        </Panel>
-      )}
 
       {isRightPanelOpen && (
         <Separator
@@ -447,7 +438,6 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
           id="kanban-right"
           minSize="20%"
           maxSize="45%"
-          defaultSize="28%"
           className="min-w-0 h-full overflow-hidden bg-secondary"
         >
           <ProjectRightSidebarContainer />
