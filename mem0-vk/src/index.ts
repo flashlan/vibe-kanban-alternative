@@ -79,6 +79,8 @@ import {
 import { z } from "zod";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { Queue, Worker, type Job } from "bullmq";
+import IORedis from "ioredis";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -146,6 +148,11 @@ const config = {
   },
 
   graphUrl: (process.env.GRAPH_URL || "").replace(/\/$/, ""),
+
+  // Durable job queue (BullMQ/Redis) that `POST /api/memories` enqueues to
+  // instead of running LLM extraction + embedding inline — see the
+  // `memoryStoreQueue`/`memoryStoreWorker` setup below.
+  redisUrl: process.env.REDIS_URL || "redis://localhost:6379",
 };
 
 // ── Runtime configuration (persisted, overrides env) ────────────────────────
@@ -996,6 +1003,52 @@ async function memoryStore(
   return { stored, ids, entities: entities.length, relations: relations.length, graph: pushed };
 }
 
+// ── Durable memory-store queue (BullMQ/Redis) ───────────────────────────────
+// `POST /api/memories` used to run `memoryStore` inline — LLM extraction +
+// embedding on the request/response path — which blocks the calling agent
+// for the full round trip. Enqueue instead: the route handler below returns
+// 202 with a job id immediately, and this worker does the actual work in the
+// background. Durable (survives a mem0-vk restart mid-job — BullMQ persists
+// queued/active jobs in Redis) rather than an in-process queue, since this is
+// meant to run on a shared server serving multiple concurrent agents.
+type MemoryStoreJobData = {
+  content: string;
+  userId: string;
+  commitSha?: string;
+};
+
+const memoryQueueConnection = new IORedis(config.redisUrl, {
+  maxRetriesPerRequest: null,
+});
+
+const MEMORY_STORE_QUEUE_NAME = "memory-store";
+
+const memoryStoreQueue = new Queue<MemoryStoreJobData>(MEMORY_STORE_QUEUE_NAME, {
+  connection: memoryQueueConnection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: "exponential", delay: 2000 },
+    // Keep a bounded trail for debugging without growing Redis forever.
+    removeOnComplete: { count: 500 },
+    removeOnFail: { count: 500 },
+  },
+});
+
+const memoryStoreWorker = new Worker<MemoryStoreJobData>(
+  MEMORY_STORE_QUEUE_NAME,
+  async (job: Job<MemoryStoreJobData>) => {
+    const { content, userId, commitSha } = job.data;
+    return memoryStore(content, userId, commitSha);
+  },
+  { connection: memoryQueueConnection, concurrency: 4 }
+);
+
+memoryStoreWorker.on("failed", (job, err) => {
+  console.error(
+    `[memory-store] job ${job?.id} failed after ${job?.attemptsMade} attempt(s): ${err.message}`
+  );
+});
+
 async function memorySearch(
   query: string,
   userId: string,
@@ -1189,20 +1242,21 @@ function createMcpServer(): McpServer {
 
 mcpTool(
   "memory_store",
-  "Store a new memory. The LLM extracts facts, entities and relations; vectors go to Qdrant and (if configured) the graph goes to the Python container.",
+  "Queue a new memory for storage. The LLM extraction, embedding, and (if configured) graph push run in the background — this returns immediately with a job id, not the extracted facts.",
   {
     content: z.string().describe("The content to remember"),
     user_id: z.string().optional().describe("Project/user ID for isolation (repo slug)"),
   },
   async ({ content, user_id }) => {
-    const res = await memoryStore(content, user_id || "");
+    const job = await memoryStoreQueue.add("store", {
+      content,
+      userId: user_id || "",
+    });
     return {
       content: [
         {
           type: "text" as const,
-          text: `Stored ${res.stored.length} fact(s) for "${user_id || config.defaultUser}" (entities: ${res.entities}, relations: ${res.relations}, graph: ${res.graph ? "on" : "off"})\n${res.stored
-            .map((s, i) => `[${res.ids[i]}] ${s}`)
-            .join("\n")}`,
+          text: `Queued for "${user_id || config.defaultUser}" (job ${job.id}) — extraction and storage happen in the background.`,
         },
       ],
     };
@@ -1374,8 +1428,26 @@ app.post("/api/memories", async (c) => {
   if (!content || typeof content !== "string") {
     return c.json({ error: "missing string field 'content'" }, 400);
   }
-  const res = await memoryStore(content, user_id || "", commit_sha);
-  return c.json({ ok: true, ...res }, 201);
+  const job = await memoryStoreQueue.add("store", {
+    content,
+    userId: user_id || "",
+    commitSha: commit_sha,
+  });
+  return c.json({ ok: true, queued: true, job_id: job.id }, 202);
+});
+
+// Best-effort status lookup for a queued save — mainly for debugging/tests;
+// callers of POST /api/memories are not expected to poll this.
+app.get("/api/memories/jobs/:jobId", async (c) => {
+  const job = await memoryStoreQueue.getJob(c.req.param("jobId"));
+  if (!job) return c.json({ error: "job not found" }, 404);
+  const state = await job.getState();
+  return c.json({
+    id: job.id,
+    state,
+    result: state === "completed" ? job.returnvalue : undefined,
+    failedReason: state === "failed" ? job.failedReason : undefined,
+  });
 });
 
 app.post("/api/search", async (c) => {

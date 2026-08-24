@@ -28,6 +28,7 @@ Camada de memória compartilhada para agentes de código — MCP (Streamable-HTT
 - **Container 1 (`mem0-vk`)** — o endpoint. Expõe MCP e REST sobre a MESMA memória Qdrant, particionada por `user_id` (slug do repo).
 - **Qdrant** — store de vetores; um ponto por fato, com payload `{content, user_id, created_at, entities, relations}`.
 - **Container 2 (Python, opcional)** — sentence-transformers em CPU servindo `/v1/embeddings` (formato OpenAI) + API de grafos NetworkX. Enquanto não existe, o sistema roda em modo vector-only com qualquer backend de embedding configurado.
+- **Redis (fila BullMQ)** — `POST /api/memories` (e a tool MCP `memory_store`) não roda mais a extração LLM + embedding na própria request: enfileira o job e responde `202 Accepted` na hora. Um worker no mesmo processo Node consome a fila em background. Isso evita bloquear o agente chamador durante o round-trip até o provedor LLM, e a fila é durável (sobrevive a um restart do container mem0-vk no meio de um job) — importante rodando num servidor compartilhado por vários agentes concorrentes. `GET /api/memories/jobs/:jobId` consulta o status de um job (debug only — chamadores normais não precisam fazer polling).
 
 ## Como o isolamento por repo funciona
 
@@ -151,6 +152,7 @@ Se as memórias forem injetadas no **início** do prompt, o prefixo muda a cada 
 | `MEM0_COLLECTION` | `mem0-vk` | Nome da collection |
 | `MEM0_DEFAULT_USER` | `default` | `user_id` quando o caller não envia |
 | `EMBED_DIM` | `768` | **Deve casar** com o dim do backend de embedding vencedor |
+| `REDIS_URL` | `redis://localhost:6379` (`redis://redis:6379` no compose) | Fila durável (BullMQ) do `memory_store` em background |
 
 ### LLM de extração (1 ativo, via `MEM0_LLM_PROVIDER`)
 

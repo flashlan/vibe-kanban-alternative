@@ -145,6 +145,10 @@ struct McpMemorySaveRequest {
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 struct McpMemorySaveResult {
     success: bool,
+    /// `true` once mem0-vk has durably queued the save (Redis-backed BullMQ
+    /// job) — NOT once the fact is actually extracted/embedded/stored, which
+    /// now happens in a background worker after this call already returned.
+    /// Kept as `stored` (rather than renamed to `queued`) for API stability.
     stored: bool,
 }
 
@@ -324,10 +328,17 @@ struct Mem0TraverseResponse {
     truncated: bool,
 }
 
+/// mem0-vk now enqueues `POST /api/memories` (202 Accepted) instead of
+/// running extraction/embedding inline before responding — see
+/// `mem0-vk/src/index.ts`'s `memoryStoreQueue`. `job_id` is accepted but
+/// unused here: nothing polls it today, since the agent doesn't need to wait
+/// for the background extraction to know the save was accepted.
 #[derive(Debug, Deserialize)]
 struct Mem0SaveResponse {
     ok: Option<bool>,
-    stored: Option<Vec<String>>,
+    queued: Option<bool>,
+    #[allow(dead_code)]
+    job_id: Option<String>,
 }
 
 impl McpServer {
@@ -570,17 +581,17 @@ impl McpServer {
             }
         };
 
-        let stored = parsed.stored.map(|s| !s.is_empty()).unwrap_or(false);
+        let stored = parsed.queued.unwrap_or(false);
         let success = parsed.ok.unwrap_or(true);
         if success && stored {
-            tracing::info!(target: "mem0", user_id = %user_id, "memory_save ok");
+            tracing::info!(target: "mem0", user_id = %user_id, "memory_save queued");
         } else {
             tracing::warn!(
                 target: "mem0",
                 user_id = %user_id,
                 success,
                 stored,
-                "memory_save returned ok status but did not confirm storage"
+                "memory_save returned ok status but did not confirm the save was queued"
             );
         }
         McpServer::success(&McpMemorySaveResult { success, stored })

@@ -8,7 +8,30 @@ services:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "bash", "-c", "curl -sf http://localhost:6333/healthz || exit 1"]
+      # qdrant/qdrant:latest ships neither curl nor wget — only bash — so use
+      # bash's built-in /dev/tcp instead of an external HTTP client. Confirmed
+      # this container was reporting "unhealthy" indefinitely for exactly this
+      # reason (curl: command not found) despite serving requests correctly.
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "exec 3<>/dev/tcp/localhost/6333 && printf 'GET /healthz HTTP/1.0\r\n\r\n' >&3 && head -1 <&3 | grep -q '200'",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -23,6 +46,11 @@ services:
       # ── Server ─────────────────────────────────────────────
       - PORT=8000
       - HOST=0.0.0.0
+
+      # ── Job queue (durable — memory_store extraction/embedding runs as a
+      #    background worker so POST /api/memories returns immediately
+      #    instead of blocking the caller for the LLM round trip) ───────────
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
 
       # ── Qdrant ─────────────────────────────────────────────
       - QDRANT_URL=http://qdrant:6333
@@ -70,6 +98,7 @@ services:
     depends_on:
       - qdrant
       - embeddings
+      - redis
     restart: unless-stopped
     volumes:
       - graph_data:/data
@@ -102,3 +131,4 @@ services:
 volumes:
   qdrant_data:
   graph_data:
+  redis_data:

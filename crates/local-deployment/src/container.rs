@@ -64,6 +64,7 @@ use tokio_util::io::ReaderStream;
 use utils::{
     log_msg::LogMsg,
     msg_store::MsgStore,
+    process::kill_stale_opencode_servers,
     text::{git_branch_id, short_uuid, truncate_to_char_boundary},
 };
 use uuid::Uuid;
@@ -2379,6 +2380,11 @@ impl ContainerService for LocalContainerService {
     /// detached sessions that ended while we were down are marked completed; all
     /// other orphans are marked failed (the default behavior).
     async fn cleanup_orphan_executions(&self) -> Result<(), ContainerError> {
+        // No PID is persisted for OpenCode's per-turn detached HTTP server
+        // (see `kill_stale_opencode_servers` doc comment), so the DB-driven
+        // cleanup below can't reap it — sweep by process signature instead.
+        kill_stale_opencode_servers().await;
+
         let running_processes = ExecutionProcess::find_running(&self.db.pool).await?;
         for process in running_processes {
             // Interactive (detached tmux) executions may have outlived a restart.

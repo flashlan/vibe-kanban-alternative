@@ -7,6 +7,27 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-alternat
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.38] - 2026-08-24
+
+### Added
+
+- **Live Android screen mirroring**: embedded live screen mirror in the workspace panel with detachable floating window support (Document Picture-in-Picture) for mobile app testing and debugging.
+- **Asynchronous background memory queue (mem0-vk)**: added BullMQ and Redis worker queue to offload heavy LLM entity extraction and embeddings in the background, making memory store operations non-blocking and instantaneous.
+- **Vibe Kanban Book Manuscript ("Manual Moderno & Publicação na Amazon KDP")**: complete 15-chapter publication-ready manuscript (`docs/livro/manuscript.md`), 12 visual anchors, automated consolidated build script (`scripts/build-manuscript.py`), and 1600x2560 eBook cover image.
+- **Default project orchestrator prompts & rule persistence**: baked default pre/post orchestrator prompt rules directly into the server binary via `assets/default_orchestrator_prompt.txt` and persisted per-project rules in `projects.toml`.
+- **Kanban column card count badge**: added real-time card counters directly to column headers on the Kanban board.
+- **Global left sidebar width persistence**: resizing the left sidebar now persists immediately across browser reloads via `localStorage`.
+
+### Fixed
+
+- **Chat footer layout & model/agent selector ergonomics**: separated footer controls into two dedicated rows. The top row groups Preset, Model Selector, and Permissions in a non-wrapping container with smooth text truncation (`...`), while the bottom row places the Agent/Mode selector alongside attachment/skill icons and the Send/Queue action buttons, preventing button stacking and layout breaks when resizing.
+- **Kanban board reload and flickering on panel toggle**: stabilized the panel group hierarchy by removing keyed remounts on `<Group>`, keeping the `<ProjectKanbanBoard />` permanently mounted and allowing fluid horizontal resizing when toggling the right sidebar or project terminal.
+- **Side panel minimum width enforcement**: enforced a 380px minimum width (`minSize="380px"`, `min-w-[380px]`) on the Kanban right sidebar and workspace layout, ensuring action buttons (such as "Open Workspace" and model pickers) are never clipped or squished into truncated labels.
+- **Startup banner overlay lockup**: resolved an issue where the dark startup banner persisted with pointer events, blocking UI interaction. The banner now dismisses smoothly and immediately upon React hydration.
+- **Kanban terminal layout & navigation**: ensured project terminal toggle divides space side-by-side with the board without collapsing into the workspace or erroneously toggling the main sidebar.
+- **Terminal tab management**: fixed tab close handlers to reliably trigger on pointer down and close the drawer panel when the last tab is deleted.
+- **Antigravity token telemetry & log suppression**: normalized Antigravity session context gauges and suppressed internal cortex validation errors from surfacing in the chat UI.
+
 ## [0.2.37] - 2026-08-23
 
 ### Fixed

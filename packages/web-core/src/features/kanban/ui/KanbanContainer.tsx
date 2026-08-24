@@ -1278,7 +1278,10 @@ export function KanbanContainer() {
                               className="p-half rounded-sm text-low hover:text-normal hover:bg-secondary transition-colors"
                               aria-label="Add task"
                             >
-                              <PlusIcon className="size-icon-xs" weight="bold" />
+                              <PlusIcon
+                                className="size-icon-xs"
+                                weight="bold"
+                              />
                             </button>
                           )}
                         </div>

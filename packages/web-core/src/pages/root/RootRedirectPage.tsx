@@ -31,14 +31,18 @@ export function RootRedirectPage() {
       let effectiveLastWorkspaceId: string | null = lastWorkspaceId;
       if (!effectiveLastWorkspaceId) {
         try {
-          effectiveLastWorkspaceId = localStorage.getItem('vk-last-workspace-id');
+          effectiveLastWorkspaceId = localStorage.getItem(
+            'vk-last-workspace-id'
+          );
         } catch {
           effectiveLastWorkspaceId = null;
         }
       }
       if (effectiveLastWorkspaceId) {
         if (!isActive) return;
-        appNavigation.goToWorkspace(effectiveLastWorkspaceId, { replace: true });
+        appNavigation.goToWorkspace(effectiveLastWorkspaceId, {
+          replace: true,
+        });
         return;
       }
 

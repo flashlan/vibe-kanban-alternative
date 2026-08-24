@@ -82,7 +82,9 @@ export function SharedAppLayout() {
     (s) => s.toggleLeftSidebar
   );
   const [isSidebarHoverOpen, setIsSidebarHoverOpen] = useState(false);
-  const hoverCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hoverCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const openSidebarHover = useCallback(() => {
     if (hoverCloseTimeoutRef.current) {
       clearTimeout(hoverCloseTimeoutRef.current);
@@ -91,7 +93,8 @@ export function SharedAppLayout() {
     setIsSidebarHoverOpen(true);
   }, []);
   const closeSidebarHoverDelayed = useCallback(() => {
-    if (hoverCloseTimeoutRef.current) clearTimeout(hoverCloseTimeoutRef.current);
+    if (hoverCloseTimeoutRef.current)
+      clearTimeout(hoverCloseTimeoutRef.current);
     hoverCloseTimeoutRef.current = setTimeout(
       () => setIsSidebarHoverOpen(false),
       120
@@ -109,7 +112,8 @@ export function SharedAppLayout() {
   }, [isLeftSidebarPinned]);
   useEffect(() => {
     return () => {
-      if (hoverCloseTimeoutRef.current) clearTimeout(hoverCloseTimeoutRef.current);
+      if (hoverCloseTimeoutRef.current)
+        clearTimeout(hoverCloseTimeoutRef.current);
     };
   }, []);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -862,7 +866,9 @@ export function SharedAppLayout() {
                         className={cn(
                           'fixed left-0 top-0 bottom-0 z-30 w-[256px] overflow-hidden border-r border-border shadow-2xl',
                           'transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] will-change-transform',
-                          isSidebarHoverOpen ? 'translate-x-0' : '-translate-x-full'
+                          isSidebarHoverOpen
+                            ? 'translate-x-0'
+                            : '-translate-x-full'
                         )}
                       >
                         <Sidebar
@@ -911,7 +917,9 @@ export function SharedAppLayout() {
                           onTogglePinned={toggleLeftSidebarPinned}
                           className="h-full w-full"
                           headerActions={
-                            <CreateProjectButton onClick={handleCreateProject} />
+                            <CreateProjectButton
+                              onClick={handleCreateProject}
+                            />
                           }
                           bottomActions={<SidebarBottomActions />}
                         />
