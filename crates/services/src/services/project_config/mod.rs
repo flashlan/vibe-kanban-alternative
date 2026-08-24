@@ -1,12 +1,13 @@
 //! Static project/repo config export & import (TOML <-> DB).
 //!
 //! The SQLite database is the source of truth for projects, repos, their links,
-//! and kanban columns — they are created and edited through the API. TOML is no
+//! kanban columns, and project-scoped Instructions & Rules (`orchestrator_prompt`
+//! pre/post prompts) — they are created and edited through the API. TOML is no
 //! longer auto-loaded at startup or written through on every mutation. Instead it
 //! is an explicit, portable export/import format for the *static* config:
-//! projects, repos, project↔repo links, kanban seed columns, and executor
-//! profiles (agents). Issues, workspaces, tags, and other runtime state are never
-//! part of it.
+//! projects, repos, project↔repo links, kanban seed columns, project prompts,
+//! and executor profiles (agents). Issues, workspaces, tags, and other runtime
+//! state are never part of it.
 //!
 //! - [`export_to_string`] / [`export_to_path`]: serialise the current DB config
 //!   (plus the cached executor profiles) into a single TOML document.
@@ -89,6 +90,14 @@ struct ProjectConfig {
     /// Kanban column names, created in order only when the project has none yet.
     #[serde(default)]
     statuses: Vec<String>,
+    /// Project-scoped Instructions & Rules — the pre/post prompts stored as
+    /// `orchestrator_prompt` in the DB (`<!-- vk:rules:pre:start -->` /
+    /// `<!-- vk:rules:post:start -->` tags). Exported so it persists in git
+    /// via `projects.toml` and is available to npm installers after `import`.
+    /// Omitting the key leaves the existing DB value untouched on import
+    /// (non-destructive); an explicit empty string clears it.
+    #[serde(default)]
+    orchestrator_prompt: Option<String>,
 }
 
 /// Default export/import path: `$VIBE_KANBAN_PROJECTS_CONFIG`, otherwise
@@ -289,6 +298,13 @@ async fn import_project(pool: &SqlitePool, cfg: &ProjectConfig) -> anyhow::Resul
         }
     }
 
+    // Sync project-scoped pre/post rules (orchestrator_prompt) if present in TOML.
+    // Omitted key = leave DB untouched (non-destructive). Some(value) = upsert
+    // (empty string clears the prompt, matching PUT semantics).
+    if let Some(prompt) = cfg.orchestrator_prompt.as_deref() {
+        Project::update_orchestrator_prompt(pool, project.id, prompt).await?;
+    }
+
     // Seed kanban columns only if the project has none yet.
     if ProjectStatus::count_by_project(pool, project.id).await? == 0 {
         let names: Vec<String> = if cfg.statuses.is_empty() {
@@ -445,6 +461,11 @@ fn write_project_table(
     );
     set_str_array(table, "repos", repo_paths);
     set_str_array(table, "statuses", statuses);
+    // Persist project-scoped pre/post rules so they survive git + npm `import`.
+    // Only emit when non-empty to keep the TOML tidy; missing key = untouched on import.
+    if !project.orchestrator_prompt.trim().is_empty() {
+        table["orchestrator_prompt"] = value(project.orchestrator_prompt.as_str());
+    }
 }
 
 fn write_repo_table(table: &mut Table, repo: &Repo) {

@@ -1,9 +1,10 @@
 # Example config bundle for Vibe Kanban (import/export format).
 #
-# The SQLite database is the source of truth for projects, repos, links, and
-# kanban columns — create and edit them in the app. This file is an explicit,
-# portable export/import format for that *static* config (NOT issues, workspaces,
-# or tags).
+# The SQLite database is the source of truth for projects, repos, links,
+# kanban columns, and project-scoped Instructions & Rules — create and edit
+# them in the app (Project Settings → Instructions & Rules). This file is an
+# explicit, portable export/import format for that *static* config (NOT issues,
+# workspaces, or tags).
 #
 # Import this file:   vibe-kanban import path/to/this.toml
 #   (or POST its contents to /api/config/import)
@@ -57,3 +58,9 @@ repos = ["~/code/acme-api", "~/code/acme-web"]
 # Kanban columns, created in order on import only if the project has none yet.
 # Once a project has columns they are managed in the app and this is ignored.
 statuses = ["Todo", "In Progress", "In Review", "Done"]
+# Project-scoped Instructions & Rules — pre/post prompts (Project Settings →
+# Instructions & Rules). Stored as `orchestrator_prompt` with vk tags and
+# injected via `get_rules` for every card. Persists in git via this file so
+# npm installers get the same prompts after `vibe-kanban import projects.toml`.
+# Omit the key to leave the existing DB value untouched; empty string clears it.
+# orchestrator_prompt = """<!-- vk:rules:pre:start -->\nAlways use strict TypeScript.\n<!-- vk:rules:pre:end -->\n\n<!-- vk:rules:post:start -->\nNEVER run cargo build.\n<!-- vk:rules:post:end -->"""

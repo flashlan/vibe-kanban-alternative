@@ -4,16 +4,18 @@ description: "Declare projects and repositories in a portable projects.toml — 
 ---
 
 Vibe Kanban Indie stores everything locally. Projects, repositories, board
-columns, and issues live in a SQLite database on your machine — there is no
-account and no cloud sync. For the **static** configuration (projects, repos, and
-columns, but not issues), Indie also supports a portable `projects.toml`
-import/export format so you can version it, share it, or recreate a setup
-elsewhere.
+columns, project-scoped Instructions & Rules (pre/post prompts), and issues live
+in a SQLite database on your machine — there is no account and no cloud sync.
+For the **static** configuration (projects, repos, columns, and project prompts,
+but not issues), Indie also supports a portable `projects.toml` import/export
+format so you can version it, share it, or recreate a setup elsewhere — including
+via `npm` installs (`vibe-kanban import ./projects.toml` after cloning).
 
 <Note>
 The SQLite database is the source of truth. `projects.toml` is an explicit,
-portable export/import of the static config — create and edit projects in the app,
-then export when you want a portable copy.
+portable export/import of the static config — create and edit projects in the app
+(Project Settings → Instructions & Rules for pre/post prompts), then export when
+you want a portable copy that persists in git.
 </Note>
 
 ## Import and export
@@ -69,6 +71,14 @@ color = "#3b82f6"
 repos = ["~/code/acme-api", "~/code/acme-web"]
 # Columns, created in order on import only if the project has none yet.
 statuses = ["Todo", "In Progress", "In Review", "Done"]
+# Project-scoped Instructions & Rules (pre/post prompts, persisted in git)
+# orchestrator_prompt = """<!-- vk:rules:pre:start -->
+# Always use strict TypeScript.
+# <!-- vk:rules:pre:end -->
+#
+# <!-- vk:rules:post:start -->
+# NEVER run cargo build.
+# <!-- vk:rules:post:end -->"""
 ```
 
 ### Repositories
@@ -113,6 +123,16 @@ statuses = ["Todo", "In Progress", "In Review", "Done"]
   Kanban columns, created in order — but only on import, and only if the project
   has no columns yet. Once a project has columns, they are managed in the app and
   this field is ignored.
+</ParamField>
+
+<ParamField path="orchestrator_prompt" type="string">
+  Project-scoped Instructions & Rules — the two texts from Project Settings →
+  Instructions & Rules (pre-prompt active throughout work, post-prompt checked
+  before finishing). Stored with `&lt;!-- vk:rules:pre:start --&gt;` /
+  `&lt;!-- vk:rules:post:start --&gt;` tags and injected via `get_rules` for
+  every card. Exported so it persists in git and is available to `npm` installers
+  after `vibe-kanban import projects.toml`. Omit the key to leave the DB value
+  untouched; set to an empty string to clear it.
 </ParamField>
 
 <Note>
