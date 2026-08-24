@@ -167,7 +167,10 @@ export const MIN_LEFT_SIDEBAR_WIDTH = 180;
 export const MAX_LEFT_SIDEBAR_WIDTH = 480;
 
 export const clampLeftSidebarWidth = (v: number): number =>
-  Math.min(MAX_LEFT_SIDEBAR_WIDTH, Math.max(MIN_LEFT_SIDEBAR_WIDTH, Math.round(v)));
+  Math.min(
+    MAX_LEFT_SIDEBAR_WIDTH,
+    Math.max(MIN_LEFT_SIDEBAR_WIDTH, Math.round(v))
+  );
 
 const loadLeftSidebarWidth = (): number => {
   try {
@@ -184,7 +187,10 @@ const loadLeftSidebarWidth = (): number => {
 
 const saveLeftSidebarWidth = (w: number): void => {
   try {
-    localStorage.setItem(LEFT_SIDEBAR_WIDTH_KEY, String(clampLeftSidebarWidth(w)));
+    localStorage.setItem(
+      LEFT_SIDEBAR_WIDTH_KEY,
+      String(clampLeftSidebarWidth(w))
+    );
   } catch {
     // localStorage may be unavailable
   }
@@ -212,6 +218,29 @@ const loadThemeVariant = (): ThemeVariant => {
     // localStorage may be unavailable
   }
   return DEFAULT_THEME_VARIANT;
+};
+
+// Persisted pane sizes (fallback to localStorage for instant hydration)
+const PANE_SIZES_KEY = 'vk-pane-sizes';
+
+const loadLocalPaneSizes = (): Record<string, number | string> => {
+  try {
+    const stored = localStorage.getItem(PANE_SIZES_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch {
+    // localStorage may be unavailable
+  }
+  return {};
+};
+
+const saveLocalPaneSize = (key: string, size: number | string): void => {
+  try {
+    const current = loadLocalPaneSizes();
+    current[key] = size;
+    localStorage.setItem(PANE_SIZES_KEY, JSON.stringify(current));
+  } catch {
+    // localStorage may be unavailable
+  }
 };
 
 // Last visited workspace — restored on next app launch (via RootRedirectPage)
@@ -645,7 +674,7 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
   repoActions: {},
   expanded: {},
   contextBarPosition: 'middle-right',
-  paneSizes: {},
+  paneSizes: loadLocalPaneSizes(),
   collapsedPaths: {},
   fileSearchRepoId: null,
 
@@ -730,8 +759,10 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
       },
     })),
   setContextBarPosition: (position) => set({ contextBarPosition: position }),
-  setPaneSize: (key, size) =>
-    set((s) => ({ paneSizes: { ...s.paneSizes, [key]: size } })),
+  setPaneSize: (key, size) => {
+    saveLocalPaneSize(key, size);
+    set((s) => ({ paneSizes: { ...s.paneSizes, [key]: size } }));
+  },
   setCollapsedPaths: (key, paths) =>
     set((s) => ({ collapsedPaths: { ...s.collapsedPaths, [key]: paths } })),
   setFileSearchRepo: (repoId) => set({ fileSearchRepoId: repoId }),

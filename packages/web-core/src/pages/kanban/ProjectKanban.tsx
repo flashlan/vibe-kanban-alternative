@@ -359,12 +359,13 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
   // - inner split board/terminal fica dentro do leftWrapper
   const outerDefaultLayout: Layout = (() => {
     const rawLeft =
-      typeof kanbanLeftPanelSize === 'number' ? kanbanLeftPanelSize : 75;
+      typeof kanbanLeftPanelSize === 'number' ? kanbanLeftPanelSize : 70;
+    const clampedLeft = Math.min(Math.max(rawLeft, 30), 80);
     const layout: Record<string, number> = {
-      'kanban-left-wrapper': isRightPanelOpen ? rawLeft : 100,
+      'kanban-left-wrapper': isRightPanelOpen ? clampedLeft : 100,
     };
     if (isRightPanelOpen) {
-      layout['kanban-right'] = 100 - rawLeft;
+      layout['kanban-right'] = 100 - clampedLeft;
     }
     return layout;
   })();
@@ -387,7 +388,7 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
 
   return (
     <Group
-      key={`outer-${isRightPanelOpen}`}
+      id="kanban-outer-group"
       orientation="horizontal"
       className="flex-1 min-w-0 h-full"
       defaultLayout={outerDefaultLayout}
@@ -395,30 +396,32 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
     >
       <Panel
         id="kanban-left-wrapper"
-        minSize="30%"
+        minSize="300px"
         className="min-w-0 h-full overflow-hidden"
       >
-        {isProjectTerminalOpen ? (
-          <Group
-            key={`inner-${isProjectTerminalOpen}`}
-            orientation="horizontal"
-            className="h-full w-full"
-            defaultLayout={innerDefaultLayout}
+        <Group
+          id="kanban-inner-group"
+          orientation="horizontal"
+          className="h-full w-full"
+          defaultLayout={innerDefaultLayout}
+        >
+          <Panel
+            id="kanban-board"
+            minSize="300px"
+            className="min-w-0 h-full overflow-hidden bg-primary"
           >
-            <Panel
-              id="kanban-board"
-              minSize="30%"
-              className="min-w-0 h-full overflow-hidden bg-primary"
-            >
-              <ProjectKanbanBoard />
-            </Panel>
+            <ProjectKanbanBoard />
+          </Panel>
+          {isProjectTerminalOpen && (
             <Separator
               id="kanban-terminal-separator"
               className="w-1 bg-panel outline-none hover:bg-brand/50 transition-colors cursor-col-resize"
             />
+          )}
+          {isProjectTerminalOpen && (
             <Panel
               id="kanban-terminal"
-              minSize="20%"
+              minSize="200px"
               maxSize="50%"
               className="min-w-0 h-full overflow-hidden bg-secondary"
             >
@@ -426,12 +429,8 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
                 onClose={() => setProjectTerminalOpen(false)}
               />
             </Panel>
-          </Group>
-        ) : (
-          <div className="h-full w-full bg-primary overflow-hidden">
-            <ProjectKanbanBoard />
-          </div>
-        )}
+          )}
+        </Group>
       </Panel>
 
       {isRightPanelOpen && (
@@ -444,9 +443,8 @@ function ProjectKanbanLayout({ projectName }: { projectName: string }) {
       {isRightPanelOpen && (
         <Panel
           id="kanban-right"
-          minSize="20%"
-          maxSize="45%"
-          className="min-w-0 h-full overflow-hidden bg-secondary"
+          minSize="380px"
+          className="min-w-[380px] h-full overflow-hidden bg-secondary"
         >
           <ProjectRightSidebarContainer />
         </Panel>

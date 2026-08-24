@@ -307,7 +307,7 @@ export function WorkspacesLayout() {
       <ChangesViewProvider>
         <div className="flex h-full">
           <Group
-            key={`${isLeftMainPanelVisible}-${rightMainPanelMode}`}
+            id="workspaces-main-group"
             orientation="horizontal"
             className="flex-1 min-w-0 h-full"
             defaultLayout={defaultLayout}
