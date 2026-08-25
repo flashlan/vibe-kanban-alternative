@@ -543,6 +543,7 @@ mod tests {
             "memory_graph_traverse".to_string(),
             "memory_save".to_string(),
             "memory_search".to_string(),
+            "search_workspace".to_string(),
             "get_rules".to_string(),
             "remove_issue_tag".to_string(),
             "report_pipeline_stage".to_string(),
