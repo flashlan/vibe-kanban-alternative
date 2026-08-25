@@ -253,6 +253,8 @@ pub async fn create_and_start_workspace(
         }
     }
 
+    let mut final_prompt = workspace_prompt;
+
     if !issue_attachments.is_empty() {
         final_prompt.push_str("\n\n## Card attachments\nThe card's attached files have been copied locally. Inspect the relevant files before implementing:\n");
         for attachment in &issue_attachments {
@@ -263,7 +265,6 @@ pub async fn create_and_start_workspace(
         }
     }
 
-    let mut final_prompt = workspace_prompt;
     if let Some(issue) = &linked_local_issue {
         if let Ok((project_prompt, _)) =
             db::models::project::Project::resolve_orchestrator_prompt(pool, issue.project_id).await

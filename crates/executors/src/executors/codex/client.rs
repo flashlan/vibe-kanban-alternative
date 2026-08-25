@@ -174,11 +174,15 @@ impl AppServerClient {
         &self,
         params: ThreadForkParams,
     ) -> Result<ThreadForkResponse, ExecutorError> {
+        let request_id = self.next_request_id();
         let request = ClientRequest::ThreadFork {
-            request_id: self.next_request_id(),
+            request_id: request_id.clone(),
             params,
         };
-        self.send_request(request, "thread/fork").await
+        let request = thread_fork_request_value(request)?;
+        self.rpc()
+            .request(request_id, &request, "thread/fork", self.cancel.clone())
+            .await
     }
 
     pub async fn turn_start_with_mode(
@@ -851,6 +855,22 @@ impl AppServerClient {
     }
 }
 
+fn thread_fork_request_value(request: ClientRequest) -> Result<Value, ExecutorError> {
+    let mut request = serde_json::to_value(request)
+        .map_err(|err| ExecutorError::Io(io::Error::other(err.to_string())))?;
+
+    // codex-app-server 0.149 removed the legacy `permissionProfile` object from
+    // thread/fork in favor of an optional named `permissions` profile id. The
+    // protocol crate pinned by this app still serializes `permissionProfile:
+    // null`, which the newer server rejects even though this client configures
+    // the fork through `sandbox` instead.
+    if let Some(params) = request.get_mut("params").and_then(Value::as_object_mut) {
+        params.remove("permissionProfile");
+    }
+
+    Ok(request)
+}
+
 #[async_trait]
 impl JsonRpcCallbacks for AppServerClient {
     async fn on_request(
@@ -1043,5 +1063,29 @@ impl LogWriter {
         guard.write_all(b"\n").await.map_err(ExecutorError::Io)?;
         guard.flush().await.map_err(ExecutorError::Io)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use codex_app_server_protocol::{ClientRequest, RequestId, ThreadForkParams};
+
+    use super::thread_fork_request_value;
+
+    #[test]
+    fn thread_fork_omits_legacy_permission_profile() {
+        let request = ClientRequest::ThreadFork {
+            request_id: RequestId::Integer(1),
+            params: ThreadForkParams {
+                thread_id: "thread-1".to_string(),
+                ..Default::default()
+            },
+        };
+
+        let value = thread_fork_request_value(request).unwrap();
+        let params = value["params"].as_object().unwrap();
+
+        assert!(!params.contains_key("permissionProfile"));
+        assert_eq!(params["threadId"], "thread-1");
     }
 }
