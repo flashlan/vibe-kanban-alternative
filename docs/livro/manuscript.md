@@ -11,7 +11,7 @@
 
 # Manual Moderno de Vibe Coding — Índice
 
-**Subtítulo:** *Manual prático da interface do Vibe Kanban Indie — do `npx` ao SaaS em produção, com um projeto-guia.*
+**Subtítulo:** *Manual prático da interface do Vibe Kanban Alternative — do `npx` ao SaaS em produção, com um projeto-guia.*
 
 Este livro foi escrito dentro do próprio repositório que ele ensina a usar. Todo caminho de arquivo citado existe no código; quando uma regra externa muda (ex.: preços do KDP), o capítulo marca a data de verificação.
 
@@ -48,6 +48,12 @@ Este livro foi escrito dentro do próprio repositório que ele ensina a usar. To
 | 15 | Ancoragem de imagens | `15-ancoragem-imagens.md` | Escrito |
 | A | Apêndice: referência de comandos | `apendice-comandos.md` | Escrito |
 
+## Anexos
+
+| # | Seção | Arquivo | Estado |
+| --- | --- | --- | --- |
+| — | Agradecimentos (linhagem: BloopAI → dexloom → Alternative) | `16-agradecimentos.md` | Escrito |
+
 ## Screenshots-âncora (caps. 3–8)
 
 | Imagem | Arquivo | Usada em |
@@ -78,7 +84,7 @@ Este livro foi escrito dentro do próprio repositório que ele ensina a usar. To
 
 ## Para quem é este livro
 
-Para um desenvolvedor que acabou de instalar o Vibe Kanban Indie e quer **usar a interface para desenvolver de verdade** — não para estudar a arquitetura do app. Ao final da Parte I você vai saber:
+Para um desenvolvedor que acabou de instalar o Vibe Kanban Alternative e quer **usar a interface para desenvolver de verdade** — não para estudar a arquitetura do app. Ao final da Parte I você vai saber:
 
 - instalar e configurar o app no seu `projects.toml`;
 - navegar na interface (board, workspaces, painéis);
@@ -91,9 +97,9 @@ A **Parte II** fica para quando você quiser customizar o próprio Vibe Kanban. 
 
 > **Leia o capítulo 02 antes de instalar.** Ele apresenta o vocabulário do vibe coding atual — *Engineering Loop*, *Spec Development*, *multi-agente*, *YOLO mode*, *context engineering* — com exemplos deste repositório. Os capítulos práticos (03 em diante) assumem que você já reconhece esses termos.
 
-## O que é o Vibe Kanban Indie, em uma página
+## O que é o Vibe Kanban Alternative, em uma página
 
-O Vibe Kanban Indie é um **kanban self-hosted para um desenvolvedor solo dirigir agentes de IA**. Cada cartão do quadro é uma tarefa ("consertar login", "criar página de planos do SaaS"). Cada tarefa vira um **workspace** — uma pasta isolada com seu próprio branch git — onde um agente (Claude Code, OpenCode, Codex, Gemini, Cursor, Copilot, etc.) escreve código por você. Você acompanha o progresso no board, revisa diffs e dá merge.
+O Vibe Kanban Alternative é um **kanban self-hosted para um desenvolvedor solo dirigir agentes de IA**. Cada cartão do quadro é uma tarefa ("consertar login", "criar página de planos do SaaS"). Cada tarefa vira um **workspace** — uma pasta isolada com seu próprio branch git — onde um agente (Claude Code, OpenCode, Codex, Gemini, Cursor, Copilot, etc.) escreve código por você. Você acompanha o progresso no board, revisa diffs e dá merge.
 
 Os conceitos que você vai usar todo dia:
 
@@ -450,7 +456,7 @@ O Indie é **100% local** — sem login, sem cloud. Escolha uma:
 ### Opção A — npx (para usar, sem clonar)
 
 ```bash
-npx vibe-kanban-indie
+npx vibe-kanban-alternative
 # → Frontend :3001  Backend :3002  Preview proxy :3003
 ```
 
@@ -559,7 +565,7 @@ Para o AssinaFácil, deixe o dev server subindo `app-web` na `5173` — o Previe
 
 ## Checklist do capítulo
 
-- [ ] `npx vibe-kanban-indie` (ou `pnpm run dev` no clone) abre em `http://localhost:3001` sem `AddrInUse`.
+- [ ] `npx vibe-kanban-alternative` (ou `pnpm run dev` no clone) abre em `http://localhost:3001` sem `AddrInUse`.
 - [ ] Preferências de agente/IDE/som definidas em Settings.
 - [ ] `projects.toml` com projeto `AssinaFácil` (`AF`) e repo `~/code/assina-facil` importado — board aparece com 4 colunas.
 - [ ] Scripts `setup_script` e `dev_server_script` configurados; `copy_files` com `.env` se o SaaS precisar.
@@ -1226,7 +1232,9 @@ O `AGENTS.md` da raiz deste repositório é um bom espécime. Seção por seçã
 
 ### 1. Identidade em uma frase
 
-> "vibe-kanban-indie — the independent, self-hosted fork of vibe-kanban, built for a single-developer process (no team, no cloud, no auth)."
+> "Vibe Kanban Alternative — fork independente e self-hosted do Vibe Kanban, feito para um processo de desenvolvedor único (sem equipe, sem nuvem, sem auth)."
+
+> Nota: o `AGENTS.md` raiz ainda carrega o nome histórico do fork-base; o produto é comercializado como **Vibe Kanban Alternative** e deriva do **Vibe Kanban Indie** (dexloom), que por sua vez deriva do **Vibe Kanban** original (BloopAI) — ver Agradecimentos.
 
 Essa linha sozinha impede que um agente "ajude" reintroduzindo auth ou cloud. Logo abaixo vem a seção explícita listando os crates deletados (`crates/remote`, `crates/relay-*`) com a ordem **"do not reintroduce"** — e o aviso que `shared/remote-types.ts` é contrato congelado, não lixo (ver cap. 12).
 
@@ -1923,6 +1931,34 @@ As pipelines TOML vivem em `assets/pipelines/`; `quick.toml` é a de cards trivi
 ## Publicação do livro
 
 O checklist de KDP vive em `docs/livro-vibe-kanban-amazon-checklist.md`. Verificação de regras do KDP: revalide em `kdp.amazon.com` antes de publicar — preços e limites de categoria mudam.
+
+---
+
+# Agradecimentos
+
+Este livro documenta o **Vibe Kanban Alternative** — um kanban self-hosted para um desenvolvedor solo dirigir agentes de IA. Mas ele não nasceu do zero: apoia-se em dois projetos anteriores, e esta seção existe para creditá-los com clareza.
+
+## A linhagem do software
+
+```
+Vibe Kanban (BloopAI)
+   └─ Vibe Kanban Indie (dexloom)        ← fork-base deste repositório
+        └─ Vibe Kanban Alternative       ← o projeto que este livro documenta
+```
+
+- **Vibe Kanban — BloopAI** ([github.com/BloopAI/vibe-kanban](https://github.com/BloopAI/vibe-kanban)): o projeto **original**. A ideia fundamental — um quadro kanban onde cada card sobe um *workspace* isolado com um agente escrevendo código — e boa parte do modelo de execução de agentes e da UI/UX vieram daqui. Sem o lançamento aberto da BloopAI, nada disso existiria.
+
+- **Vibe Kanban Indie — dexloom** ([github.com/dexloom/vibe-kanban-indie](https://github.com/dexloom/vibe-kanban-indie)): o **fork independente** em que este repositório se baseia. Ele pegou o original e o reformatou para um fluxo de *desenvolvedor único, self-hosted, sem nuvem e sem auth* — o modelo de branches `vk/xxxx`, o cockpit local (TUI), a orquestração de agentes e o foco em um só dev. É exatamente esse substrato que este livro descreve.
+
+- **Vibe Kanban Alternative** (este repositório): o fork presente. Adiciona o manual de uso da interface, o passeio prático do SaaS **AssinaFácil** e o pipeline de publicação (incluindo este próprio livro), preservando o espírito self-hosted para um dev solo.
+
+## Outros créditos
+
+- Às ferramentas de ecossistema de agentes que tornam o vibe coding prático: **Claude Code, OpenCode, Codex, Gemini, Cursor, Copilot** e o protocolo **MCP** — sem eles, "dirigir agentes" seria só teoria.
+- Ao **Kindle Direct Publishing** e à comunidade de autores técnicos que mantêm viva a cultura de documentar ferramentas em português.
+- A você, leitor, por dedicar tempo a aprender a **dirigir** agentes em vez de só pedir a eles.
+
+> Este livro é um documento vivo. Se a linhagem acima mudar (novo fork, novo upstream), atualize esta seção — ela existe para que nenhum esforço anterior seja apagado da história.
 
 ---
 

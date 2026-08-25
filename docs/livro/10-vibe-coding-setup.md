@@ -25,7 +25,9 @@ O `AGENTS.md` da raiz deste repositório é um bom espécime. Seção por seçã
 
 ### 1. Identidade em uma frase
 
-> "vibe-kanban-indie — the independent, self-hosted fork of vibe-kanban, built for a single-developer process (no team, no cloud, no auth)."
+> "Vibe Kanban Alternative — fork independente e self-hosted do Vibe Kanban, feito para um processo de desenvolvedor único (sem equipe, sem nuvem, sem auth)."
+
+> Nota: o `AGENTS.md` raiz ainda carrega o nome histórico do fork-base; o produto é comercializado como **Vibe Kanban Alternative** e deriva do **Vibe Kanban Indie** (dexloom), que por sua vez deriva do **Vibe Kanban** original (BloopAI) — ver Agradecimentos.
 
 Essa linha sozinha impede que um agente "ajude" reintroduzindo auth ou cloud. Logo abaixo vem a seção explícita listando os crates deletados (`crates/remote`, `crates/relay-*`) com a ordem **"do not reintroduce"** — e o aviso que `shared/remote-types.ts` é contrato congelado, não lixo (ver cap. 12).
 

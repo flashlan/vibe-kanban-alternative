@@ -1,6 +1,6 @@
 # Manual Moderno de Vibe Coding — Índice
 
-**Subtítulo:** *Manual prático da interface do Vibe Kanban Indie — do `npx` ao SaaS em produção, com um projeto-guia.*
+**Subtítulo:** *Manual prático da interface do Vibe Kanban Alternative — do `npx` ao SaaS em produção, com um projeto-guia.*
 
 Este livro foi escrito dentro do próprio repositório que ele ensina a usar. Todo caminho de arquivo citado existe no código; quando uma regra externa muda (ex.: preços do KDP), o capítulo marca a data de verificação.
 
@@ -36,6 +36,12 @@ Este livro foi escrito dentro do próprio repositório que ele ensina a usar. To
 | 14 | Orquestração de agentes: MCP, pipelines e o alarme | `14-orquestracao.md` | Escrito |
 | 15 | Ancoragem de imagens | `15-ancoragem-imagens.md` | Escrito |
 | A | Apêndice: referência de comandos | `apendice-comandos.md` | Escrito |
+
+## Anexos
+
+| # | Seção | Arquivo | Estado |
+| --- | --- | --- | --- |
+| — | Agradecimentos (linhagem: BloopAI → dexloom → Alternative) | `16-agradecimentos.md` | Escrito |
 
 ## Screenshots-âncora (caps. 3–8)
 
