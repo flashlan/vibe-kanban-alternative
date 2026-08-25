@@ -531,11 +531,11 @@ export const ConversationList = forwardRef<
   );
 
   const scrollToBottomAndClearSpacer = useCallback(
-    (behavior?: 'auto' | 'smooth') => {
+    (behavior?: 'auto' | 'smooth', force = false) => {
       if (planRevealSpacerRef.current) {
         planRevealSpacerRef.current.style.height = '0px';
       }
-      conversationVirtualizer.scrollToBottom(behavior);
+      conversationVirtualizer.scrollToBottom(behavior, force);
     },
     [conversationVirtualizer]
   );
@@ -645,7 +645,10 @@ export const ConversationList = forwardRef<
         scrollToPreviousUserMessage();
       },
       scrollToBottom: (behavior = 'smooth') => {
-        scrollToBottomAndClearSpacer(behavior);
+        scrollToBottomAndClearSpacer(behavior, true);
+      },
+      releaseBottomLock: () => {
+        conversationVirtualizer.releaseBottomLock();
       },
       releaseBottomLock: () => {
         conversationVirtualizer.releaseBottomLock();

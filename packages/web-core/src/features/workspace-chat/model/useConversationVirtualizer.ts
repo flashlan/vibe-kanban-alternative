@@ -89,7 +89,7 @@ export interface ConversationVirtualizerResult {
   measureElement: (node: Element | null) => void;
 
   /** Scroll to the absolute bottom of the list. */
-  scrollToBottom: (behavior?: ScrollToOptionsBehavior) => void;
+  scrollToBottom: (behavior?: ScrollToOptionsBehavior, force?: boolean) => void;
 
   /** Scroll to a specific row index. */
   scrollToIndex: (
@@ -153,6 +153,7 @@ export function useConversationVirtualizer({
   shouldSuppressSizeAdjustment,
 }: ConversationVirtualizerOptions): ConversationVirtualizerResult {
   const bottomLockedRef = useRef(false);
+  const userScrollPausedRef = useRef(false);
   const smoothScrollDeadlineRef = useRef(0);
   const lastScrollBehaviorRef = useRef<ScrollToOptionsBehavior>('auto');
 
@@ -369,10 +370,12 @@ export function useConversationVirtualizer({
   // -------------------------------------------------------------------------
 
   const scrollToBottom = useCallback(
-    (behavior: ScrollToOptionsBehavior = 'smooth') => {
+    (behavior: ScrollToOptionsBehavior = 'smooth', force = false) => {
       const el = scrollContainerRef.current;
       if (!el) return;
+      if (userScrollPausedRef.current && !force) return;
 
+      userScrollPausedRef.current = false;
       bottomLockedRef.current = true;
       lastScrollBehaviorRef.current = behavior;
 
@@ -404,9 +407,8 @@ export function useConversationVirtualizer({
         behavior?: ScrollToOptionsBehavior;
       }
     ) => {
-      if (bottomLockedRef.current) {
-        bottomLockedRef.current = false;
-      }
+      userScrollPausedRef.current = true;
+      bottomLockedRef.current = false;
 
       virtualizer.scrollToIndex(index, {
         align: options?.align ?? 'start',
@@ -437,12 +439,13 @@ export function useConversationVirtualizer({
 
   const checkIsAtBottom = useCallback((): boolean => {
     const el = scrollContainerRef.current;
-    if (!el) return true;
+    if (!el) return !userScrollPausedRef.current;
+    if (userScrollPausedRef.current) return false;
     return isNearBottom(el.scrollTop, el.clientHeight, el.scrollHeight);
   }, [scrollContainerRef]);
 
   const releaseBottomLock = useCallback(() => {
-    if (!bottomLockedRef.current) return;
+    userScrollPausedRef.current = true;
     bottomLockedRef.current = false;
   }, []);
 
