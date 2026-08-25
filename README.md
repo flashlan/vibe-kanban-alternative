@@ -85,87 +85,6 @@ npx vibe-kanban-alternative
 
 This downloads prebuilt binaries and starts the local web cockpit at `http://localhost:3001` (backend on `:3002`).
 
-### Development Setup
-
-For development, custom ports, a local mem0 vector store, or custom agent configuration, run the project from source.
-
-**Prerequisites**
-- [Node.js](https://nodejs.org/) (>=20) and [pnpm](https://pnpm.io/)
-- [Rust](https://rustup.rs/) (stable toolchain)
-- [Docker](https://www.docker.com/), for the mem0 graph memory stack (optional)
-
-**1. Clone and install**
-
-```bash
-git clone https://github.com/flashlan/vibe-kanban-alternative.git
-cd vibe-kanban-alternative
-pnpm i
-```
-
-**2. Configure environment variables**
-
-```bash
-cp .env.example .env
-```
-
-Then open `.env` and set the values relevant to your setup:
-
-```env
-# ==========================================
-# CORE SERVER CONFIGURATION
-# ==========================================
-PORT=3000
-HOST=localhost
-NODE_ENV=development
-
-# ==========================================
-# MEM0 LONG-TERM MEMORY SETTINGS
-# ==========================================
-MEM0_ENABLED=true
-MEM0_API_KEY=your_mem0_api_key_here
-# If running local embeddings/vector store:
-# MEM0_VECTOR_STORE=qdrant
-# MEM0_HOST=http://localhost:6333
-
-# ==========================================
-# AGENT API KEYS & RUNTIMES
-# ==========================================
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
-GEMINI_API_KEY=...
-
-# Antigravity (AGY) Specific Settings
-AGY_CLI_PATH=/usr/local/bin/agy
-AGY_DEFAULT_TEMPERATURE=0.2
-
-# ==========================================
-# METRICS & TELEMETRY
-# ==========================================
-ENABLE_METRICS_DASHBOARD=true
-METRICS_STORAGE_PATH=./data/metrics.sqlite
-
-# ==========================================
-# BACKUP CONFIGURATION
-# ==========================================
-BACKUP_ENABLED=true
-BACKUP_INTERVAL_MINUTES=30
-BACKUP_STORAGE_PATH=./backups
-```
-
-**3. Start the project memory stack (optional, recommended)**
-
-```bash
-cd mem0-vk && cp .env.example .env && docker compose up -d --build && cd ..
-```
-
-**4. Start the development cockpit**
-
-```bash
-./restart.sh
-```
-
-Frontend runs on `:3001`, backend on `:3002`.
-
 ## Project Memory (mem0)
 
 `vibe-kanban-alternative` ships with a first-class mem0 integration, giving every coding agent driving a workspace a durable, semantic memory of the repositories it works in.
@@ -383,6 +302,87 @@ Full REST API integration alongside GitHub:
 - Automatic routing: `github.com` remotes use the `gh` CLI; custom hosts use the Gitea REST API.
 - Secure token storage in `~/.vibe-kanban/gitea.toml` or `GITEA_TOKEN`.
 - Unified comments and PR lifecycle management.
+
+## Development Setup
+
+For development, custom ports, a local mem0 vector store, or custom agent configuration, run the project from source.
+
+**Prerequisites**
+- [Node.js](https://nodejs.org/) (>=20) and [pnpm](https://pnpm.io/)
+- [Rust](https://rustup.rs/) (stable toolchain)
+- [Docker](https://www.docker.com/), for the mem0 graph memory stack (optional)
+
+**1. Clone and install**
+
+```bash
+git clone https://github.com/flashlan/vibe-kanban-alternative.git
+cd vibe-kanban-alternative
+pnpm i
+```
+
+**2. Configure environment variables**
+
+```bash
+cp .env.example .env
+```
+
+Then open `.env` and set the values relevant to your setup:
+
+```env
+# ==========================================
+# CORE SERVER CONFIGURATION
+# ==========================================
+PORT=3000
+HOST=localhost
+NODE_ENV=development
+
+# ==========================================
+# MEM0 LONG-TERM MEMORY SETTINGS
+# ==========================================
+MEM0_ENABLED=true
+MEM0_API_KEY=your_mem0_api_key_here
+# If running local embeddings/vector store:
+# MEM0_VECTOR_STORE=qdrant
+# MEM0_HOST=http://localhost:6333
+
+# ==========================================
+# AGENT API KEYS & RUNTIMES
+# ==========================================
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GEMINI_API_KEY=...
+
+# Antigravity (AGY) Specific Settings
+AGY_CLI_PATH=/usr/local/bin/agy
+AGY_DEFAULT_TEMPERATURE=0.2
+
+# ==========================================
+# METRICS & TELEMETRY
+# ==========================================
+ENABLE_METRICS_DASHBOARD=true
+METRICS_STORAGE_PATH=./data/metrics.sqlite
+
+# ==========================================
+# BACKUP CONFIGURATION
+# ==========================================
+BACKUP_ENABLED=true
+BACKUP_INTERVAL_MINUTES=30
+BACKUP_STORAGE_PATH=./backups
+```
+
+**3. Start the project memory stack (optional, recommended)**
+
+```bash
+cd mem0-vk && cp .env.example .env && docker compose up -d --build && cd ..
+```
+
+**4. Start the development cockpit**
+
+```bash
+./restart.sh
+```
+
+Frontend runs on `:3001`, backend on `:3002`.
 
 ## License
 
