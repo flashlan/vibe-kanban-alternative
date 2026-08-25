@@ -34,7 +34,10 @@ use tokio::{
 use tokio_util::sync::CancellationToken;
 use workspace_utils::approvals::{ApprovalStatus, QuestionStatus};
 
-use super::jsonrpc::{JsonRpcCallbacks, JsonRpcPeer};
+use super::{
+    AppServerCompatibility,
+    jsonrpc::{JsonRpcCallbacks, JsonRpcPeer},
+};
 use crate::{
     approvals::{ExecutorApprovalError, ExecutorApprovalService},
     env::RepoContext,
@@ -89,12 +92,13 @@ pub struct AppServerClient {
     commit_reminder: bool,
     commit_reminder_prompt: String,
     commit_reminder_sent: AtomicBool,
+    compatibility: AppServerCompatibility,
     cancel: CancellationToken,
 }
 
 impl AppServerClient {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    pub(super) fn new(
         log_writer: LogWriter,
         approvals: Option<Arc<dyn ExecutorApprovalService>>,
         auto_approve: bool,
@@ -102,6 +106,7 @@ impl AppServerClient {
         repo_context: RepoContext,
         commit_reminder: bool,
         commit_reminder_prompt: String,
+        compatibility: AppServerCompatibility,
         cancel: CancellationToken,
     ) -> Arc<Self> {
         Arc::new(Self {
@@ -118,6 +123,7 @@ impl AppServerClient {
             commit_reminder,
             commit_reminder_prompt,
             commit_reminder_sent: AtomicBool::new(false),
+            compatibility,
             cancel,
         })
     }
@@ -174,15 +180,11 @@ impl AppServerClient {
         &self,
         params: ThreadForkParams,
     ) -> Result<ThreadForkResponse, ExecutorError> {
-        let request_id = self.next_request_id();
         let request = ClientRequest::ThreadFork {
-            request_id: request_id.clone(),
+            request_id: self.next_request_id(),
             params,
         };
-        let request = thread_fork_request_value(request)?;
-        self.rpc()
-            .request(request_id, &request, "thread/fork", self.cancel.clone())
-            .await
+        self.send_request(request, "thread/fork").await
     }
 
     pub async fn turn_start_with_mode(
@@ -712,6 +714,7 @@ impl AppServerClient {
         R: DeserializeOwned + std::fmt::Debug,
     {
         let request_id = request_id(&request);
+        let request = client_request_value(request, self.compatibility)?;
         self.rpc()
             .request(request_id, &request, label, self.cancel.clone())
             .await
@@ -855,17 +858,23 @@ impl AppServerClient {
     }
 }
 
-fn thread_fork_request_value(request: ClientRequest) -> Result<Value, ExecutorError> {
+fn client_request_value(
+    request: ClientRequest,
+    compatibility: AppServerCompatibility,
+) -> Result<Value, ExecutorError> {
     let mut request = serde_json::to_value(request)
         .map_err(|err| ExecutorError::Io(io::Error::other(err.to_string())))?;
 
-    // codex-app-server 0.149 removed the legacy `permissionProfile` object from
-    // thread/fork in favor of an optional named `permissions` profile id. The
-    // protocol crate pinned by this app still serializes `permissionProfile:
-    // null`, which the newer server rejects even though this client configures
-    // the fork through `sandbox` instead.
-    if let Some(params) = request.get_mut("params").and_then(Value::as_object_mut) {
-        params.remove("permissionProfile");
+    if compatibility == AppServerCompatibility::NamedPermissions {
+        let method = request.get("method").and_then(Value::as_str);
+        if matches!(method, Some("thread/start" | "thread/fork" | "turn/start"))
+            && let Some(params) = request.get_mut("params").and_then(Value::as_object_mut)
+        {
+            // Codex 0.149 replaced the legacy `permissionProfile` object with
+            // an optional named `permissions` id. These requests use sandbox,
+            // so the null legacy field must be omitted rather than translated.
+            params.remove("permissionProfile");
+        }
     }
 
     Ok(request)
@@ -1068,24 +1077,59 @@ impl LogWriter {
 
 #[cfg(test)]
 mod tests {
-    use codex_app_server_protocol::{ClientRequest, RequestId, ThreadForkParams};
+    use codex_app_server_protocol::{
+        ClientRequest, RequestId, ThreadForkParams, ThreadStartParams, TurnStartParams,
+    };
 
-    use super::thread_fork_request_value;
+    use super::{AppServerCompatibility, client_request_value};
 
     #[test]
-    fn thread_fork_omits_legacy_permission_profile() {
+    fn named_permissions_compatibility_omits_legacy_field_from_session_requests() {
+        let requests = [
+            ClientRequest::ThreadStart {
+                request_id: RequestId::Integer(1),
+                params: ThreadStartParams::default(),
+            },
+            ClientRequest::ThreadFork {
+                request_id: RequestId::Integer(2),
+                params: ThreadForkParams {
+                    thread_id: "thread-1".to_string(),
+                    ..Default::default()
+                },
+            },
+            ClientRequest::TurnStart {
+                request_id: RequestId::Integer(3),
+                params: TurnStartParams::default(),
+            },
+        ];
+
+        for request in requests {
+            let value =
+                client_request_value(request, AppServerCompatibility::NamedPermissions).unwrap();
+            assert!(
+                !value["params"]
+                    .as_object()
+                    .unwrap()
+                    .contains_key("permissionProfile")
+            );
+        }
+    }
+
+    #[test]
+    fn legacy_compatibility_preserves_permission_profile_field() {
         let request = ClientRequest::ThreadFork {
             request_id: RequestId::Integer(1),
-            params: ThreadForkParams {
-                thread_id: "thread-1".to_string(),
-                ..Default::default()
-            },
+            params: ThreadForkParams::default(),
         };
 
-        let value = thread_fork_request_value(request).unwrap();
-        let params = value["params"].as_object().unwrap();
+        let value =
+            client_request_value(request, AppServerCompatibility::LegacyPermissionProfile).unwrap();
 
-        assert!(!params.contains_key("permissionProfile"));
-        assert_eq!(params["threadId"], "thread-1");
+        assert!(
+            value["params"]
+                .as_object()
+                .unwrap()
+                .contains_key("permissionProfile")
+        );
     }
 }

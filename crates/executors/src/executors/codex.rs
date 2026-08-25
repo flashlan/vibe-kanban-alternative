@@ -31,6 +31,71 @@ pub(crate) fn resolve_model(model: Option<&str>) -> (Option<&str>, bool) {
     }
 }
 
+const MIN_SUPPORTED_CODEX_VERSION: CodexVersion = CodexVersion::new(0, 124, 0);
+const MAX_SUPPORTED_CODEX_VERSION_EXCLUSIVE: CodexVersion = CodexVersion::new(0, 150, 0);
+const NAMED_PERMISSIONS_VERSION: CodexVersion = CodexVersion::new(0, 149, 0);
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct CodexVersion {
+    major: u64,
+    minor: u64,
+    patch: u64,
+}
+
+impl CodexVersion {
+    const fn new(major: u64, minor: u64, patch: u64) -> Self {
+        Self {
+            major,
+            minor,
+            patch,
+        }
+    }
+
+    fn parse(output: &str) -> Option<Self> {
+        output.split_whitespace().find_map(|word| {
+            let version = word.trim_start_matches('v');
+            let mut parts = version.split('.');
+            let major = parts.next()?.parse().ok()?;
+            let minor = parts.next()?.parse().ok()?;
+            let patch = parts
+                .next()?
+                .split(|c: char| !c.is_ascii_digit())
+                .next()?
+                .parse()
+                .ok()?;
+            Some(Self::new(major, minor, patch))
+        })
+    }
+}
+
+impl std::fmt::Display for CodexVersion {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(formatter, "{}.{}.{}", self.major, self.minor, self.patch)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(super) enum AppServerCompatibility {
+    LegacyPermissionProfile,
+    NamedPermissions,
+}
+
+fn compatibility_for_version(
+    version: CodexVersion,
+) -> Result<AppServerCompatibility, ExecutorError> {
+    if !(MIN_SUPPORTED_CODEX_VERSION..MAX_SUPPORTED_CODEX_VERSION_EXCLUSIVE).contains(&version) {
+        return Err(ExecutorError::Io(std::io::Error::other(format!(
+            "Codex {version} is not compatible with this app. Supported versions are >= {MIN_SUPPORTED_CODEX_VERSION} and < {MAX_SUPPORTED_CODEX_VERSION_EXCLUSIVE}. Update Vibe Kanban Alternative or install a compatible Codex version."
+        ))));
+    }
+
+    if version >= NAMED_PERMISSIONS_VERSION {
+        Ok(AppServerCompatibility::NamedPermissions)
+    } else {
+        Ok(AppServerCompatibility::LegacyPermissionProfile)
+    }
+}
+
 pub(crate) fn fork_params_from(thread_id: String, params: ThreadStartParams) -> ThreadForkParams {
     ThreadForkParams {
         thread_id,
@@ -455,6 +520,7 @@ impl Codex {
             .await;
 
         let Ok(mut spawned) = spawned else {
+            tracing::warn!("failed to spawn Codex app-server for model discovery");
             return Vec::new();
         };
 
@@ -477,8 +543,20 @@ impl Codex {
         }
         let _ = spawned.child.kill().await;
 
-        let Ok(Ok(Ok(response))) = response else {
-            return Vec::new();
+        let response = match response {
+            Ok(Ok(Ok(response))) => response,
+            Ok(Ok(Err(error))) => {
+                tracing::warn!("Codex model discovery request failed: {error}");
+                return Vec::new();
+            }
+            Ok(Err(_)) => {
+                tracing::warn!("Codex model discovery channel closed before responding");
+                return Vec::new();
+            }
+            Err(_) => {
+                tracing::warn!("Codex model discovery timed out");
+                return Vec::new();
+            }
         };
 
         response
@@ -581,6 +659,13 @@ impl Codex {
 
     fn build_config_overrides(&self) -> Option<HashMap<String, Value>> {
         let mut overrides = HashMap::new();
+
+        // This app-server client does not implement DynamicToolCall execution.
+        // Keep Codex on its built-in shell path even when a user's global
+        // config enables Code Mode, otherwise a run initializes successfully
+        // but cannot execute repository commands without code-mode-host.
+        overrides.insert("features.code_mode".to_string(), Value::Bool(false));
+        overrides.insert("features.code_mode_host".to_string(), Value::Bool(false));
 
         if let Some(effort) = &self.model_reasoning_effort {
             overrides.insert(
@@ -700,6 +785,9 @@ impl Codex {
         Fut: std::future::Future<Output = Result<(), ExecutorError>> + Send + 'static,
     {
         let (program_path, args) = command_parts.into_resolved().await?;
+        let compatibility = self
+            .detect_app_server_compatibility(&program_path, &args, current_dir, env)
+            .await?;
 
         let mut process = Command::new(program_path);
         process
@@ -755,6 +843,7 @@ impl Codex {
                 repo_context,
                 commit_reminder,
                 commit_reminder_prompt,
+                compatibility,
                 cancel_for_task.clone(),
             );
             let rpc_peer = JsonRpcPeer::spawn(
@@ -810,11 +899,59 @@ impl Codex {
             cancel: Some(cancel),
         })
     }
+
+    async fn detect_app_server_compatibility(
+        &self,
+        program_path: &Path,
+        app_server_args: &[String],
+        current_dir: &Path,
+        env: &ExecutionEnv,
+    ) -> Result<AppServerCompatibility, ExecutorError> {
+        let app_server_index = app_server_args
+            .iter()
+            .position(|arg| arg == "app-server")
+            .ok_or_else(|| {
+                ExecutorError::Io(std::io::Error::other(
+                    "Codex command is missing the app-server argument",
+                ))
+            })?;
+        let mut version_args = app_server_args[..app_server_index].to_vec();
+        version_args.push("--version".to_string());
+
+        let mut command = Command::new(program_path);
+        command
+            .kill_on_drop(true)
+            .current_dir(current_dir)
+            .env("NPM_CONFIG_LOGLEVEL", "error")
+            .env("NODE_NO_WARNINGS", "1")
+            .env("NO_COLOR", "1")
+            .args(version_args);
+        env.clone()
+            .with_profile(&self.cmd)
+            .apply_to_command(&mut command);
+
+        let output = command.output().await.map_err(ExecutorError::Io)?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let version = CodexVersion::parse(&stdout)
+            .or_else(|| CodexVersion::parse(&stderr))
+            .ok_or_else(|| {
+                ExecutorError::Io(std::io::Error::other(format!(
+                    "Could not determine the Codex version from `{}`. Expected output such as `codex-cli 0.149.1`.",
+                    stdout.trim()
+                )))
+            })?;
+
+        compatibility_for_version(version)
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::resolve_model;
+    use super::{
+        AppServerCompatibility, CodexVersion, MAX_SUPPORTED_CODEX_VERSION_EXCLUSIVE,
+        MIN_SUPPORTED_CODEX_VERSION, compatibility_for_version, resolve_model,
+    };
 
     #[test]
     fn resolve_model_detects_fast_suffix() {
@@ -838,6 +975,48 @@ mod tests {
         let params = codex.build_thread_start_params(std::path::Path::new("/tmp"));
         let json = serde_json::to_string(&params).unwrap();
         assert!(json.contains("workspace-write"));
+        assert_eq!(params.config.as_ref().unwrap()["features.code_mode"], false);
+        assert_eq!(
+            params.config.as_ref().unwrap()["features.code_mode_host"],
+            false
+        );
+    }
+
+    #[test]
+    fn parses_codex_cli_versions() {
+        assert_eq!(
+            CodexVersion::parse("codex-cli 0.149.1\n"),
+            Some(CodexVersion::new(0, 149, 1))
+        );
+        assert_eq!(
+            CodexVersion::parse("warning\ncodex-cli v0.124.0-beta.1"),
+            Some(CodexVersion::new(0, 124, 0))
+        );
+    }
+
+    #[test]
+    fn compatibility_matrix_covers_minimum_and_current_versions() {
+        assert_eq!(
+            compatibility_for_version(MIN_SUPPORTED_CODEX_VERSION).unwrap(),
+            AppServerCompatibility::LegacyPermissionProfile
+        );
+        assert_eq!(
+            compatibility_for_version(CodexVersion::new(0, 149, 1)).unwrap(),
+            AppServerCompatibility::NamedPermissions
+        );
+    }
+
+    #[test]
+    fn rejects_versions_outside_the_tested_range_with_actionable_error() {
+        for version in [
+            CodexVersion::new(0, 123, 9),
+            MAX_SUPPORTED_CODEX_VERSION_EXCLUSIVE,
+        ] {
+            let error = compatibility_for_version(version).unwrap_err().to_string();
+            assert!(error.contains("not compatible"));
+            assert!(error.contains("Supported versions"));
+            assert!(error.contains("install a compatible Codex version"));
+        }
     }
 
     #[tokio::test]
