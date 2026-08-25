@@ -1,6 +1,6 @@
 use rmcp::{
-    ErrorData, handler::server::wrapper::Parameters, model::CallToolResult, schemars, tool,
-    tool_router,
+    handler::server::wrapper::Parameters, model::CallToolResult, schemars, tool, tool_router,
+    ErrorData,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -73,6 +73,23 @@ impl McpServer {
                 Ok(r) => r,
                 Err(e) => return Ok(Self::tool_error(e)),
             };
+
+        // The MCP surface intentionally supports only the lightweight Quick
+        // pipeline. Keep the broader pipeline catalog available to the UI,
+        // but never expose another pipeline's prompts to coding agents.
+        let resp = if resp.pipeline_names.iter().all(|name| name == "Quick") {
+            resp
+        } else {
+            api_types::pipeline::ResolvedPipelineResponse {
+                workspace_id: resp.workspace_id,
+                pipeline_names: Vec::new(),
+                instructions: String::new(),
+                stages: Vec::new(),
+                executor: None,
+                custom_text: None,
+                current_pipeline_stage: resp.current_pipeline_stage,
+            }
+        };
 
         let stages = resp
             .stages
