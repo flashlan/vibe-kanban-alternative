@@ -28,5 +28,8 @@ export function forwardWheelToScroller(
     delta *= scrollEl.clientHeight;
   }
 
+  // A wheel gesture is explicit user intent. Release the follow-bottom lock
+  // before forwarding the event so streaming cannot pull the chat back down.
+  listRef.current?.releaseBottomLock?.();
   scrollEl.scrollTop += delta;
 }

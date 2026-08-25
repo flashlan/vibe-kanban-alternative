@@ -55,6 +55,7 @@ interface ConversationListProps {
 export interface ConversationListHandle {
   scrollToPreviousUserMessage: () => void;
   scrollToBottom: (behavior?: 'auto' | 'smooth') => void;
+  releaseBottomLock: () => void;
   adjustScrollBy: (delta: number) => void;
   getScrollElement: () => HTMLDivElement | null;
   scrollToEntryByPatchKey: (patchKey: string) => void;
@@ -646,6 +647,9 @@ export const ConversationList = forwardRef<
       scrollToBottom: (behavior = 'smooth') => {
         scrollToBottomAndClearSpacer(behavior);
       },
+      releaseBottomLock: () => {
+        conversationVirtualizer.releaseBottomLock();
+      },
       adjustScrollBy: (delta) => {
         if (Math.abs(delta) < 0.5) return;
         const scrollElement = tanstackScrollRef.current;
@@ -764,6 +768,7 @@ export const ConversationList = forwardRef<
           ref={tanstackScrollRef}
           className="h-full overflow-y-auto scrollbar-none"
           style={{ overflowAnchor: 'none', contain: 'strict' }}
+          onWheelCapture={() => conversationVirtualizer.releaseBottomLock()}
           onClickCapture={handleConversationClickCapture}
         >
           <div className="pt-2">
