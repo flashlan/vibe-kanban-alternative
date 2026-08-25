@@ -648,6 +648,16 @@ impl LocalContainerService {
                         if let Err(e) = container.try_start_next_action(&ctx).await {
                             tracing::error!("Failed to start next action after completion: {}", e);
                         }
+                    } else if container.queued_message_service.has_queued(ctx.session.id) {
+                        // A follow-up queue must outlive an otherwise terminal turn.
+                        // This is especially important for executors such as Codex,
+                        // where a successful response can make no file changes: the
+                        // queued prompt is still a user-requested next turn and is
+                        // consumed by the common finalization block below.
+                        tracing::debug!(
+                            session_id = %ctx.session.id,
+                            "Keeping completed session open to dispatch queued follow-up"
+                        );
                     } else {
                         tracing::info!(
                             "Skipping cleanup script for workspace {} - no changes made by coding agent",
