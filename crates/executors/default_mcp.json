@@ -3,8 +3,10 @@
     "command": "npx",
     "args": [
       "-y",
-      "vibe-kanban@latest",
-      "--mcp"
+      "vibe-kanban-alternative@latest",
+      "--mcp",
+      "--mode",
+      "global"
     ]
   },
   "context7": {
@@ -83,4 +85,3 @@
     }
   }
 }
-

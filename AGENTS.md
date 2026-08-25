@@ -22,6 +22,7 @@ Rules:
 - [x] **Done** — Add urgency and tags buttons to create-issue dialog (`vk/160b-feature-definir`)
 - [x] **Done** — Browser cache for workspace conversations to skip re-stream on switch (`vk/f804-poss-vel-cache-d`)
 - [x] **Done** — Workspace color setting (sidebar tree tint) (`vk/3585-altra-cor-do-wor`)
+- [ ] **In Review** — Expor tools, MCP e Mem0 para Codex (`vk/d95f-tools-e-mcp-ara`)
 - [ ] **In Review** — Livro Vibe Kanban na Amazon — checklist + manuscrito completo (15 caps + apêndice + Agradecimentos, ~1.830 linhas, 12 âncoras) (`vk/1f98-livre-vibo-kanba`)
 
 ## Card Pipeline Protocol (MCP)
@@ -104,5 +105,4 @@ Do not manually edit shared/types.ts, instead edit crates/server/src/bin/generat
 ## Security & Config Tips
 - Use `.env` for local overrides; never commit secrets. Key envs: `FRONTEND_PORT`, `BACKEND_PORT`, `HOST`
 - Dev ports are fixed: frontend `3001`, backend `3002`, preview proxy `3003`. Dev assets live in `dev_assets/` (seeded from `dev_assets_seed/`).
-
 

@@ -417,3 +417,42 @@ impl CodingAgent {
         apply_adapter(adapter, canonical)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use serde_json::Value;
+
+    use super::{Adapter, PRECONFIGURED_MCP_SERVERS, apply_adapter};
+
+    #[test]
+    fn codex_vibe_kanban_preset_runs_this_forks_global_mcp_server() {
+        let preset = apply_adapter(Adapter::Codex, PRECONFIGURED_MCP_SERVERS.clone());
+        let vibe_kanban = preset
+            .get("vibe_kanban")
+            .and_then(Value::as_object)
+            .expect("Codex must expose the Vibe Kanban MCP preset");
+
+        assert_eq!(
+            vibe_kanban.get("command").and_then(Value::as_str),
+            Some("npx")
+        );
+        assert_eq!(
+            vibe_kanban.get("args").and_then(Value::as_array),
+            Some(&vec![
+                Value::String("-y".to_string()),
+                Value::String("vibe-kanban-alternative@latest".to_string()),
+                Value::String("--mcp".to_string()),
+                Value::String("--mode".to_string()),
+                Value::String("global".to_string()),
+            ])
+        );
+    }
+
+    #[test]
+    fn codex_preset_omits_unsupported_http_servers() {
+        let preset = apply_adapter(Adapter::Codex, PRECONFIGURED_MCP_SERVERS.clone());
+
+        assert!(preset.get("context7").is_none());
+        assert!(preset.get("vibe_kanban").is_some());
+    }
+}
