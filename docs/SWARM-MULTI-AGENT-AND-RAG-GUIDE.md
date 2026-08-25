@@ -40,7 +40,7 @@ O conhecimento e contexto dos agentes são organizados em 4 camadas complementar
 
 ### 2. Contexto Mestre do Projeto (Orchestrator Prompt / `AGENTS.md`)
 * **Onde editar na UI**: No topo do Quadro Kanban, clique no botão **`Orchestrator Prompt`**.
-* **Onde editar no Repositório**: Arquivo [`AGENTS.md`](../AGENTS.md) (ou `CLAUDE.md`) na raiz do repositório.
+* **Onde editar no Repositório**: Arquivo [`AGENTS.md`](https://github.com/flashlan/vibe-kanban-alternative/blob/main/AGENTS.md) (ou `CLAUDE.md`) na raiz do repositório.
 * **O que colocar**: Diretrizes globais obrigatórias (estilo de código, comandos de build e testes como `cargo test`, `pnpm run check`, regras de branches).
 
 ### 3. Contexto da Tarefa (`SPEC.md` e `IMPLEMENTATION_PLAN.md`)
@@ -141,4 +141,3 @@ Para garantir **zero conflitos de Git** e eliminar riscos de agentes corrompendo
    * O `Claude 3.7 Sonnet` executa a implementação de código de forma linear e determinística.
 3. **Fase 3: Relações de Bloqueio no Kanban (`IssueRelationshipType::Blocking`)**:
    * Sub-issues dependentes exibem o status `⏳ Bloqueada por #ID` e só são liberadas para execução quando as tarefas anteriores alcançarem `Done`.
-

@@ -5,7 +5,7 @@
 
 ## Context
 
-Following [ADR-025](ADR-025-multi-agent-handoff-pipelines.md) (Multi-Agent Handoff Pipelines), large-scale user requests require two critical capabilities for a true autonomous single-developer workflow:
+Following [ADR-025](/ADR/ADR-025-multi-agent-handoff-pipelines) (Multi-Agent Handoff Pipelines), large-scale user requests require two critical capabilities for a true autonomous single-developer workflow:
 
 1. **Autonomous Task Decomposition (Hierarchical Sub-Issues & Swarm PM)**:
    - When a developer submits a complex high-level feature (e.g. "Implement GitHub OAuth login with JWT sessions and user profile UI"), no single prompt can safely implement the full stack in one run.

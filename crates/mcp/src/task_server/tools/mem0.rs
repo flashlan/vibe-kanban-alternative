@@ -135,10 +135,12 @@ struct McpUnifiedSearchRequest {
     #[schemars(description = "Terms describing the card, chat, decision, or operation to find")]
     query: String,
     #[schemars(
-        description = "Optional issue/card ID; defaults to the current card when available"
+        description = "Search scope: 'global' (default) searches the whole repository; use 'current' only when the user explicitly refers to this section/workspace"
     )]
+    scope: Option<String>,
+    #[schemars(description = "Optional issue/card ID for an exact card scope")]
     issue_id: Option<Uuid>,
-    #[schemars(description = "Optional workspace ID; defaults to the current workspace")]
+    #[schemars(description = "Optional workspace ID for an exact workspace scope")]
     workspace_id: Option<Uuid>,
     #[schemars(
         description = "Optional repository slug for mem0; defaults to the current repository"
@@ -414,15 +416,24 @@ impl McpServer {
 #[tool_router(router = mem0_tools_router, vis = "pub")]
 impl McpServer {
     #[tool(
-        description = "Search the current project's operation history and mem0 with one compact call. Use this for questions about cards, chats, changes, decisions, or work already performed. The database provides exact execution facts; mem0 provides related semantic context. Include issue_id when the question concerns a specific card. Results are capped per source and intentionally omit full transcripts to save tokens."
+        description = "Search the project's operation history and mem0 with one compact call. Use this for questions about cards, chats, changes, decisions, or work already performed. The default scope is global across the repository; use scope='current' only when the user explicitly refers to this section/workspace, or pass issue_id/workspace_id for an exact scope. The database provides exact execution facts; mem0 provides related semantic context. Results are capped per source and intentionally omit full transcripts to save tokens."
     )]
     async fn search_workspace(
         &self,
         Parameters(request): Parameters<McpUnifiedSearchRequest>,
     ) -> Result<CallToolResult, ErrorData> {
         let limit = request.limit.unwrap_or(DEFAULT_SEARCH_LIMIT).clamp(1, 10);
-        let workspace_id = request.workspace_id.or_else(|| self.scoped_workspace_id());
-        let issue_id = request.issue_id.or_else(|| self.context.as_ref()?.issue_id);
+        let use_current_scope = request.scope.as_deref() == Some("current");
+        let workspace_id = request.workspace_id.or_else(|| {
+            use_current_scope
+                .then(|| self.scoped_workspace_id())
+                .flatten()
+        });
+        let issue_id = request.issue_id.or_else(|| {
+            use_current_scope
+                .then(|| self.context.as_ref().and_then(|context| context.issue_id))
+                .flatten()
+        });
         let query = request.query;
         let repo_id = request.repo_id.or_else(|| {
             self.context
