@@ -135,6 +135,23 @@ impl File {
         .await
     }
 
+    pub async fn find_by_issue_id(
+        pool: &SqlitePool,
+        issue_id: Uuid,
+    ) -> Result<Vec<Self>, sqlx::Error> {
+        sqlx::query_as!(
+            File,
+            r#"SELECT i.id as "id!: Uuid", i.file_path as "file_path!", i.original_name as "original_name!",
+                      i.mime_type, i.size_bytes as "size_bytes!", i.hash as "hash!",
+                      i.created_at as "created_at!: DateTime<Utc>", i.updated_at as "updated_at!: DateTime<Utc>"
+               FROM attachments i JOIN issue_attachments ia ON i.id = ia.attachment_id
+               WHERE ia.issue_id = $1 ORDER BY ia.created_at"#,
+            issue_id
+        )
+        .fetch_all(pool)
+        .await
+    }
+
     pub async fn delete(pool: &SqlitePool, id: Uuid) -> Result<(), sqlx::Error> {
         sqlx::query!(r#"DELETE FROM attachments WHERE id = $1"#, id)
             .execute(pool)

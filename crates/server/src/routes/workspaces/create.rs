@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use axum::{Json, extract::State, response::Json as ResponseJson};
 use db::models::{
     execution_process::{ExecutionProcess, ExecutionProcessStatus},
+    file::File,
     issue::Issue,
     issue_workspace::IssueWorkspace,
     repo::Repo,
@@ -143,6 +144,14 @@ pub async fn create_and_start_workspace(
         None => None,
     };
 
+    // Card attachments are not merely Markdown links: make them workspace
+    // attachments so the local deployment copies them into .vibe-attachments
+    // before the coding agent starts.
+    let issue_attachments = match &linked_local_issue {
+        Some(issue) => File::find_by_issue_id(pool, issue.id).await?,
+        None => Vec::new(),
+    };
+
     // Fix 2: expand an issue-linked workspace to the project's full default repo
     // set so sibling path-dependency repos are mounted even when the caller
     // supplied only one. The source is the `PROJECT_REPO_DEFAULTS` scratch — the
@@ -205,8 +214,16 @@ pub async fn create_and_start_workspace(
         }
     }
 
-    if let Some(ids) = &attachment_ids {
-        managed_workspace.associate_attachments(ids).await?;
+    let mut all_attachment_ids = attachment_ids.unwrap_or_default();
+    for attachment in &issue_attachments {
+        if !all_attachment_ids.contains(&attachment.id) {
+            all_attachment_ids.push(attachment.id);
+        }
+    }
+    if !all_attachment_ids.is_empty() {
+        managed_workspace
+            .associate_attachments(&all_attachment_ids)
+            .await?;
     }
 
     let workspace = managed_workspace.workspace.clone();
@@ -233,6 +250,16 @@ pub async fn create_and_start_workspace(
             tokio::spawn(async move {
                 services::services::auto_move::on_workspace_created(&pool_clone, issue_id).await;
             });
+        }
+    }
+
+    if !issue_attachments.is_empty() {
+        final_prompt.push_str("\n\n## Card attachments\nThe card's attached files have been copied locally. Inspect the relevant files before implementing:\n");
+        for attachment in &issue_attachments {
+            final_prompt.push_str(&format!(
+                "- `.vibe-attachments/{}` ({})\n",
+                attachment.file_path, attachment.original_name
+            ));
         }
     }
 
