@@ -125,7 +125,7 @@ struct McpMemorySearchRequest {
     limit: Option<usize>,
 }
 
-#[derive(Debug, Serialize, schemars::JsonSchema)]
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
 struct McpMemorySearchResult {
     memories: Vec<String>,
 }
