@@ -10,7 +10,7 @@ import {
   type NavbarBreadcrumbItem,
   type MobileTabId,
 } from '@vibe/ui/components/Navbar';
-import { BrandLockup } from '@vibe/ui/components/Logo';
+import { BrandLockup, GitHubStarBanner } from '@vibe/ui/components/Logo';
 import { useProjects } from '@/shared/hooks/useProjects';
 import { useShape } from '@/shared/integrations/electric/hooks';
 import { PROJECT_ISSUES_SHAPE } from 'shared/remote-types';
@@ -298,7 +298,12 @@ export function NavbarContainer({
     <Navbar
       workspaceTitle={navbarTitle}
       breadcrumbs={breadcrumbs}
-      brand={<BrandLockup />}
+      brand={
+        <div className="flex items-center gap-base">
+          <BrandLockup />
+          <GitHubStarBanner />
+        </div>
+      }
       leftItems={leftItems}
       rightItems={rightItems}
       syncErrors={syncErrors}

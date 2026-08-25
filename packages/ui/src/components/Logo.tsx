@@ -1,4 +1,5 @@
 import { cn } from '../lib/cn';
+import { GithubLogo, Star } from '@phosphor-icons/react';
 
 /**
  * Feather Caret — the Vibe Kanban Indie brand mark.
@@ -81,5 +82,28 @@ export function BrandLockup({ className }: { className?: string }) {
       <FeatherCaret size={32} className="text-brand" />
       <BrandWordmark />
     </span>
+  );
+}
+
+/** Small call-to-action displayed beside the application wordmark. */
+export function GitHubStarBanner({ className }: { className?: string }) {
+  return (
+    <a
+      href="https://github.com/flashlan/vibe-kanban-alternative"
+      target="_blank"
+      rel="noreferrer"
+      aria-label="Give Vibe Kanban Alternative a star on GitHub"
+      className={cn(
+        'flex items-center gap-1.5 rounded border border-brand/40 px-2 py-1',
+        'font-ibm-plex-mono text-micro font-semibold tracking-[0.08em] text-brand',
+        'transition-colors hover:border-brand hover:bg-brand/10 hover:text-high',
+        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand',
+        className
+      )}
+    >
+      <GithubLogo className="size-icon-sm" weight="fill" />
+      <span>GIVE US A STAR</span>
+      <Star className="size-icon-sm" weight="fill" />
+    </a>
   );
 }
