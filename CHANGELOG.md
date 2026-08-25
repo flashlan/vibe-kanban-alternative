@@ -7,6 +7,22 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-alternat
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.43] - 2026-08-25
+
+### Added
+
+- Added a unified MCP search across operation history and semantic memory, with repository-wide search as the default and optional card/workspace scoping.
+- Added a GitHub star banner to the navigation bar.
+
+### Fixed
+
+- Paused automatic chat scrolling when the user scrolls manually with the mouse wheel.
+- Decoded unified mem0 search responses correctly and exposed workspace search through the MCP tool surface.
+
+### Documentation
+
+- Fixed broken Mintlify links between the multi-agent ADRs and the repository-level `AGENTS.md`.
+
 ## [0.2.42] - 2026-08-25
 
 ### Added
