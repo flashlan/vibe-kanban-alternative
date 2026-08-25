@@ -7,6 +7,27 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-alternat
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.42] - 2026-08-25
+
+### Added
+
+- Added Atelier light and night themes.
+- Added an IDE launcher helper for macOS development builds.
+
+### Fixed
+
+- **Codex app-server compatibility**: detect the installed Codex version before startup, accept the tested 0.124.x–0.149.x range, and adapt `thread/start`, `thread/fork`, and `turn/start` requests for the named-permissions protocol introduced in Codex 0.149. Unsupported versions now fail early with an actionable message.
+- **Codex workspace command execution**: disable Code Mode for this client because it does not implement dynamic tool execution, keeping self-hosted sessions on Codex's built-in shell path when `codex-code-mode-host` is unavailable.
+- **Codex MCP configuration**: expose the local Vibe Kanban MCP tools and migrate the legacy bundled MCP preset safely.
+- **Workspace attachments**: copy issue attachments into agent workspaces and include their local paths in the initial prompt.
+- **Queued follow-ups**: dispatch queued messages after successful no-op turns instead of finalizing the session early.
+- Restored the missing SQLx offline metadata for issue attachments and fixed the create-workspace prompt initialization order.
+
+### Documentation
+
+- Documented the Codex app-server compatibility policy in ADR-034.
+- Updated the Vibe Kanban book manuscript, acknowledgements, and KDP publication checklist.
+
 ## [0.2.41] - 2026-08-24
 
 ### Fixed
