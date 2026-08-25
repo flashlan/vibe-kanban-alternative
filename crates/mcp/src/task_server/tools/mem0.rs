@@ -131,6 +131,41 @@ struct McpMemorySearchResult {
 }
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct McpUnifiedSearchRequest {
+    #[schemars(description = "Terms describing the card, chat, decision, or operation to find")]
+    query: String,
+    #[schemars(
+        description = "Optional issue/card ID; defaults to the current card when available"
+    )]
+    issue_id: Option<Uuid>,
+    #[schemars(description = "Optional workspace ID; defaults to the current workspace")]
+    workspace_id: Option<Uuid>,
+    #[schemars(
+        description = "Optional repository slug for mem0; defaults to the current repository"
+    )]
+    repo_id: Option<String>,
+    #[schemars(description = "Maximum results per source (default 5, capped at 10)")]
+    limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
+struct McpDatabaseSearchResult {
+    source: String,
+    execution_id: String,
+    workspace_id: String,
+    issue_id: Option<String>,
+    created_at: String,
+    prompt: Option<String>,
+    summary: Option<String>,
+}
+
+#[derive(Debug, Serialize, schemars::JsonSchema)]
+struct McpUnifiedSearchResult {
+    database: Vec<McpDatabaseSearchResult>,
+    memories: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
 struct McpMemorySaveRequest {
     #[schemars(
         description = "Self-contained, factual memory to persist. Only save VERIFIED, durable facts — never speculation."
@@ -378,6 +413,66 @@ impl McpServer {
 
 #[tool_router(router = mem0_tools_router, vis = "pub")]
 impl McpServer {
+    #[tool(
+        description = "Search the current project's operation history and mem0 with one compact call. Use this for questions about cards, chats, changes, decisions, or work already performed. The database provides exact execution facts; mem0 provides related semantic context. Include issue_id when the question concerns a specific card. Results are capped per source and intentionally omit full transcripts to save tokens."
+    )]
+    async fn search_workspace(
+        &self,
+        Parameters(request): Parameters<McpUnifiedSearchRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let limit = request.limit.unwrap_or(DEFAULT_SEARCH_LIMIT).clamp(1, 10);
+        let workspace_id = request.workspace_id.or_else(|| self.scoped_workspace_id());
+        let issue_id = request.issue_id.or_else(|| self.context.as_ref()?.issue_id);
+        let query = request.query;
+        let repo_id = request.repo_id.or_else(|| {
+            self.context
+                .as_ref()
+                .and_then(|context| context.workspace_repos.first())
+                .map(|repo| repo.repo_name.clone())
+        });
+
+        let database = self
+            .client
+            .post(self.url("/api/search/agent-history"))
+            .json(&serde_json::json!({
+                "q": query.clone(),
+                "issue_id": issue_id,
+                "workspace_id": workspace_id,
+                "limit": limit,
+            }))
+            .send()
+            .await
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))?
+            .json::<crate::ApiResponseEnvelope<Vec<McpDatabaseSearchResult>>>()
+            .await
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))?
+            .data
+            .unwrap_or_default();
+
+        let memories = if let Some(user_id) = repo_id {
+            let result = self
+                .memory_search(Parameters(McpMemorySearchRequest {
+                    query: query.to_string(),
+                    user_id,
+                    limit: Some(limit),
+                }))
+                .await?;
+            result
+                .content
+                .first()
+                .and_then(|content| content.as_text())
+                .and_then(|content| {
+                    serde_json::from_str::<McpMemorySearchResult>(&content.text).ok()
+                })
+                .map(|result| result.memories)
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
+
+        McpServer::success_compact(&McpUnifiedSearchResult { database, memories })
+    }
+
     /// Search the project's shared mem0 memory for facts relevant to a query.
     /// Returns ranked, deduplicated memory contents. Best-effort: mem0 is an
     /// optional dependency, so any failure (unreachable, bad status,
