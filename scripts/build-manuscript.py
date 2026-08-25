@@ -28,6 +28,7 @@ ORDER = [
     "14-orquestracao.md",
     "15-ancoragem-imagens.md",
     "apendice-comandos.md",
+    "16-agradecimentos.md",
 ]
 
 TITLE = """# Manual Moderno de Vibe Coding

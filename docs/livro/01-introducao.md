@@ -2,7 +2,7 @@
 
 ## Para quem é este livro
 
-Para um desenvolvedor que acabou de instalar o Vibe Kanban Indie e quer **usar a interface para desenvolver de verdade** — não para estudar a arquitetura do app. Ao final da Parte I você vai saber:
+Para um desenvolvedor que acabou de instalar o Vibe Kanban Alternative e quer **usar a interface para desenvolver de verdade** — não para estudar a arquitetura do app. Ao final da Parte I você vai saber:
 
 - instalar e configurar o app no seu `projects.toml`;
 - navegar na interface (board, workspaces, painéis);
@@ -15,9 +15,9 @@ A **Parte II** fica para quando você quiser customizar o próprio Vibe Kanban. 
 
 > **Leia o capítulo 02 antes de instalar.** Ele apresenta o vocabulário do vibe coding atual — *Engineering Loop*, *Spec Development*, *multi-agente*, *YOLO mode*, *context engineering* — com exemplos deste repositório. Os capítulos práticos (03 em diante) assumem que você já reconhece esses termos.
 
-## O que é o Vibe Kanban Indie, em uma página
+## O que é o Vibe Kanban Alternative, em uma página
 
-O Vibe Kanban Indie é um **kanban self-hosted para um desenvolvedor solo dirigir agentes de IA**. Cada cartão do quadro é uma tarefa ("consertar login", "criar página de planos do SaaS"). Cada tarefa vira um **workspace** — uma pasta isolada com seu próprio branch git — onde um agente (Claude Code, OpenCode, Codex, Gemini, Cursor, Copilot, etc.) escreve código por você. Você acompanha o progresso no board, revisa diffs e dá merge.
+O Vibe Kanban Alternative é um **kanban self-hosted para um desenvolvedor solo dirigir agentes de IA**. Cada cartão do quadro é uma tarefa ("consertar login", "criar página de planos do SaaS"). Cada tarefa vira um **workspace** — uma pasta isolada com seu próprio branch git — onde um agente (Claude Code, OpenCode, Codex, Gemini, Cursor, Copilot, etc.) escreve código por você. Você acompanha o progresso no board, revisa diffs e dá merge.
 
 Os conceitos que você vai usar todo dia:
 
