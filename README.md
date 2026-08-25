@@ -227,6 +227,22 @@ flowchart TB
 
 The project memory layer runs on a local Docker stack (`mem0-vk`): a mem0 API server on `:8000`, a Qdrant vector store, and a Python embeddings + NetworkX graph service.
 
+For the simplest installation, run the all-in-one Docker Hub image (API, Qdrant, Redis, local embeddings, and graph in one container):
+
+```bash
+docker run -d \
+  --name vk-mem0 \
+  --restart unless-stopped \
+  -p 8000:8000 \
+  -e GROQ_API_KEY='your-key' \
+  -v vk_mem0_data:/data \
+  datyapoint/vk-mem0:latest
+```
+
+The local embeddings model requires no API key. Settings changed through **Settings → Memory** persist in the same `/data` volume.
+
+For development or independently managed services, use the multi-container stack:
+
 ```bash
 cd mem0-vk
 cp .env.example .env      # then set an extraction LLM key (see below)

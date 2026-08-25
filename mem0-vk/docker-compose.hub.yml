@@ -1,0 +1,21 @@
+services:
+  mem0:
+    image: datyapoint/vk-mem0:${MEM0_TAG:-latest}
+    container_name: vk-mem0
+    ports:
+      - "${MEM0_PORT:-8000}:8000"
+    environment:
+      - MEM0_LLM_PROVIDER=${MEM0_LLM_PROVIDER:-groq}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}
+      - MEM0_OPENROUTER_KEY=${MEM0_OPENROUTER_KEY:-}
+      - MEM0_OPENROUTER_MODEL=${MEM0_OPENROUTER_MODEL:-openai/gpt-oss-20b:free}
+      - MEM0_LLAMA_URL=${MEM0_LLAMA_URL:-}
+      - MEM0_LLAMA_KEY=${MEM0_LLAMA_KEY:-}
+      - MEM0_LLAMA_MODEL=${MEM0_LLAMA_MODEL:-}
+    volumes:
+      - mem0_data:/data
+    restart: unless-stopped
+
+volumes:
+  mem0_data:

@@ -1,0 +1,76 @@
+# syntax=docker/dockerfile:1.7
+
+FROM node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 AS node-build
+
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY tsconfig.json ./
+COPY src/ ./src/
+RUN npm run build && npm prune --omit=dev
+
+# The official Qdrant image supplies the vector database and a compatible
+# Debian runtime. Redis, Node, Python embeddings, and mem0-vk are added here so
+# self-hosted users can start the complete memory stack with one docker run.
+FROM qdrant/qdrant@sha256:057ee3a8da769fe7310dd3537b4dc7583bf87a95ce8ac43c0af5a46bc580d1fc
+
+ARG ST_MODEL=sentence-transformers/all-MiniLM-L6-v2
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PORT=8000 \
+    HOST=0.0.0.0 \
+    QDRANT_URL=http://127.0.0.1:6333 \
+    QDRANT__STORAGE__STORAGE_PATH=/data/qdrant \
+    REDIS_URL=redis://127.0.0.1:6379 \
+    EMBED_LOCAL_URL=http://127.0.0.1:8001/v1 \
+    EMBED_LOCAL_MODEL=sentence-transformers \
+    GRAPH_URL=http://127.0.0.1:8001 \
+    GRAPH_DIR=/data/graphs \
+    EMBED_DIM=384 \
+    MEM0_COLLECTION=mem0-vk \
+    MEM0_DEFAULT_USER=default \
+    ST_MODEL=${ST_MODEL} \
+    HF_HOME=/opt/huggingface \
+    HF_HUB_OFFLINE=1 \
+    PATH=/opt/venv/bin:$PATH
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        nodejs \
+        python3 \
+        python3-pip \
+        python3-venv \
+        redis-server \
+        supervisor \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/venv/bin/pip install --no-cache-dir \
+        torch --index-url https://download.pytorch.org/whl/cpu
+
+COPY embeddings/requirements.txt /tmp/embeddings-requirements.txt
+RUN HF_HUB_OFFLINE=0 /opt/venv/bin/pip install --no-cache-dir -r /tmp/embeddings-requirements.txt \
+    && rm /tmp/embeddings-requirements.txt \
+    && HF_HUB_OFFLINE=0 /opt/venv/bin/python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('${ST_MODEL}', device='cpu')"
+
+WORKDIR /app
+COPY --from=node-build /app/package.json /app/package-lock.json ./
+COPY --from=node-build /app/node_modules/ ./node_modules/
+COPY --from=node-build /app/dist/ ./dist/
+COPY embeddings/app.py /opt/mem0-embeddings/app.py
+COPY docker/supervisord.conf /etc/supervisor/conf.d/mem0-all-in-one.conf
+COPY docker/healthcheck.sh /usr/local/bin/mem0-healthcheck
+
+RUN chmod +x /usr/local/bin/mem0-healthcheck \
+    && mkdir -p /data/qdrant /data/redis /data/graphs /var/log/supervisor
+
+VOLUME ["/data"]
+EXPOSE 8000
+
+HEALTHCHECK --interval=15s --timeout=8s --start-period=120s --retries=5 \
+    CMD ["/usr/local/bin/mem0-healthcheck"]
+
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]

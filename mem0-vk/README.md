@@ -2,6 +2,39 @@
 
 Camada de memória compartilhada para agentes de código — MCP (Streamable-HTTP) + REST, Qdrant, grafos opcionais. Zero GPU: embeddings locais por sentence-transformers (CPU).
 
+## Instalação mais simples — Docker Hub all-in-one
+
+A imagem `datyapoint/vk-mem0` inclui a API, Qdrant, Redis, embeddings locais e o grafo NetworkX. Você precisa apenas de uma chave para o provedor de extração:
+
+```bash
+docker run -d \
+  --name vk-mem0 \
+  --restart unless-stopped \
+  -p 8000:8000 \
+  -e GROQ_API_KEY='sua-chave' \
+  -v vk_mem0_data:/data \
+  datyapoint/vk-mem0:latest
+```
+
+Na primeira inicialização, aguarde o healthcheck carregar o modelo local:
+
+```bash
+docker ps --filter name=vk-mem0
+curl http://localhost:8000/health
+```
+
+Para fixar uma versão, substitua `latest` por uma tag como `0.2.43`. Você também pode usar o Compose pronto para Docker Hub:
+
+```bash
+cd mem0-vk
+export GROQ_API_KEY='sua-chave'
+docker compose -f docker-compose.hub.yml up -d
+```
+
+Todos os dados persistentes ficam no volume `vk_mem0_data`. As portas internas de Qdrant, Redis e embeddings não são publicadas no host.
+
+A tela **Settings → Memory** continua funcionando com esta imagem: ela lê e grava a configuração pela API `/api/config`, persistida em `/data/config.json`. Essas chaves selecionam o LLM que extrai fatos e relações (Groq, OpenRouter, OpenAI ou Llama). Os embeddings não precisam de chave porque o modelo local já está incluído na imagem.
+
 ## Arquitetura
 
 ```
