@@ -27,6 +27,46 @@ pub static PRECONFIGURED_MCP_SERVERS: LazyLock<Value> = LazyLock::new(|| {
     serde_json::from_str::<Value>(DEFAULT_MCP_JSON).expect("Failed to parse default MCP JSON")
 });
 
+const LEGACY_VIBE_KANBAN_MCP_PACKAGE: &str = "vibe-kanban@latest";
+const VIBE_KANBAN_MCP_PACKAGE: &str = "vibe-kanban-alternative@latest";
+
+/// Upgrade the former upstream Vibe Kanban MCP preset in a Codex config.
+///
+/// Only the exact, previously generated command is migrated. User-managed
+/// servers with another package or invocation are intentionally left alone.
+pub fn migrate_legacy_codex_vibe_kanban_mcp(config: &mut Value) -> bool {
+    let Some(server) = config
+        .get_mut("mcp_servers")
+        .and_then(Value::as_object_mut)
+        .and_then(|servers| servers.get_mut("vibe_kanban"))
+        .and_then(Value::as_object_mut)
+    else {
+        return false;
+    };
+
+    let is_legacy = server.get("command").and_then(Value::as_str) == Some("npx")
+        && server
+            .get("args")
+            .and_then(Value::as_array)
+            .is_some_and(|args| {
+                args.iter().map(Value::as_str).eq([
+                    Some("-y"),
+                    Some(LEGACY_VIBE_KANBAN_MCP_PACKAGE),
+                    Some("--mcp"),
+                ])
+            });
+
+    if !is_legacy {
+        return false;
+    }
+
+    server.insert(
+        "args".to_string(),
+        serde_json::json!(["-y", VIBE_KANBAN_MCP_PACKAGE, "--mcp", "--mode", "global"]),
+    );
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct McpConfig {
     servers: HashMap<String, serde_json::Value>,
@@ -422,7 +462,9 @@ impl CodingAgent {
 mod tests {
     use serde_json::Value;
 
-    use super::{Adapter, PRECONFIGURED_MCP_SERVERS, apply_adapter};
+    use super::{
+        Adapter, PRECONFIGURED_MCP_SERVERS, apply_adapter, migrate_legacy_codex_vibe_kanban_mcp,
+    };
 
     #[test]
     fn codex_vibe_kanban_preset_runs_this_forks_global_mcp_server() {
@@ -454,5 +496,44 @@ mod tests {
 
         assert!(preset.get("context7").is_none());
         assert!(preset.get("vibe_kanban").is_some());
+    }
+
+    #[test]
+    fn migrates_only_the_legacy_codex_vibe_kanban_preset() {
+        let mut config = serde_json::json!({
+            "mcp_servers": {
+                "vibe_kanban": {
+                    "command": "npx",
+                    "args": ["-y", "vibe-kanban@latest", "--mcp"],
+                    "env": { "VIBE_BACKEND_URL": "http://localhost:3002" }
+                }
+            }
+        });
+
+        assert!(migrate_legacy_codex_vibe_kanban_mcp(&mut config));
+        assert_eq!(
+            config["mcp_servers"]["vibe_kanban"]["args"],
+            serde_json::json!([
+                "-y",
+                "vibe-kanban-alternative@latest",
+                "--mcp",
+                "--mode",
+                "global"
+            ])
+        );
+        assert_eq!(
+            config["mcp_servers"]["vibe_kanban"]["env"],
+            serde_json::json!({ "VIBE_BACKEND_URL": "http://localhost:3002" })
+        );
+
+        let mut custom_config = serde_json::json!({
+            "mcp_servers": {
+                "vibe_kanban": {
+                    "command": "custom-vibe-kanban",
+                    "args": ["--mcp"]
+                }
+            }
+        });
+        assert!(!migrate_legacy_codex_vibe_kanban_mcp(&mut custom_config));
     }
 }

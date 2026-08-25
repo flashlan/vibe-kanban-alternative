@@ -13,7 +13,9 @@ use executors::{
     executors::{
         AvailabilityInfo, BaseAgentCapability, BaseCodingAgent, StandardCodingAgentExecutor,
     },
-    mcp_config::{McpConfig, read_agent_config, write_agent_config},
+    mcp_config::{
+        McpConfig, migrate_legacy_codex_vibe_kanban_mcp, read_agent_config, write_agent_config,
+    },
     profile::{ExecutorConfigs, ExecutorProfileId},
 };
 use serde::{Deserialize, Serialize};
@@ -319,7 +321,12 @@ async fn get_mcp_servers(
     };
 
     let mut mcpc = coding_agent.get_mcp_config();
-    let raw_config = read_agent_config(&config_path, &mcpc).await?;
+    let mut raw_config = read_agent_config(&config_path, &mcpc).await?;
+    if query.executor == BaseCodingAgent::Codex
+        && migrate_legacy_codex_vibe_kanban_mcp(&mut raw_config)
+    {
+        write_agent_config(&config_path, &mcpc, &raw_config).await?;
+    }
     let servers = get_mcp_servers_from_config_path(&raw_config, &mcpc.servers_path);
     mcpc.set_servers(servers);
     Ok(ResponseJson(ApiResponse::success(GetMcpServerResponse {
