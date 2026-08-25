@@ -43,7 +43,7 @@ Cenário mínimo viável: **R$ 0** (tudo DIY). Cenário recomendado: reservar ve
 
 ### Fase 1 — Manuscrito
 
-- [ ] Manuscrito em `docs/livro/` revisado (índice em `00-indice.md`, caps. 1–8 + apêndice)
+- [ ] Manuscrito em `docs/livro/` revisado (índice em `00-indice.md`, caps. 1–15 + apêndice)
 - [ ] Texto final revisado (estrutura: introdução, capítulos, sobre o autor)
 - [ ] Página de copyright incluída
 - [ ] Formatação no **Kindle Create** (gratuito) com sumário navegável
@@ -90,7 +90,65 @@ Cenário mínimo viável: **R$ 0** (tudo DIY). Cenário recomendado: reservar ve
 - [ ] Configurar campanha de **Amazon Ads** (se houver verba)
 - [ ] Monitorar relatórios de vendas no painel KDP e ajustar preço/metadados
 
-## 5. Definition of done
+## 6. Rascunho de metadados (pré-preenchido — copiar no KDP)
+
+Valores sugeridos para a Fase 3. Ajuste o autor e confira as categorias no seletor do KDP (o esquema de pedir categorias extras por e-mail não existe mais).
+
+**Título:**
+```
+Manual Moderno de Vibe Coding
+```
+
+**Subtítulo (campo de subtítulo do KDP — forte para SEO):**
+```
+Uso prático do Vibe Kanban Indie: do npx ao SaaS em produção
+```
+
+**Autor:**
+```
+[seu nome / pseudônimo]
+```
+
+**Descrição (texto de venda, PT-BR — 1.200/4.000 chars usados):**
+```
+Você instalou o Vibe Kanban Indie e quer usá-lo de verdade — não só estudar a arquitetura? Este Manual Moderno de Vibe Coding é o guia prático, escrito por quem usa a ferramenta para desenvolver.
+
+Em 15 capítulos (+ apêndice), você vai do `npx` à publicação de um SaaS completo (o projeto-guia AssinaFácil), aprendendo o vocabulário do vibe coding (Engineering Loop, Spec-Driven, multi-agente), a interface do app (board, workspaces, pipelines, worktrees) e como a máquina dirige o fluxo sozinha (MCP, marcadores de log, alarme de revisão).
+
+Para quem: desenvolvedores solo que querem dirigir agentes de IA (Claude Code, OpenCode, Codex, Gemini) com cards, pipelines e git sem medo.
+
+O que você vai aprender:
+• Instalar e configurar o app no seu `projects.toml`
+• Criar cards com spec forte e critério de pronto
+• Usar pipelines que movem o card sozinho (VK-PIPELINE-STAGE)
+• Fazer git em worktrees isolados, em paralelo, sem conflito
+• Construir um SaaS de assinaturas inteiro pela interface
+• Boas práticas: context engineering, autocompact, memória semântica e de grafo de agentes
+
+Tudo ancorado em screenshots reais e exemplos do código. Escreva menos, dirija mais.
+```
+
+**Categorias (até 3 — escolha nichos onde um livro novo rankeia):**
+```
+1. Computadores e Internet > Desenvolvimento de Software > Geral
+2. Computadores e Internet > Programação > Geral
+3. Computadores e Internet > Inteligência Artificial (se disponível) — ou Negócios > Empreendedorismo
+```
+
+**Palavras-chave (7 campos × 50 chars — frases que o leitor digita, sem repetir o título):**
+```
+1. vibe coding
+2. claude code tutorial
+3. kanban para desenvolvedores
+4. agentes de ia programacao
+5. desenvolvimento com ia
+6. vibe kanban indie
+7. criar saas do zero
+```
+
+> Dica: o subtítulo e as keywords são onde mora a descoberta. Revalide a 7ª palavra-chave e as categorias na hora do cadastro — o KDP muda o catálogo com frequência.
+
+## 7. Definition of done
 
 - [ ] eBook disponível na Amazon
 - [ ] Paperback disponível (se escolhido)
