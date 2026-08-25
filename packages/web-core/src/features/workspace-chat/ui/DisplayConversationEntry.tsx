@@ -1127,7 +1127,7 @@ function ThinkingMessageEntry({
 }) {
   const [expanded, toggle] = usePersistedExpanded(
     `thinking:${expansionKey}`,
-    false
+    true
   );
 
   return (
@@ -1380,7 +1380,7 @@ function AggregatedThinkingGroupEntry({
     (firstEntryKey
       ? `entry:${firstEntryKey}`
       : `entry:${group.patchKey}`) as PersistKey,
-    false
+    true
   );
   const [isHovered, setIsHovered] = useState(false);
 
