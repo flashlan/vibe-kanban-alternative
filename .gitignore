@@ -105,3 +105,6 @@ Caddyfile.dev
 
 IMPLEMENTATION_PLAN.md
 SPEC.md
+
+# Local mem0 volume backups (may contain private project memory)
+mem0-vk/backups/
