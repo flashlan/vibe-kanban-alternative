@@ -58,10 +58,14 @@
         "null"
       ],
       "enum": [
+        "none",
+        "minimal",
         "low",
         "medium",
         "high",
         "xhigh",
+        "max",
+        "ultra",
         null
       ]
     },

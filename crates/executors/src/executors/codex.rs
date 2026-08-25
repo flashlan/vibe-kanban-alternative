@@ -120,10 +120,14 @@ pub enum AskForApproval {
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
 pub enum ReasoningEffort {
+    None,
+    Minimal,
     Low,
     Medium,
     High,
     Xhigh,
+    Max,
+    Ultra,
 }
 
 /// Model reasoning summary style
@@ -151,7 +155,7 @@ enum CodexSessionAction {
     Review { target: ReviewTarget },
 }
 
-#[derive(Derivative, Clone, Serialize, Deserialize, TS, JsonSchema)]
+#[derive(Derivative, Clone, Serialize, Deserialize, TS, JsonSchema, Default)]
 #[derivative(Debug, PartialEq)]
 pub struct Codex {
     #[serde(default)]
@@ -482,7 +486,7 @@ impl Codex {
             .into_iter()
             .filter(|m| !m.hidden)
             .map(|m| {
-                let default_effort = m.default_reasoning_effort.to_string();
+                let default_effort = m.default_reasoning_effort.unwrap_or_default();
                 ModelInfo {
                     id: m.id,
                     name: m.display_name,
@@ -491,7 +495,7 @@ impl Codex {
                         .supported_reasoning_efforts
                         .into_iter()
                         .map(|opt| {
-                            let id = opt.reasoning_effort.to_string();
+                            let id = opt.reasoning_effort;
                             let is_default = id == default_effort;
                             ReasoningOption {
                                 id,
@@ -826,5 +830,25 @@ mod tests {
             (Some("gpt-5.4-mini"), false)
         );
         assert_eq!(resolve_model(None), (None, false));
+    }
+
+    #[test]
+    fn test_serialize_thread_start_params() {
+        let codex = super::Codex::default();
+        let params = codex.build_thread_start_params(std::path::Path::new("/tmp"));
+        let json = serde_json::to_string(&params).unwrap();
+        assert!(json.contains("workspace-write"));
+    }
+
+    #[tokio::test]
+    async fn test_discover_models_live() {
+        let codex = super::Codex::default();
+        let models = codex.discover_models_live(None, None).await;
+        assert!(
+            !models.is_empty(),
+            "Expected models to be discovered from codex"
+        );
+        let terra = models.iter().find(|m| m.id == "gpt-5.6-terra");
+        assert!(terra.is_some(), "Expected gpt-5.6-terra in models");
     }
 }

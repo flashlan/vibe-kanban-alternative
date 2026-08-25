@@ -7,6 +7,15 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-alternat
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.41] - 2026-08-24
+
+### Fixed
+
+- **Codex model discovery & RPC handler resilience**:
+  - Added `ClientRequest::ModelList` to JSON-RPC `request_id()` handler to resolve `"request_id called for unsupported request variant"` panic during model discovery.
+  - Implemented resilient `CodexModelListResponse` deserialization supporting new reasoning effort levels (`max`, `ultra`, `minimal`, `none`) introduced in Codex CLI v0.148.0+.
+  - Fully enabled support for frontier models including `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`, `gpt-5.5`, and `gpt-5.2` with custom reasoning efforts.
+
 ## [0.2.40] - 2026-08-24
 
 ### Fixed
