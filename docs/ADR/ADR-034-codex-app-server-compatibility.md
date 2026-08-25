@@ -20,9 +20,9 @@ only the tested range from 0.124.0 inclusive through 0.150.0 exclusive.
 Protocol serialization is selected by version:
 
 - 0.124 through 0.148 preserve the legacy request shape.
-- 0.149 removes the null legacy `permissionProfile` field from `thread/start`,
-  `thread/fork`, and `turn/start`. The executor continues to configure sandbox
-  behavior and does not invent a named permissions profile.
+- 0.149 replaces the legacy `permissionProfile` field on `thread/start`,
+  `thread/fork`, and `turn/start` with the named `permissions` profile id
+  `workspace-write`, matching the executor's default sandbox behavior.
 
 The executor explicitly disables `code_mode` and `code_mode_host` because its
 app-server client does not implement `DynamicToolCall`. Codex therefore uses

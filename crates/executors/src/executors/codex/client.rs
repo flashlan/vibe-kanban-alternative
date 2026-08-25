@@ -44,6 +44,8 @@ use crate::{
     executors::{ExecutorError, codex::normalize_logs::Approval},
 };
 
+const DEFAULT_NAMED_PERMISSIONS_PROFILE: &str = "workspace-write";
+
 struct PendingPlan {
     item_id: String,
 }
@@ -870,10 +872,10 @@ fn client_request_value(
         if matches!(method, Some("thread/start" | "thread/fork" | "turn/start"))
             && let Some(params) = request.get_mut("params").and_then(Value::as_object_mut)
         {
-            // Codex 0.149 replaced the legacy `permissionProfile` object with
-            // an optional named `permissions` id. These requests use sandbox,
-            // so the null legacy field must be omitted rather than translated.
             params.remove("permissionProfile");
+            params
+                .entry("permissions")
+                .or_insert_with(|| Value::String(DEFAULT_NAMED_PERMISSIONS_PROFILE.to_string()));
         }
     }
 
@@ -1111,6 +1113,10 @@ mod tests {
                     .as_object()
                     .unwrap()
                     .contains_key("permissionProfile")
+            );
+            assert_eq!(
+                value["params"]["permissions"],
+                DEFAULT_NAMED_PERMISSIONS_PROFILE
             );
         }
     }
