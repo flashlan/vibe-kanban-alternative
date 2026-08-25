@@ -241,6 +241,61 @@ docker run -d \
 
 The local embeddings model requires no API key. Settings changed through **Settings → Memory** persist in the same `/data` volume.
 
+#### Updating the all-in-one image
+
+Updating the image does not delete data as long as you reuse the same `/data` volume. Stop and remove only the container, then start the new image with the same volume:
+
+```bash
+docker pull datyapoint/vk-mem0:latest
+docker rm -f vk-mem0
+docker run -d \
+  --name vk-mem0 \
+  --restart unless-stopped \
+  -p 8000:8000 \
+  -v vk_mem0_data:/data \
+  datyapoint/vk-mem0:latest
+```
+
+`docker rm -f` removes the container only. It does not remove `vk_mem0_data`. Never use `docker volume rm`, `docker volume prune`, or `docker compose down -v` when you want to keep memories.
+
+#### Migrating from the multi-container stack
+
+The original Compose deployment stores data in three volumes. Before migrating, make a backup and stop the old stack without removing its volumes:
+
+```bash
+cd mem0-vk
+mkdir -p backups
+docker run --rm -v mem0-vk_graph_data:/source -v "$PWD/backups":/backup alpine \
+  tar czf /backup/mem0-graph-data.tgz -C /source .
+docker run --rm -v mem0-vk_qdrant_data:/source -v "$PWD/backups":/backup alpine \
+  tar czf /backup/mem0-qdrant-data.tgz -C /source .
+docker run --rm -v mem0-vk_redis_data:/source -v "$PWD/backups":/backup alpine \
+  tar czf /backup/mem0-redis-data.tgz -C /source .
+docker compose down
+```
+
+Start the all-in-one image with the existing volumes mounted at the paths it expects:
+
+```bash
+docker run -d \
+  --name vk-mem0 \
+  --restart unless-stopped \
+  -p 8000:8000 \
+  -v mem0-vk_graph_data:/data \
+  -v mem0-vk_qdrant_data:/data/qdrant \
+  -v mem0-vk_redis_data:/data/redis \
+  datyapoint/vk-mem0:latest
+```
+
+Wait for `healthy` before using the UI:
+
+```bash
+docker ps --filter name=vk-mem0
+curl http://localhost:8000/health
+```
+
+This migration reuses the existing graph, Qdrant, Redis, and `/data/config.json` contents. To roll back, remove only the new container and start the original Compose stack again; do not delete the three volumes.
+
 For development or independently managed services, use the multi-container stack:
 
 ```bash

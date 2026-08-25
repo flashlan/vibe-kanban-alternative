@@ -35,6 +35,31 @@ Todos os dados persistentes ficam no volume `vk_mem0_data`. As portas internas d
 
 A tela **Settings → Memory** continua funcionando com esta imagem: ela lê e grava a configuração pela API `/api/config`, persistida em `/data/config.json`. Essas chaves selecionam o LLM que extrai fatos e relações (Groq, OpenRouter, OpenAI ou Llama). Os embeddings não precisam de chave porque o modelo local já está incluído na imagem.
 
+### Atualização segura
+
+Para atualizar uma instalação all-in-one, reutilize o mesmo volume `/data`. Remover o container não remove o volume:
+
+```bash
+docker pull datyapoint/vk-mem0:latest
+docker rm -f vk-mem0
+docker run -d --name vk-mem0 --restart unless-stopped -p 8000:8000 \
+  -v vk_mem0_data:/data datyapoint/vk-mem0:latest
+```
+
+Não use `docker volume rm`, `docker volume prune` ou `docker compose down -v` durante uma atualização.
+
+Para migrar da instalação Compose antiga, faça backup dos volumes `mem0-vk_graph_data`, `mem0-vk_qdrant_data` e `mem0-vk_redis_data`, execute `docker compose down` (sem `-v`) e monte-os assim:
+
+```bash
+docker run -d --name vk-mem0 --restart unless-stopped -p 8000:8000 \
+  -v mem0-vk_graph_data:/data \
+  -v mem0-vk_qdrant_data:/data/qdrant \
+  -v mem0-vk_redis_data:/data/redis \
+  datyapoint/vk-mem0:latest
+```
+
+O rollback é reversível: remova apenas o container all-in-one e inicie novamente o Compose original, mantendo os três volumes.
+
 ## Arquitetura
 
 ```
