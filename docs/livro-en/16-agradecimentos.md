@@ -1,18 +1,18 @@
 # Acknowledgments
 
-This book documents **Vibe Kanban Alternative** — a self-hosted kanban for a solo developer to drive AI coding agents. It does not start from scratch: it stands on two prior projects, and this section credits them clearly.
+This book documents **Aurapunk IDE** — a self-hosted kanban for a solo developer to drive AI coding agents. It does not start from scratch: it stands on two prior projects, and this section credits them clearly.
 
 ## The software lineage
 
 ```
 Vibe Kanban (BloopAI)
    └─ Vibe Kanban Indie (dexloom)        ← base fork of this repo
-        └─ Vibe Kanban Alternative       ← the project documented here
+        └─ Aurapunk IDE       ← the project documented here
 ```
 
 - **Vibe Kanban — BloopAI** ([github.com/BloopAI/vibe-kanban](https://github.com/BloopAI/vibe-kanban)): the **original** project. The core idea — a kanban board where each card spins up an isolated agent workspace — and much of the agent-execution model and UI/UX originated here.
 - **Vibe Kanban Indie — dexloom** ([github.com/dexloom/vibe-kanban-indie](https://github.com/dexloom/vibe-kanban-indie)): the **independent fork** this repository is based on. It reshaped the original for a solo-dev, self-hosted, no-cloud, no-auth workflow — the `vk/xxxx` branch model, the local cockpit (TUI), the agent orchestration — the exact substrate this book describes.
-- **Vibe Kanban Alternative** (this repo): the present fork. It adds the interface manual, the AssinaFacil SaaS walkthrough and the publishing pipeline, keeping the solo-dev, self-hosted spirit.
+- **Aurapunk IDE** (this repo): the present fork. It adds the interface manual, the AssinaFacil SaaS walkthrough and the publishing pipeline, keeping the solo-dev, self-hosted spirit.
 
 ## Further credits
 

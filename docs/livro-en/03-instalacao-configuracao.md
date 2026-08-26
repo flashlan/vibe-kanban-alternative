@@ -6,7 +6,7 @@
 
 | Option | Command | When to use |
 | --- | --- | --- |
-| **npx (zero-install)** | `npx vibe-kanban-alternative` | Quickest try; downloads and runs the latest release |
+| **npx (zero-install)** | `npx aurapunk-ide` | Quickest try; downloads and runs the latest release |
 | **Clone + dev** | `git clone … && pnpm install && pnpm run dev` | When you want to customize the app itself (Part II) |
 
 Both open the same UI at `http://localhost:3001` (backend `:3002`, preview proxy `:3003`). If a port is taken, see the `AddrInUse` troubleshooting in ch. 02 §5 / ch. 13.
@@ -65,7 +65,7 @@ You edit them in **Settings → Projects & Repositories** (or directly in `proje
 
 ## First run checklist
 
-- [ ] `npx vibe-kanban-alternative` (or clone + `pnpm run dev`) opens at `:3001`.
+- [ ] `npx aurapunk-ide` (or clone + `pnpm run dev`) opens at `:3001`.
 - [ ] `projects.toml` exists with at least `key`, `statuses` and `dev_server_script`.
 - [ ] Creating a workspace runs `setup_script` without errors (check the **Logs** panel).
 - [ ] The **Preview** panel shows your app (or "set up dev server" prompt if the script is missing).

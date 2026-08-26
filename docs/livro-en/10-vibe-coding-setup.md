@@ -25,7 +25,7 @@ The root `AGENTS.md` is a good specimen. Section by section, and why each:
 
 ### 1. Identity in one sentence
 
-> "Vibe Kanban Alternative — the independent, self-hosted fork of vibe-kanban (BloopAI), built for a single-developer process (no team, no cloud, no auth). It is based on the Vibe Kanban Indie fork (dexloom)…"
+> "Aurapunk IDE — the independent, self-hosted fork of vibe-kanban (BloopAI), built for a single-developer process (no team, no cloud, no auth). It is based on the Vibe Kanban Indie fork (dexloom)…"
 
 That line alone stops an agent from "helping" by reintroducing cloud code — and there's an explicit section listing deleted crates (`crates/remote`, `crates/relay-*`) with "do not reintroduce".
 

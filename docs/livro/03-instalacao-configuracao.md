@@ -29,7 +29,7 @@ O Indie é **100% local** — sem login, sem cloud. Escolha uma:
 ### Opção A — npx (para usar, sem clonar)
 
 ```bash
-npx vibe-kanban-alternative
+npx aurapunk-ide
 # → Frontend :3001  Backend :3002  Preview proxy :3003
 ```
 
@@ -138,7 +138,7 @@ Para o AssinaFácil, deixe o dev server subindo `app-web` na `5173` — o Previe
 
 ## Checklist do capítulo
 
-- [ ] `npx vibe-kanban-alternative` (ou `pnpm run dev` no clone) abre em `http://localhost:3001` sem `AddrInUse`.
+- [ ] `npx aurapunk-ide` (ou `pnpm run dev` no clone) abre em `http://localhost:3001` sem `AddrInUse`.
 - [ ] Preferências de agente/IDE/som definidas em Settings.
 - [ ] `projects.toml` com projeto `AssinaFácil` (`AF`) e repo `~/code/assina-facil` importado — board aparece com 4 colunas.
 - [ ] Scripts `setup_script` e `dev_server_script` configurados; `copy_files` com `.env` se o SaaS precisar.

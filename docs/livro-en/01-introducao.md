@@ -2,7 +2,7 @@
 
 ## Who this book is for
 
-For a developer who just installed Vibe Kanban Alternative and wants to **use the interface to actually build software** — not to study the app's architecture. By the end of Part I you will know how to:
+For a developer who just installed Aurapunk IDE and wants to **use the interface to actually build software** — not to study the app's architecture. By the end of Part I you will know how to:
 
 - install and configure the app in your `projects.toml`;
 - navigate the interface (board, workspaces, panels);
@@ -15,9 +15,9 @@ For a developer who just installed Vibe Kanban Alternative and wants to **use th
 
 > **Read Chapter 02 before installing.** It introduces the current vibe coding vocabulary — *Engineering Loop*, *Spec Development*, *multi-agent*, *YOLO mode*, *context engineering* — with examples from this repository. The practical chapters (03 onward) assume you already recognize these terms.
 
-## What Vibe Kanban Alternative is, in one page
+## What Aurapunk IDE is, in one page
 
-Vibe Kanban Alternative is a **self-hosted kanban for a solo developer to drive AI coding agents**. Each board card is a task ("fix login", "create the SaaS plans page"). Each task becomes a **workspace** — an isolated folder with its own git branch — where an agent (Claude Code, OpenCode, Codex, Gemini, Cursor, Copilot, etc.) writes code for you. You watch progress on the board, review diffs and merge.
+Aurapunk IDE is a **self-hosted kanban for a solo developer to drive AI coding agents**. Each board card is a task ("fix login", "create the SaaS plans page"). Each task becomes a **workspace** — an isolated folder with its own git branch — where an agent (Claude Code, OpenCode, Codex, Gemini, Cursor, Copilot, etc.) writes code for you. You watch progress on the board, review diffs and merge.
 
 The concepts you will use every day:
 

@@ -1,8 +1,8 @@
 # Manual Moderno de Vibe Coding
 
-### Uso pratico do Vibe Kanban Alternative — do `npx` ao SaaS em producao
+### Uso pratico do Aurapunk IDE — do `npx` ao SaaS em producao
 
-**Subtitulo:** *Manual pratico da interface do Vibe Kanban Alternative, com um projeto-guia SaaS (AssinaFacil).*
+**Subtitulo:** *Manual pratico da interface do Aurapunk IDE, com um projeto-guia SaaS (AssinaFacil).*
 
 > Manuscrito gerado a partir de `docs/livro/*.md` (branch `vk/1f98-livre-vibo-kanba`).
 > Regras externas (precos KDP) verificadas em ago/2026 — revalide antes de publicar.
@@ -11,7 +11,7 @@
 
 # Manual Moderno de Vibe Coding — Índice
 
-**Subtítulo:** *Manual prático da interface do Vibe Kanban Alternative — do `npx` ao SaaS em produção, com um projeto-guia.*
+**Subtítulo:** *Manual prático da interface do Aurapunk IDE — do `npx` ao SaaS em produção, com um projeto-guia.*
 
 Este livro foi escrito dentro do próprio repositório que ele ensina a usar. Todo caminho de arquivo citado existe no código; quando uma regra externa muda (ex.: preços do KDP), o capítulo marca a data de verificação.
 
@@ -84,7 +84,7 @@ Este livro foi escrito dentro do próprio repositório que ele ensina a usar. To
 
 ## Para quem é este livro
 
-Para um desenvolvedor que acabou de instalar o Vibe Kanban Alternative e quer **usar a interface para desenvolver de verdade** — não para estudar a arquitetura do app. Ao final da Parte I você vai saber:
+Para um desenvolvedor que acabou de instalar o Aurapunk IDE e quer **usar a interface para desenvolver de verdade** — não para estudar a arquitetura do app. Ao final da Parte I você vai saber:
 
 - instalar e configurar o app no seu `projects.toml`;
 - navegar na interface (board, workspaces, painéis);
@@ -97,9 +97,9 @@ A **Parte II** fica para quando você quiser customizar o próprio Vibe Kanban. 
 
 > **Leia o capítulo 02 antes de instalar.** Ele apresenta o vocabulário do vibe coding atual — *Engineering Loop*, *Spec Development*, *multi-agente*, *YOLO mode*, *context engineering* — com exemplos deste repositório. Os capítulos práticos (03 em diante) assumem que você já reconhece esses termos.
 
-## O que é o Vibe Kanban Alternative, em uma página
+## O que é o Aurapunk IDE, em uma página
 
-O Vibe Kanban Alternative é um **kanban self-hosted para um desenvolvedor solo dirigir agentes de IA**. Cada cartão do quadro é uma tarefa ("consertar login", "criar página de planos do SaaS"). Cada tarefa vira um **workspace** — uma pasta isolada com seu próprio branch git — onde um agente (Claude Code, OpenCode, Codex, Gemini, Cursor, Copilot, etc.) escreve código por você. Você acompanha o progresso no board, revisa diffs e dá merge.
+O Aurapunk IDE é um **kanban self-hosted para um desenvolvedor solo dirigir agentes de IA**. Cada cartão do quadro é uma tarefa ("consertar login", "criar página de planos do SaaS"). Cada tarefa vira um **workspace** — uma pasta isolada com seu próprio branch git — onde um agente (Claude Code, OpenCode, Codex, Gemini, Cursor, Copilot, etc.) escreve código por você. Você acompanha o progresso no board, revisa diffs e dá merge.
 
 Os conceitos que você vai usar todo dia:
 
@@ -456,7 +456,7 @@ O Indie é **100% local** — sem login, sem cloud. Escolha uma:
 ### Opção A — npx (para usar, sem clonar)
 
 ```bash
-npx vibe-kanban-alternative
+npx aurapunk-ide
 # → Frontend :3001  Backend :3002  Preview proxy :3003
 ```
 
@@ -565,7 +565,7 @@ Para o AssinaFácil, deixe o dev server subindo `app-web` na `5173` — o Previe
 
 ## Checklist do capítulo
 
-- [ ] `npx vibe-kanban-alternative` (ou `pnpm run dev` no clone) abre em `http://localhost:3001` sem `AddrInUse`.
+- [ ] `npx aurapunk-ide` (ou `pnpm run dev` no clone) abre em `http://localhost:3001` sem `AddrInUse`.
 - [ ] Preferências de agente/IDE/som definidas em Settings.
 - [ ] `projects.toml` com projeto `AssinaFácil` (`AF`) e repo `~/code/assina-facil` importado — board aparece com 4 colunas.
 - [ ] Scripts `setup_script` e `dev_server_script` configurados; `copy_files` com `.env` se o SaaS precisar.
@@ -1232,9 +1232,9 @@ O `AGENTS.md` da raiz deste repositório é um bom espécime. Seção por seçã
 
 ### 1. Identidade em uma frase
 
-> "Vibe Kanban Alternative — fork independente e self-hosted do Vibe Kanban, feito para um processo de desenvolvedor único (sem equipe, sem nuvem, sem auth)."
+> "Aurapunk IDE — fork independente e self-hosted do Vibe Kanban, feito para um processo de desenvolvedor único (sem equipe, sem nuvem, sem auth)."
 
-> Nota: o `AGENTS.md` raiz ainda carrega o nome histórico do fork-base; o produto é comercializado como **Vibe Kanban Alternative** e deriva do **Vibe Kanban Indie** (dexloom), que por sua vez deriva do **Vibe Kanban** original (BloopAI) — ver Agradecimentos.
+> Nota: o `AGENTS.md` raiz ainda carrega o nome histórico do fork-base; o produto é comercializado como **Aurapunk IDE** e deriva do **Vibe Kanban Indie** (dexloom), que por sua vez deriva do **Vibe Kanban** original (BloopAI) — ver Agradecimentos.
 
 Essa linha sozinha impede que um agente "ajude" reintroduzindo auth ou cloud. Logo abaixo vem a seção explícita listando os crates deletados (`crates/remote`, `crates/relay-*`) com a ordem **"do not reintroduce"** — e o aviso que `shared/remote-types.ts` é contrato congelado, não lixo (ver cap. 12).
 
@@ -1608,10 +1608,10 @@ Previsível, pesquisável e corrigível — e o diagnóstico está no cap. 02 §
 ```bash
 lsof -nP -i :3002 -sTCP:LISTEN          # quem segura a porta?
 ps -o pid,cwd,command -p <PID>          # de qual repo/worktree?
-# se for a instância principal em ~/vibe-kanban-alternative, não mate — use outra porta ou pare o worktree
+# se for a instância principal em ~/aurapunk-ide, não mate — use outra porta ou pare o worktree
 ```
 
-No livro, esse erro apareceu de verdade quando o worktree `vk/1f98` tentou `restart.sh` com a instância principal rodando em `vibe-kanban-alternative` (PIDs 50138/50146 desde 00:13 23/08). O `lsof` mostrou `cwd` diferente — diagnóstico em 10s, sem matar o processo errado.
+No livro, esse erro apareceu de verdade quando o worktree `vk/1f98` tentou `restart.sh` com a instância principal rodando em `aurapunk-ide` (PIDs 50138/50146 desde 00:13 23/08). O `lsof` mostrou `cwd` diferente — diagnóstico em 10s, sem matar o processo errado.
 
 > **Exercício:** quebre de propósito — adicione `unused_variable` num crate, rode `pnpm run check` e leia o erro do `cargo check`. Agora rode `pnpm run format` e `pnpm run check` de novo. Esse é o loop que o agente faz sozinho 20 vezes por card.
 
@@ -1936,21 +1936,21 @@ O checklist de KDP vive em `docs/livro-vibe-kanban-amazon-checklist.md`. Verific
 
 # Agradecimentos
 
-Este livro documenta o **Vibe Kanban Alternative** — um kanban self-hosted para um desenvolvedor solo dirigir agentes de IA. Mas ele não nasceu do zero: apoia-se em dois projetos anteriores, e esta seção existe para creditá-los com clareza.
+Este livro documenta o **Aurapunk IDE** — um kanban self-hosted para um desenvolvedor solo dirigir agentes de IA. Mas ele não nasceu do zero: apoia-se em dois projetos anteriores, e esta seção existe para creditá-los com clareza.
 
 ## A linhagem do software
 
 ```
 Vibe Kanban (BloopAI)
    └─ Vibe Kanban Indie (dexloom)        ← fork-base deste repositório
-        └─ Vibe Kanban Alternative       ← o projeto que este livro documenta
+        └─ Aurapunk IDE       ← o projeto que este livro documenta
 ```
 
 - **Vibe Kanban — BloopAI** ([github.com/BloopAI/vibe-kanban](https://github.com/BloopAI/vibe-kanban)): o projeto **original**. A ideia fundamental — um quadro kanban onde cada card sobe um *workspace* isolado com um agente escrevendo código — e boa parte do modelo de execução de agentes e da UI/UX vieram daqui. Sem o lançamento aberto da BloopAI, nada disso existiria.
 
 - **Vibe Kanban Indie — dexloom** ([github.com/dexloom/vibe-kanban-indie](https://github.com/dexloom/vibe-kanban-indie)): o **fork independente** em que este repositório se baseia. Ele pegou o original e o reformatou para um fluxo de *desenvolvedor único, self-hosted, sem nuvem e sem auth* — o modelo de branches `vk/xxxx`, o cockpit local (TUI), a orquestração de agentes e o foco em um só dev. É exatamente esse substrato que este livro descreve.
 
-- **Vibe Kanban Alternative** (este repositório): o fork presente. Adiciona o manual de uso da interface, o passeio prático do SaaS **AssinaFácil** e o pipeline de publicação (incluindo este próprio livro), preservando o espírito self-hosted para um dev solo.
+- **Aurapunk IDE** (este repositório): o fork presente. Adiciona o manual de uso da interface, o passeio prático do SaaS **AssinaFácil** e o pipeline de publicação (incluindo este próprio livro), preservando o espírito self-hosted para um dev solo.
 
 ## Outros créditos
 

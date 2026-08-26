@@ -94,10 +94,10 @@ Previsível, pesquisável e corrigível — e o diagnóstico está no cap. 02 §
 ```bash
 lsof -nP -i :3002 -sTCP:LISTEN          # quem segura a porta?
 ps -o pid,cwd,command -p <PID>          # de qual repo/worktree?
-# se for a instância principal em ~/vibe-kanban-alternative, não mate — use outra porta ou pare o worktree
+# se for a instância principal em ~/aurapunk-ide, não mate — use outra porta ou pare o worktree
 ```
 
-No livro, esse erro apareceu de verdade quando o worktree `vk/1f98` tentou `restart.sh` com a instância principal rodando em `vibe-kanban-alternative` (PIDs 50138/50146 desde 00:13 23/08). O `lsof` mostrou `cwd` diferente — diagnóstico em 10s, sem matar o processo errado.
+No livro, esse erro apareceu de verdade quando o worktree `vk/1f98` tentou `restart.sh` com a instância principal rodando em `aurapunk-ide` (PIDs 50138/50146 desde 00:13 23/08). O `lsof` mostrou `cwd` diferente — diagnóstico em 10s, sem matar o processo errado.
 
 > **Exercício:** quebre de propósito — adicione `unused_variable` num crate, rode `pnpm run check` e leia o erro do `cargo check`. Agora rode `pnpm run format` e `pnpm run check` de novo. Esse é o loop que o agente faz sozinho 20 vezes por card.
 
