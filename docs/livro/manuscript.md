@@ -1,11 +1,11 @@
 # Manual Moderno de Vibe Coding
 
-### Uso prático do Vibe Kanban Indie — do `npx` ao SaaS em produção
+### Uso pratico do Vibe Kanban Alternative — do `npx` ao SaaS em producao
 
-**Subtítulo:** *Manual prático da interface do Vibe Kanban Indie, com um projeto-guia SaaS (AssinaFácil).*
+**Subtitulo:** *Manual pratico da interface do Vibe Kanban Alternative, com um projeto-guia SaaS (AssinaFacil).*
 
 > Manuscrito gerado a partir de `docs/livro/*.md` (branch `vk/1f98-livre-vibo-kanba`).
-> Regras externas (preços KDP) verificadas em ago/2026 — revalide antes de publicar.
+> Regras externas (precos KDP) verificadas em ago/2026 — revalide antes de publicar.
 
 ---
 
