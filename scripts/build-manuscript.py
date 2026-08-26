@@ -1,14 +1,6 @@
 #!/usr/bin/env python3
-"""Consolida docs/livro/*.md em um único manuscrito para exportação KDP.
-
-Ordem de leitura = numeração dos arquivos (00-indice ... 15 ... apendice).
-Imagens /images/livro/* viram ../images/livro/* (relativas a docs/livro/manuscript.md),
-para empacotar junto quando converter (pandoc/kindle-create).
-"""
+"""Consolida docs/livro/*.md e docs/livro-en/*.md em manuscritos para KDP."""
 from pathlib import Path
-
-LIVRO = Path("docs/livro")
-OUT = LIVRO / "manuscript.md"
 
 ORDER = [
     "00-indice.md",
@@ -31,26 +23,42 @@ ORDER = [
     "16-agradecimentos.md",
 ]
 
-TITLE = """# Manual Moderno de Vibe Coding
+def build(livro_dir, title):
+    LIVRO = Path(livro_dir)
+    OUT = LIVRO / "manuscript.md"
+    parts = [title]
+    for name in ORDER:
+        p = LIVRO / name
+        if not p.exists():
+            continue
+        text = p.read_text(encoding="utf-8")
+        text = text.replace("](/images/livro/", "](../images/livro/")
+        parts.append(text.rstrip() + "\n\n---\n\n")
+    OUT.write_text("".join(parts), encoding="utf-8")
+    print(f"escrito {OUT} ({OUT.stat().st_size} bytes, {len(parts)-1} caps)")
 
-### Uso prático do Vibe Kanban Indie — do `npx` ao SaaS em produção
+build("docs/livro", """# Manual Moderno de Vibe Coding
 
-**Subtítulo:** *Manual prático da interface do Vibe Kanban Indie, com um projeto-guia SaaS (AssinaFácil).*
+### Uso pratico do Vibe Kanban Alternative — do `npx` ao SaaS em producao
+
+**Subtitulo:** *Manual pratico da interface do Vibe Kanban Alternative, com um projeto-guia SaaS (AssinaFacil).*
 
 > Manuscrito gerado a partir de `docs/livro/*.md` (branch `vk/1f98-livre-vibo-kanba`).
-> Regras externas (preços KDP) verificadas em ago/2026 — revalide antes de publicar.
+> Regras externas (precos KDP) verificadas em ago/2026 — revalide antes de publicar.
 
 ---
 
-"""
+""")
 
-parts = [TITLE]
-for name in ORDER:
-    p = LIVRO / name
-    text = p.read_text(encoding="utf-8")
-    # imagens do livro: /images/livro/* -> ../images/livro/*
-    text = text.replace("](/images/livro/", "](../images/livro/")
-    parts.append(text.rstrip() + "\n\n---\n\n")
+build("docs/livro-en", """# Modern Vibe Coding Manual
 
-OUT.write_text("".join(parts), encoding="utf-8")
-print(f"escrito {OUT} ({OUT.stat().st_size} bytes, {len(ORDER)} arquivos)")
+### Practical use of Vibe Kanban Alternative — from `npx` to a production SaaS
+
+**Subtitle:** *A practical interface guide for Vibe Kanban Alternative, with the guided SaaS project AssinaFacil.*
+
+> Manuscript generated from `docs/livro-en/*.md` (branch `vk/1f98-livre-vibo-kanba`).
+> External KDP rules verified Aug/2026 — revalidate before publishing.
+
+---
+
+""")
