@@ -12,6 +12,7 @@ use command_group::AsyncGroupChild;
 use db::{
     DBService,
     models::{
+        agent_work::{AgentWorkDeclaration, DeclareAgentWork},
         coding_agent_turn::CodingAgentTurn,
         execution_process::{
             ExecutionContext, ExecutionProcess, ExecutionProcessRunReason, ExecutionProcessStatus,
@@ -578,6 +579,11 @@ impl LocalContainerService {
         }
 
         if let Ok(ctx) = ExecutionProcess::load_context(&db.pool, exec_id).await {
+            if let Err(error) =
+                AgentWorkDeclaration::release(&db.pool, ctx.workspace.id, exec_id).await
+            {
+                tracing::warn!(%error, %exec_id, "Failed to release automatic agent-work declaration");
+            }
             // Ephemeral workspaces (spec-intake) are throwaway: skip ALL normal
             // finalize side effects — commit, next-action, queued follow-ups,
             // task finalize, unseen marking, analytics, and remote sync.
@@ -2745,6 +2751,50 @@ impl ContainerService for LocalContainerService {
         // Always inject workspace/session context
         env.insert("VK_WORKSPACE_ID", workspace.id.to_string());
         env.insert("VK_WORKSPACE_BRANCH", &workspace.branch);
+
+        // Mandatory pre-edit hook: create a lease before the executor starts.
+        // The MCP declaration tool later updates this same row with the
+        // agent's precise files, symbols, and dependencies. Failing closed
+        // here prevents an agent from starting without coordinator presence.
+        let coding_prompt = match executor_action.typ() {
+            ExecutorActionType::CodingAgentInitialRequest(request) => Some(&request.prompt),
+            ExecutorActionType::CodingAgentFollowUpRequest(request) => Some(&request.prompt),
+            _ => None,
+        };
+        if let Some(prompt) = coding_prompt {
+            let agent_name = format!(
+                "{}-{}",
+                executor_action
+                    .base_executor()
+                    .map(|executor| executor.to_string())
+                    .unwrap_or_else(|| "CODING_AGENT".to_string()),
+                short_uuid(&execution_process.id)
+            );
+            let intent = prompt
+                .lines()
+                .map(str::trim)
+                .find(|line| !line.is_empty())
+                .unwrap_or("Coding agent execution")
+                .chars()
+                .take(2_000)
+                .collect::<String>();
+            AgentWorkDeclaration::declare(
+                &self.db.pool,
+                &DeclareAgentWork {
+                    workspace_id: workspace.id,
+                    owner_id: execution_process.id,
+                    execution_process_id: Some(execution_process.id),
+                    agent_name: agent_name.clone(),
+                    intent,
+                    files: Vec::new(),
+                    symbols: Vec::new(),
+                    dependencies: Vec::new(),
+                },
+            )
+            .await?;
+            env.insert("VK_EXECUTION_PROCESS_ID", execution_process.id.to_string());
+            env.insert("VIBE_KANBAN_AGENT_NAME", agent_name);
+        }
 
         // Telegram channel: hand Claude Code agents their per-branch channel
         // *name* via TELEGRAM_TOPIC, plus TELEGRAM_DEV=1 marking the session as

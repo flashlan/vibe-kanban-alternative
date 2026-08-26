@@ -650,9 +650,6 @@ export const ConversationList = forwardRef<
       releaseBottomLock: () => {
         conversationVirtualizer.releaseBottomLock();
       },
-      releaseBottomLock: () => {
-        conversationVirtualizer.releaseBottomLock();
-      },
       adjustScrollBy: (delta) => {
         if (Math.abs(delta) < 0.5) return;
         const scrollElement = tanstackScrollRef.current;

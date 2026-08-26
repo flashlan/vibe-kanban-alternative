@@ -79,10 +79,11 @@ impl GitHostService {
             return Ok(Self::GitHub(GitHubProvider::new()?));
         }
 
-        if gitea_base_url.is_some() && is_gitea_remote(gitea_base_url, url) {
-            if let Some(provider) = gitea {
-                return Ok(Self::Gitea(provider));
-            }
+        if gitea_base_url.is_some()
+            && is_gitea_remote(gitea_base_url, url)
+            && let Some(provider) = gitea
+        {
+            return Ok(Self::Gitea(provider));
         }
 
         Err(GitHostError::UnsupportedProvider)

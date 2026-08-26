@@ -30,7 +30,7 @@ The built-in stages are:
 | Wait for approval | Pause and wait for your decision before continuing |
 | Review via Codex | Independently review the change's diff with Codex once code is written |
 | Update documentation | Update the docs the change affects |
-| Merge to base | Squash-merge the workspace branch into its base — the agent does this itself; listing the stage is the authorisation |
+| Integration Guard → Done | Complete the workspace through the Integration Guard — it records the original target HEAD and performs a three-way integration; listing the stage is the authorisation |
 | Open pull request | Open a GitHub pull request |
 
 <Note>
@@ -86,14 +86,17 @@ model does that subagent work, trading cost for thoroughness:
 | Codex plan review | On by default | On by default | On by default |
 | Code | Sonnet subagent (`vibe-kanban-indie:coder`) | Sonnet subagent (`vibe-kanban-indie:coder`) | Opus subagent (`vibe-kanban-indie:coder`) |
 | Review via Codex | Off by default | Off by default | Off by default |
-| Merge to base | On by default | On by default | On by default |
+| Integration Guard → Done | On by default | On by default | On by default |
 
 All three pipelines are Codex-only for review — none has a Fable diff-review
 stage. The plan is always reviewed; the **diff** review is off by default, so tick
 **Review via Codex** on a card when you want one. **Merge to base** is on by
-default: once the stage is listed, the agent squash-merges the card's branch into
-its base itself, without waiting for a go-ahead. Add a **Wait for approval** stage
-when you want to gate that. Run any of them with a Claude Code (Opus) execution
+default: once the stage is listed, the agent completes the card through the
+Integration Guard, without waiting for a go-ahead. The guard compares the task
+and target changes from their common ancestor and integrates independent changes
+even when the target advanced; rebase is reserved for intentional history
+rewrites or a genuine overlap. Add a **Wait for approval** stage when you want to
+gate that. Run any of them with a Claude Code (Opus) execution
 agent, so the main loop has the model budget to coordinate the fan-out and verify
 each subagent's work.
 

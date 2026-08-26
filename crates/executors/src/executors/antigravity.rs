@@ -131,12 +131,11 @@ impl Antigravity {
         }
         if let Ok(output) = std::process::Command::new("which").arg("agy").output()
             && output.status.success()
+            && let Ok(s) = String::from_utf8(output.stdout)
         {
-            if let Ok(s) = String::from_utf8(output.stdout) {
-                let s = s.trim();
-                if !s.is_empty() {
-                    return s.to_string();
-                }
+            let s = s.trim();
+            if !s.is_empty() {
+                return s.to_string();
             }
         }
         if let Some(home) = dirs::home_dir() {
@@ -154,7 +153,7 @@ impl Antigravity {
         conversation_id: Option<&str>,
         current_dir: Option<&Path>,
     ) -> Result<CommandBuilder, CommandBuildError> {
-        let mut builder = CommandBuilder::new(&Self::agy_binary());
+        let mut builder = CommandBuilder::new(Self::agy_binary());
 
         builder = builder.extend_params(["--print", prompt]);
         builder = builder.extend_params(["--output-format", "stream-json"]);
@@ -184,10 +183,10 @@ impl Antigravity {
             }
         });
 
-        if let Some(effort) = effort {
-            if !effort.is_empty() {
-                builder = builder.extend_params(["--effort", effort]);
-            }
+        if let Some(effort) = effort
+            && !effort.is_empty()
+        {
+            builder = builder.extend_params(["--effort", effort]);
         }
 
         if self.yolo.unwrap_or(true) {
@@ -639,39 +638,38 @@ impl StandardCodingAgentExecutor for Antigravity {
                             let state = step_update.state.as_deref().unwrap_or("DONE");
 
                             if step_type == "agent_response" {
-                                if let Some(delta) = step_update.text_delta {
-                                    if !delta.is_empty() {
-                                        let entry = match &mut current_assistant {
-                                            Some((_, content)) => {
-                                                content.push_str(&delta);
-                                                NormalizedEntry {
-                                                    timestamp: None,
-                                                    entry_type:
-                                                        NormalizedEntryType::AssistantMessage,
-                                                    content: content.clone(),
-                                                    metadata: None,
-                                                }
-                                            }
-                                            None => NormalizedEntry {
+                                if let Some(delta) = step_update.text_delta
+                                    && !delta.is_empty()
+                                {
+                                    let entry = match &mut current_assistant {
+                                        Some((_, content)) => {
+                                            content.push_str(&delta);
+                                            NormalizedEntry {
                                                 timestamp: None,
                                                 entry_type: NormalizedEntryType::AssistantMessage,
-                                                content: delta.clone(),
+                                                content: content.clone(),
                                                 metadata: None,
-                                            },
-                                        };
+                                            }
+                                        }
+                                        None => NormalizedEntry {
+                                            timestamp: None,
+                                            entry_type: NormalizedEntryType::AssistantMessage,
+                                            content: delta.clone(),
+                                            metadata: None,
+                                        },
+                                    };
 
-                                        match &mut current_assistant {
-                                            Some((index, _)) => {
-                                                replace_normalized_entry(&msg_store, *index, entry);
-                                            }
-                                            None => {
-                                                let index = add_normalized_entry(
-                                                    &msg_store,
-                                                    &entry_index,
-                                                    entry,
-                                                );
-                                                current_assistant = Some((index, delta));
-                                            }
+                                    match &mut current_assistant {
+                                        Some((index, _)) => {
+                                            replace_normalized_entry(&msg_store, *index, entry);
+                                        }
+                                        None => {
+                                            let index = add_normalized_entry(
+                                                &msg_store,
+                                                &entry_index,
+                                                entry,
+                                            );
+                                            current_assistant = Some((index, delta));
                                         }
                                     }
                                 }
@@ -790,26 +788,23 @@ impl StandardCodingAgentExecutor for Antigravity {
                                 }
                             }
 
-                            if let Some(response) = result.response {
-                                if !response.trim().is_empty() {
-                                    let entry = NormalizedEntry {
-                                        timestamp: None,
-                                        entry_type: NormalizedEntryType::AssistantMessage,
-                                        content: response.clone(),
-                                        metadata: None,
-                                    };
-                                    match &mut current_assistant {
-                                        Some((index, _)) => {
-                                            replace_normalized_entry(&msg_store, *index, entry);
-                                        }
-                                        None => {
-                                            let index = add_normalized_entry(
-                                                &msg_store,
-                                                &entry_index,
-                                                entry,
-                                            );
-                                            current_assistant = Some((index, response));
-                                        }
+                            if let Some(response) = result.response
+                                && !response.trim().is_empty()
+                            {
+                                let entry = NormalizedEntry {
+                                    timestamp: None,
+                                    entry_type: NormalizedEntryType::AssistantMessage,
+                                    content: response.clone(),
+                                    metadata: None,
+                                };
+                                match &mut current_assistant {
+                                    Some((index, _)) => {
+                                        replace_normalized_entry(&msg_store, *index, entry);
+                                    }
+                                    None => {
+                                        let index =
+                                            add_normalized_entry(&msg_store, &entry_index, entry);
+                                        current_assistant = Some((index, response));
                                     }
                                 }
                             }
@@ -826,20 +821,19 @@ impl StandardCodingAgentExecutor for Antigravity {
                                     };
                                     add_normalized_entry(&msg_store, &entry_index, entry);
                                 }
-                            } else if let Some(status) = result.status {
-                                if status.eq_ignore_ascii_case("FAILURE")
-                                    || status.eq_ignore_ascii_case("ERROR")
-                                {
-                                    let entry = NormalizedEntry {
-                                        timestamp: None,
-                                        entry_type: NormalizedEntryType::ErrorMessage {
-                                            error_type: NormalizedEntryError::Other,
-                                        },
-                                        content: format!("Execution ended with status: {}", status),
-                                        metadata: None,
-                                    };
-                                    add_normalized_entry(&msg_store, &entry_index, entry);
-                                }
+                            } else if let Some(status) = result.status
+                                && (status.eq_ignore_ascii_case("FAILURE")
+                                    || status.eq_ignore_ascii_case("ERROR"))
+                            {
+                                let entry = NormalizedEntry {
+                                    timestamp: None,
+                                    entry_type: NormalizedEntryType::ErrorMessage {
+                                        error_type: NormalizedEntryError::Other,
+                                    },
+                                    content: format!("Execution ended with status: {}", status),
+                                    metadata: None,
+                                };
+                                add_normalized_entry(&msg_store, &entry_index, entry);
                             }
                         }
                         AgyEvent::Other => {}
@@ -933,18 +927,18 @@ impl StandardCodingAgentExecutor for Antigravity {
         let mut models = Self::discover_models_live().await;
 
         // If user already configured a model, ensure it's in the list
-        if let Some(configured_model) = &self.model {
-            if !models.iter().any(|m| m.id == *configured_model) {
-                models.insert(
-                    0,
-                    ModelInfo {
-                        id: configured_model.clone(),
-                        name: configured_model.clone(),
-                        provider_id: None,
-                        reasoning_options: vec![],
-                    },
-                );
-            }
+        if let Some(configured_model) = &self.model
+            && !models.iter().any(|m| m.id == *configured_model)
+        {
+            models.insert(
+                0,
+                ModelInfo {
+                    id: configured_model.clone(),
+                    name: configured_model.clone(),
+                    provider_id: None,
+                    reasoning_options: vec![],
+                },
+            );
         }
 
         let default_model = self
@@ -1003,7 +997,7 @@ impl AntigravityHeaded {
         conversation_id: Option<&str>,
         current_dir: Option<&Path>,
     ) -> Result<CommandParts, CommandBuildError> {
-        let mut builder = CommandBuilder::new(&Antigravity::agy_binary());
+        let mut builder = CommandBuilder::new(Antigravity::agy_binary());
 
         if let Some(dir) = current_dir {
             builder = builder.extend_params(["--add-dir", &dir.to_string_lossy()]);
@@ -1029,10 +1023,10 @@ impl AntigravityHeaded {
             }
         });
 
-        if let Some(effort) = effort {
-            if !effort.is_empty() {
-                builder = builder.extend_params(["--effort", effort]);
-            }
+        if let Some(effort) = effort
+            && !effort.is_empty()
+        {
+            builder = builder.extend_params(["--effort", effort]);
         }
 
         if self.inner.yolo.unwrap_or(true) {

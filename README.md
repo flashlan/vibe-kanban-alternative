@@ -68,7 +68,7 @@ At its core it's a kanban board that plans and tracks agent work, plus a workspa
 - **Diff review** — inline comments, diffs, a preview browser, and a manual-review stage that pauses the agent and raises an alert so you approve the result before any merge or PR.
 - **Cross-session project memory (mem0)** — agents recall and persist verified facts about the repositories they work in, keyed per repository and shared across CLIs, with a graph memory that survives restarts.
 - **Usage and observability** — a `Settings → Usage` dashboard with per-day activity, per-agent execution bars, extraction-token monitoring, and project progress.
-- **Workspaces, PRs, and merge** — dispatch work to existing sessions, open PRs (GitHub or Gitea/Forgejo) with AI-generated descriptions, and squash-merge to base.
+- **Workspaces, PRs, and merge** — dispatch work to existing sessions, open PRs (GitHub or Gitea/Forgejo) with AI-generated descriptions, and complete changes through the Integration Guard.
 - **Terminal and phone control** — a [TUI cockpit](#terminal-ui-tui) and [Telegram escalation](#telegram-orchestration) keep you in control without the browser.
 
 ![Workspace view showing an agent session, terminal, and diff review panel](packages/public/vibe-kanban-screenshot-workspace.png)

@@ -768,7 +768,7 @@ fn rebase_applies_multiple_commits_onto_ahead_base() {
 }
 
 #[test]
-fn merge_when_base_ahead_and_feature_ahead_fails() {
+fn merge_when_base_ahead_and_feature_ahead_merges_disjoint_changes() {
     let td = TempDir::new().unwrap();
     let (repo_path, worktree_path) = setup_repo_with_worktree(&td);
     let repo = Repository::open(&repo_path).unwrap();
@@ -785,7 +785,9 @@ fn merge_when_base_ahead_and_feature_ahead_fails() {
     let g = GitService::new();
     let before_main = g.get_branch_oid(&repo_path, "main").unwrap();
 
-    // Attempt to merge (squash) into main - should fail because base is ahead
+    // The target advanced independently after the feature branch was created.
+    // A three-way squash merge should preserve both changes without requiring
+    // a rebase.
     let service = GitService::new();
     let res = service.merge_changes(
         &repo_path,
@@ -796,16 +798,18 @@ fn merge_when_base_ahead_and_feature_ahead_fails() {
     );
 
     assert!(
-        res.is_err(),
-        "merge should fail when base branch is ahead of task branch"
+        res.is_ok(),
+        "disjoint changes should merge without a rebase"
     );
 
-    // Verify main branch was not modified
+    // Verify both sides of the split history are present on main.
     let after_main = g.get_branch_oid(&repo_path, "main").unwrap();
-    assert_eq!(
+    assert_ne!(
         before_main, after_main,
-        "main ref should remain unchanged when merge fails"
+        "main ref should advance after merge"
     );
+    assert!(repo_path.join("base_ahead.txt").exists());
+    assert!(repo_path.join("another.txt").exists());
 }
 
 #[test]
@@ -835,15 +839,24 @@ fn merge_conflict_does_not_move_base_ref() {
 
 #[test]
 fn merge_delete_vs_modify_conflict_behaves_safely() {
-    // main modifies file, feature deletes it -> but now blocked by branch ahead check
     let td = TempDir::new().unwrap();
-    let (repo_path, worktree_path) = setup_repo_with_worktree(&td);
+    let repo_path = td.path().join("repo");
+    let worktree_path = td.path().join("wt-feature");
+    let service = GitService::new();
+    service
+        .initialize_repo_with_main_branch(&repo_path)
+        .expect("init repo");
     let repo = Repository::open(&repo_path).unwrap();
+    configure_user(&repo);
 
-    // start from main with a file
     checkout_branch(&repo, "main");
     write_file(&repo_path, "conflict_dm.txt", "base\n");
     commit_all(&repo, "add conflict file");
+
+    create_branch_from_head(&repo, "feature");
+    service
+        .add_worktree(&repo_path, &worktree_path, "feature", false)
+        .expect("create worktree");
 
     // feature deletes it and commits
     let wt_repo = Repository::open(&worktree_path).unwrap();
@@ -870,12 +883,17 @@ fn merge_delete_vs_modify_conflict_behaves_safely() {
         "squash merge",
     );
 
-    // Should now fail due to base branch being ahead, not due to merge conflicts
-    assert!(res.is_err(), "merge should fail when base branch is ahead");
+    // The HEAD-aware merge reaches the actual three-way conflict instead of
+    // failing merely because main advanced.
+    assert!(
+        res.is_err(),
+        "merge should fail on the delete/modify conflict"
+    );
 
     // Ensure base ref unchanged on failure
     let after = g.get_branch_oid(&repo_path, "main").unwrap();
     assert_eq!(before, after, "main ref must remain unchanged on failure");
+    let _ = GitCli::new().abort_merge(&repo_path);
 }
 
 #[test]
@@ -1295,7 +1313,7 @@ fn merge_into_orphaned_branch_uses_libgit2_fallback() {
 }
 
 #[test]
-fn merge_base_ahead_of_task_should_error() {
+fn merge_base_ahead_of_task_merges_disjoint_changes() {
     let td = TempDir::new().unwrap();
     let repo_path = td.path().join("repo");
     let worktree_path = td.path().join("wt-feature");
@@ -1330,8 +1348,8 @@ fn merge_base_ahead_of_task_should_error() {
     write_file(&repo_path, "main_advance2.txt", "main advanced more\n");
     commit_all(&repo, "main advances further");
 
-    // Attempt to merge feature into main when main is ahead
-    // This should error because base branch has moved ahead of task branch
+    // Merge feature into main even though main is ahead. The changes are
+    // disjoint, so the three-way squash merge should succeed without rebase.
     let res = service.merge_changes(
         &repo_path,
         &worktree_path,
@@ -1340,10 +1358,11 @@ fn merge_base_ahead_of_task_should_error() {
         "attempt merge when base ahead",
     );
 
-    // TDD: This test will initially fail because merge currently succeeds
-    // Later we'll fix the merge logic to detect this scenario and error
     assert!(
-        res.is_err(),
-        "Merge should error when base branch is ahead of task branch"
+        res.is_ok(),
+        "disjoint changes should merge without a rebase"
     );
+    assert!(repo_path.join("main_advance.txt").exists());
+    assert!(repo_path.join("main_advance2.txt").exists());
+    assert!(repo_path.join("feature.txt").exists());
 }

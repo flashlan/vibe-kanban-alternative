@@ -413,16 +413,15 @@ fn set_macos_dock_icon() {
     let icon_bytes = include_bytes!("../icons/icon.png");
     let nsdata = NSData::with_bytes(icon_bytes);
 
-    if let Some(nsimage_cls) = AnyClass::get(c"NSImage") {
-        if let Some(nsapp_cls) = AnyClass::get(c"NSApplication") {
-            unsafe {
-                let alloc_img: *mut objc2::runtime::AnyObject = msg_send![nsimage_cls, alloc];
-                let img: *mut objc2::runtime::AnyObject =
-                    msg_send![alloc_img, initWithData: &*nsdata];
-                let app: *mut objc2::runtime::AnyObject = msg_send![nsapp_cls, sharedApplication];
-                if !app.is_null() && !img.is_null() {
-                    let _: () = msg_send![app, setApplicationIconImage: img];
-                }
+    if let Some(nsimage_cls) = AnyClass::get(c"NSImage")
+        && let Some(nsapp_cls) = AnyClass::get(c"NSApplication")
+    {
+        unsafe {
+            let alloc_img: *mut objc2::runtime::AnyObject = msg_send![nsimage_cls, alloc];
+            let img: *mut objc2::runtime::AnyObject = msg_send![alloc_img, initWithData: &*nsdata];
+            let app: *mut objc2::runtime::AnyObject = msg_send![nsapp_cls, sharedApplication];
+            if !app.is_null() && !img.is_null() {
+                let _: () = msg_send![app, setApplicationIconImage: img];
             }
         }
     }

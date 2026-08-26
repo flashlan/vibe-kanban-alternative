@@ -106,12 +106,11 @@ fn add_tree(zip: &mut ZipWriter<Cursor<Vec<u8>>>, prefix: &str, dir: &std::path:
             if zip.add_directory(zip_name.clone(), opts).is_ok() {
                 add_tree(zip, &zip_name, &path);
             }
-        } else if path.is_file() {
-            if let Ok(bytes) = std::fs::read(&path)
-                && zip.start_file(zip_name, opts).is_ok()
-            {
-                let _ = zip.write_all(&bytes);
-            }
+        } else if path.is_file()
+            && let Ok(bytes) = std::fs::read(&path)
+            && zip.start_file(zip_name, opts).is_ok()
+        {
+            let _ = zip.write_all(&bytes);
         }
     }
 }

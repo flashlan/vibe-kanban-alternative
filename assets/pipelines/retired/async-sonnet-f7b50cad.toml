@@ -39,9 +39,9 @@ prompt = "After implementing, run an independent Codex review of the card's diff
 
 [[stage]]
 id = "merge"
-label = "Merge to base"
+label = "Integration Guard → Done"
 default_enabled = true
-prompt = "When the work is implemented and reviewed, squash-merge this card's branch into the base branch yourself — this stage being listed is your authorization, so do not wait for a go-ahead; gating, when wanted, is the Wait-for-approval stage's job."
+prompt = "When the work is implemented and reviewed, call `complete_workspace_card` through the normal card workflow. The Integration Guard records the task's original target HEAD and performs a three-way integration, so independent target changes do not require a rebase. If semantic or Git overlap is reported, leave the card open and report the conflict for review. Do not manually rebase, update refs, push, or open a PR."
 
 [[stage]]
 id = "pr"

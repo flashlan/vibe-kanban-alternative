@@ -10,6 +10,8 @@ use axum::{
     routing::{get, post},
 };
 use db::models::{
+    agent_work::AgentWorkDeclaration,
+    integration_guard::IntegrationGuardLease as DbIntegrationGuardLease,
     merge::{Merge, MergeStatus, PrMerge, PullRequestInfo},
     repo::{Repo, RepoError},
     workspace::Workspace,
@@ -54,11 +56,21 @@ pub enum GitOperationError {
         target_branch: String,
     },
     RebaseInProgress,
+    AgentWorkConflict {
+        message: String,
+        conflicts: Vec<db::models::agent_work::AgentWorkConflict>,
+    },
+    IntegrationInProgress {
+        message: String,
+    },
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]
 pub struct MergeWorkspaceRequest {
     pub repo_id: Uuid,
+    #[serde(default)]
+    #[ts(optional)]
+    pub suppress_auto_move: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]
@@ -162,6 +174,47 @@ pub fn router() -> Router<DeploymentImpl> {
         .route("/branch", axum::routing::put(rename_branch))
 }
 
+/// The process keeps a handle to the database-backed Integration Guard lease.
+/// Drop releases it asynchronously on every return path, including errors.
+struct IntegrationGuardHandle {
+    pool: sqlx::SqlitePool,
+    lease: DbIntegrationGuardLease,
+}
+
+impl Drop for IntegrationGuardHandle {
+    fn drop(&mut self) {
+        let pool = self.pool.clone();
+        let repo_id = self.lease.repo_id;
+        let owner_id = self.lease.owner_id;
+        tokio::spawn(async move {
+            if let Err(error) = DbIntegrationGuardLease::release(&pool, repo_id, owner_id).await {
+                tracing::warn!(%error, %repo_id, "Failed to release Integration Guard lease");
+            }
+        });
+    }
+}
+
+async fn acquire_integration_guard(
+    pool: &sqlx::SqlitePool,
+    repo_id: Uuid,
+    owner_id: Uuid,
+) -> Result<Option<IntegrationGuardHandle>, ApiError> {
+    const MAX_WAIT_ATTEMPTS: usize = 150;
+
+    for attempt in 0..MAX_WAIT_ATTEMPTS {
+        if let Some(lease) = DbIntegrationGuardLease::try_acquire(pool, repo_id, owner_id).await? {
+            return Ok(Some(IntegrationGuardHandle {
+                pool: pool.clone(),
+                lease,
+            }));
+        }
+        if attempt + 1 < MAX_WAIT_ATTEMPTS {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+    }
+    Ok(None)
+}
+
 async fn resolve_vibe_kanban_identifier(
     _deployment: &DeploymentImpl,
     local_workspace_id: Uuid,
@@ -184,7 +237,7 @@ pub async fn merge_workspace(
     Extension(workspace): Extension<Workspace>,
     State(deployment): State<DeploymentImpl>,
     Json(request): Json<MergeWorkspaceRequest>,
-) -> Result<ResponseJson<ApiResponse<()>>, ApiError> {
+) -> Result<ResponseJson<ApiResponse<(), GitOperationError>>, ApiError> {
     let pool = &deployment.db().pool;
 
     let workspace_repo =
@@ -195,6 +248,22 @@ pub async fn merge_workspace(
     let repo = Repo::find_by_id(pool, workspace_repo.repo_id)
         .await?
         .ok_or(RepoError::NotFound)?;
+
+    // All direct merges update a shared branch reference. The lease is stored
+    // in SQLite so separate backend processes cannot validate and write the
+    // same repository concurrently.
+    let Some(_integration_guard) = acquire_integration_guard(pool, repo.id, workspace.id).await?
+    else {
+        let message =
+            "Integration Guard is busy for this repository. Retry after the active integration finishes."
+                .to_string();
+        return Ok(ResponseJson(
+            ApiResponse::error_with_data(GitOperationError::IntegrationInProgress {
+                message: message.clone(),
+            })
+            .with_message(message),
+        ));
+    };
 
     let merges = Merge::find_by_workspace_and_repo_id(pool, workspace.id, request.repo_id).await?;
     let has_open_pr = merges
@@ -223,6 +292,79 @@ pub async fn merge_workspace(
     let workspace_path = Path::new(&container_ref);
     let worktree_path = workspace_path.join(repo.name);
 
+    // Use the merge base as the task's original HEAD. This keeps changes made
+    // on the target branch after the task started out of the task scope and
+    // lets Git perform a three-way merge instead of requiring a rebase first.
+    let target_head = deployment
+        .git()
+        .get_branch_oid(&repo.path, &workspace_repo.target_branch)?;
+    let task_head = deployment
+        .git()
+        .get_branch_oid(&repo.path, &workspace.branch)?;
+    let original_head = deployment.git().get_fork_point(
+        &repo.path,
+        &workspace_repo.target_branch,
+        &workspace.branch,
+    )?;
+    let target_changed_files =
+        deployment
+            .git()
+            .get_commit_diff_file_paths(&repo.path, &original_head, &target_head)?;
+    let mut changed_files =
+        deployment
+            .git()
+            .get_commit_diff_file_paths(&repo.path, &original_head, &task_head)?;
+    if !target_changed_files.is_empty() {
+        tracing::info!(
+            workspace_id = %workspace.id,
+            target_branch = %workspace_repo.target_branch,
+            original_head = %original_head,
+            target_head = %target_head,
+            changed_files = target_changed_files.len(),
+            "Target HEAD advanced; attempting a three-way integration"
+        );
+    }
+    let current_declarations = AgentWorkDeclaration::list_active(pool, workspace.id).await?;
+    let mut changed_symbols = Vec::new();
+    let mut changed_dependencies = Vec::new();
+    for declaration in &current_declarations {
+        changed_files.extend(declaration.files.iter().cloned());
+        changed_symbols.extend(declaration.symbols.iter().cloned());
+        changed_dependencies.extend(declaration.dependencies.iter().cloned());
+    }
+    let changed_files = changed_files.into_iter().collect::<Vec<_>>();
+
+    let conflicts = AgentWorkDeclaration::list_active_for_repo(pool, repo.id)
+        .await?
+        .into_iter()
+        .filter(|declaration| declaration.workspace_id != workspace.id)
+        .filter_map(|declaration| {
+            AgentWorkDeclaration::conflict_with_scope(
+                &declaration,
+                &changed_files,
+                &changed_symbols,
+                &changed_dependencies,
+            )
+        })
+        .collect::<Vec<_>>();
+    if !conflicts.is_empty() {
+        let agents = conflicts
+            .iter()
+            .map(|conflict| conflict.agent_name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let message = format!(
+            "Merge blocked: active agent work overlaps this branch ({agents}). Review or release the conflicting declarations before integrating."
+        );
+        return Ok(ResponseJson(
+            ApiResponse::error_with_data(GitOperationError::AgentWorkConflict {
+                message: message.clone(),
+                conflicts,
+            })
+            .with_message(message),
+        ));
+    }
+
     let workspace_label = workspace.name.as_deref().unwrap_or(&workspace.branch);
     let vk_id = resolve_vibe_kanban_identifier(&deployment, workspace.id).await;
     let commit_message = format!("{} (vibe-kanban {})", workspace_label, vk_id);
@@ -244,8 +386,12 @@ pub async fn merge_workspace(
     )
     .await?;
 
-    // Auto-move card -> Done (is_terminal) after a direct merge. Best-effort.
-    {
+    AgentWorkDeclaration::release_workspace(pool, workspace.id).await?;
+
+    // Normal manual merges retain the historical auto-move behavior. The
+    // agent completion workflow defers this transition until its mandatory
+    // Mem0 write has been acknowledged.
+    if !request.suppress_auto_move.unwrap_or(false) {
         let pool_clone = pool.clone();
         let ws_id = workspace.id;
         tokio::spawn(async move {

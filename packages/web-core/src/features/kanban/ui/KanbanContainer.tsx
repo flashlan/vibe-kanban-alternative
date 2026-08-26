@@ -84,6 +84,7 @@ import { refreshShapeSource } from '@/shared/lib/electric/collections';
 import { useIssueMultiSelect } from '@/shared/hooks/useIssueMultiSelect';
 import { useIssueSelectionStore } from '@/shared/stores/useIssueSelectionStore';
 import { BulkActionBarContainer } from './BulkActionBarContainer';
+import { AgentActivityIndicator } from './AgentActivityIndicator';
 import { computeKanbanMove } from '../model/computeKanbanMove';
 import { buildKanbanMoveUpdates } from '../model/buildKanbanMoveUpdates';
 import { createSyncGuard } from '../model/syncGuard';
@@ -915,18 +916,108 @@ export function KanbanContainer() {
       // for a status-only update (no sort_order rewrite).
       const effectiveMove = isManualSort ? move : { ...move, index: undefined };
 
-      const newItems = computeKanbanMove(itemsRef.current, effectiveMove);
-      setItems(newItems);
+      const commitMove = (allowUnmergedDone: boolean) => {
+        const newItems = computeKanbanMove(itemsRef.current, effectiveMove);
+        const updates = buildKanbanMoveUpdates({
+          newItems,
+          move,
+          isManualSort,
+          calculateSortOrder,
+          statusColumnIndexMap,
+        }).map((update) =>
+          update.id === move.issueId && allowUnmergedDone
+            ? {
+                ...update,
+                changes: {
+                  ...update.changes,
+                  allow_unmerged_done: true,
+                },
+              }
+            : update
+        );
 
-      const updates = buildKanbanMoveUpdates({
-        newItems,
-        move,
-        isManualSort,
-        calculateSortOrder,
-        statusColumnIndexMap,
-      });
+        setItems(newItems);
+        applyKanbanMove(updates, projectId);
+      };
 
-      applyKanbanMove(updates, projectId);
+      // Done is a protected terminal state. The dialog is intentionally
+      // asynchronous: no optimistic state or REST write happens until the
+      // operator chooses how the card should be completed.
+      if (from !== to && doneStatusIds.has(to)) {
+        void (async () => {
+          const decision = await ConfirmDialog.show({
+            title: 'Complete card',
+            message:
+              'This card has not been integrated yet. Choose how to move it to Done.',
+            confirmText: 'Move and merge',
+            alternativeText: 'Move without merging',
+            cancelText: 'Cancel',
+            variant: 'info',
+          });
+
+          if (decision === 'canceled') return;
+
+          if (decision === 'confirmed') {
+            const linkedWorkspace = getWorkspacesForIssue(move.issueId)
+              .map((linked) => linked.local_workspace_id)
+              .filter((id): id is string => !!id)
+              .map((id) =>
+                activeWorkspaces.find((workspace) => workspace.id === id)
+              )
+              .find(
+                (workspace): workspace is (typeof activeWorkspaces)[number] =>
+                  !!workspace
+              );
+
+            if (!linkedWorkspace) {
+              await ConfirmDialog.show({
+                title: 'Cannot merge card',
+                message:
+                  'No active workspace is linked to this card. The card was left open.',
+                confirmText: 'OK',
+                showCancelButton: false,
+              });
+              return;
+            }
+
+            try {
+              const repos = await workspacesApi.getRepos(linkedWorkspace.id);
+              const repo = repos[0];
+              if (!repo) {
+                throw new Error(
+                  'The linked workspace has no repository configured.'
+                );
+              }
+              await workspacesApi.merge(linkedWorkspace.id, {
+                repo_id: repo.id,
+              });
+            } catch (error) {
+              await ConfirmDialog.show({
+                title: 'Merge blocked',
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : 'Integration failed. The card was left open.',
+                confirmText: 'OK',
+                showCancelButton: false,
+              });
+              return;
+            }
+
+            // The merge record now authorizes the terminal status transition.
+            commitMove(false);
+            return;
+          }
+
+          // The alternate button is an explicit operator override. It is
+          // persisted with the move so the backend can distinguish it from an
+          // agent silently setting Done.
+          commitMove(true);
+        })();
+        return;
+      }
+
+      commitMove(false);
     },
     [
       projectId,
@@ -935,6 +1026,9 @@ export function KanbanContainer() {
       applyKanbanMove,
       issueMap,
       isManualSort,
+      doneStatusIds,
+      getWorkspacesForIssue,
+      activeWorkspaces,
     ]
   );
 
@@ -1213,6 +1307,11 @@ export function KanbanContainer() {
             renderFiltersDialog={(props) => <KanbanFiltersDialog {...props} />}
             isMobile={isMobile}
           />
+          {!isMobile && (
+            <div className="ml-auto min-w-0 max-w-full">
+              <AgentActivityIndicator projectId={projectId} />
+            </div>
+          )}
         </div>
       </div>
 

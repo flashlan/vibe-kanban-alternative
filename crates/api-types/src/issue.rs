@@ -79,6 +79,11 @@ pub struct CreateIssueRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct UpdateIssueRequest {
+    /// Explicit operator override for moving a card to a terminal status
+    /// without an Integration Guard merge. This is intentionally not exposed
+    /// by the agent-facing MCP `update_issue` tool.
+    #[serde(default)]
+    pub allow_unmerged_done: Option<bool>,
     #[serde(
         default,
         deserialize_with = "some_if_present",

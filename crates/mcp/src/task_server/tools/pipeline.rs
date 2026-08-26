@@ -1,6 +1,6 @@
 use rmcp::{
-    handler::server::wrapper::Parameters, model::CallToolResult, schemars, tool, tool_router,
-    ErrorData,
+    ErrorData, handler::server::wrapper::Parameters, model::CallToolResult, schemars, tool,
+    tool_router,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

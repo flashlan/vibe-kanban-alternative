@@ -181,16 +181,16 @@ fn parse_rules_pre_post(raw: &str) -> (String, String) {
     let mut pre = String::new();
     let mut post = String::new();
 
-    if let (Some(pre_s), Some(pre_e)) = (raw.find(PRE_START), raw.find(PRE_END)) {
-        if pre_s + PRE_START.len() <= pre_e {
-            pre = raw[pre_s + PRE_START.len()..pre_e].trim().to_string();
-        }
+    if let (Some(pre_s), Some(pre_e)) = (raw.find(PRE_START), raw.find(PRE_END))
+        && pre_s + PRE_START.len() <= pre_e
+    {
+        pre = raw[pre_s + PRE_START.len()..pre_e].trim().to_string();
     }
 
-    if let (Some(post_s), Some(post_e)) = (raw.find(POST_START), raw.find(POST_END)) {
-        if post_s + POST_START.len() <= post_e {
-            post = raw[post_s + POST_START.len()..post_e].trim().to_string();
-        }
+    if let (Some(post_s), Some(post_e)) = (raw.find(POST_START), raw.find(POST_END))
+        && post_s + POST_START.len() <= post_e
+    {
+        post = raw[post_s + POST_START.len()..post_e].trim().to_string();
     }
 
     // If no tags were used (e.g. legacy plain text), treat whole text as pre-work rules
@@ -236,25 +236,24 @@ async fn resolve_general_rules(
         (None, None) => None,
     };
 
-    if let Some(pid) = target_project_id {
-        if let Ok((project_prompt, _)) =
+    if let Some(pid) = target_project_id
+        && let Ok((project_prompt, _)) =
             db::models::project::Project::resolve_orchestrator_prompt(pool, pid).await
-        {
-            let (proj_pre, proj_post) = parse_rules_pre_post(&project_prompt);
-            if !proj_pre.trim().is_empty() {
-                pre = format!(
-                    "{}\n\n---\n## Project Pre-Work Rules\n{}",
-                    pre,
-                    proj_pre.trim()
-                );
-            }
-            if !proj_post.trim().is_empty() {
-                post = format!(
-                    "{}\n\n---\n## Project Closing Checklist & Prohibitions\n{}",
-                    post,
-                    proj_post.trim()
-                );
-            }
+    {
+        let (proj_pre, proj_post) = parse_rules_pre_post(&project_prompt);
+        if !proj_pre.trim().is_empty() {
+            pre = format!(
+                "{}\n\n---\n## Project Pre-Work Rules\n{}",
+                pre,
+                proj_pre.trim()
+            );
+        }
+        if !proj_post.trim().is_empty() {
+            post = format!(
+                "{}\n\n---\n## Project Closing Checklist & Prohibitions\n{}",
+                post,
+                proj_post.trim()
+            );
         }
     }
 
@@ -727,17 +726,15 @@ async fn get_agent_models(
                         } else if let Ok(model) = serde_json::from_value::<
                             executors::model_selector::ModelInfo,
                         >(val.clone())
-                        {
-                            if !models_out
+                            && !models_out
                                 .iter()
                                 .any(|existing: &DiscoveredModelEntry| existing.id == model.id)
-                            {
-                                models_out.push(DiscoveredModelEntry {
-                                    id: model.id,
-                                    name: model.name,
-                                    provider: model.provider_id,
-                                });
-                            }
+                        {
+                            models_out.push(DiscoveredModelEntry {
+                                id: model.id,
+                                name: model.name,
+                                provider: model.provider_id,
+                            });
                         }
                     }
                 }

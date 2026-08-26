@@ -1,5 +1,5 @@
 name = "Swarm Multi-Agent"
-description = "Plan (Antigravity) → Implement (Claude Code) → Review (Codex) → Manual Preview → Squash-merge"
+description = "Plan (Antigravity) → Implement (Claude Code) → Review (Codex) → Manual Preview → Integration Guard"
 
 [[stage]]
 id = "memory"
@@ -37,6 +37,6 @@ prompt = "All implementation, tests, and code reviews are complete. Boot the wor
 
 [[stage]]
 id = "merge"
-label = "5. Squash-merge to base"
+label = "5. Integration Guard → Done"
 default_enabled = true
-prompt = "Once build and review pass (and manual review approval is confirmed if that stage was selected), squash-merge this card's branch into the base branch yourself. Local only — do NOT git push, do NOT open a PR. Report that you squash-merged to the base branch with the SHA and mark the card DONE."
+prompt = "Once build and review pass (and manual review approval is confirmed if that stage was selected), call `complete_workspace_card` through the normal card workflow. The Integration Guard records the task's original target HEAD and performs a three-way integration, so independent target changes do not require a rebase. If semantic or Git overlap is reported, leave the card open and report the conflict for review. Do not manually rebase, update refs, push, or open a PR."

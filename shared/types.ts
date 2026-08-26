@@ -245,6 +245,12 @@ export enum ExecutionProcessStatus { running = "running", completed = "completed
 
 export type ExecutionProcessRunReason = "setupscript" | "cleanupscript" | "archivescript" | "codingagent" | "devserver";
 
+export type AgentWorkDeclaration = { id: string, workspace_id: string, owner_id: string, execution_process_id: string | null, agent_name: string, intent: string, files: Array<string>, symbols: Array<string>, dependencies: Array<string>, lease_expires_at: string, created_at: string, updated_at: string, };
+
+export type AgentWorkConflict = { workspace_id: string, owner_id: string, agent_name: string, intent: string, files: Array<string>, symbols: Array<string>, dependencies: Array<string>, conflict_type: string, lease_expires_at: string, };
+
+export type AgentWorkDeclarationResult = { declaration: AgentWorkDeclaration, conflicts: Array<AgentWorkConflict>, };
+
 export type ExecutionProcessRepoState = { id: string, execution_process_id: string, repo_id: string, before_head_commit: string | null, after_head_commit: string | null, merge_commit: string | null, created_at: Date, updated_at: Date, };
 
 export type Merge = { "type": "direct" } & DirectMerge | { "type": "pr" } & PrMerge;
@@ -375,7 +381,7 @@ export type AddWorkspaceRepoRequest = { repo_id: string, target_branch: string, 
 
 export type AddWorkspaceRepoResponse = { workspace: Workspace, repo: RepoWithTargetBranch, };
 
-export type MergeWorkspaceRequest = { repo_id: string, };
+export type MergeWorkspaceRequest = { repo_id: string, suppress_auto_move?: boolean, };
 
 export type CommitWorkspaceRequest = { repo_id: string, };
 
@@ -424,7 +430,7 @@ export type ContinueRebaseRequest = { repo_id: string, };
 
 export type AbortConflictsRequest = { repo_id: string, };
 
-export type GitOperationError = { "type": "merge_conflicts", message: string, op: ConflictOp, conflicted_files: Array<string>, target_branch: string, } | { "type": "rebase_in_progress" };
+export type GitOperationError = { "type": "merge_conflicts", message: string, op: ConflictOp, conflicted_files: Array<string>, target_branch: string, } | { "type": "rebase_in_progress" } | { "type": "agent_work_conflict", message: string, conflicts: Array<AgentWorkConflict>, } | { "type": "integration_in_progress", message: string, };
 
 export type PushError = { "type": "force_push_required" };
 

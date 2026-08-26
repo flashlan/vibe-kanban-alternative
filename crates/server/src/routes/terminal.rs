@@ -58,12 +58,12 @@ struct TerminalQuery {
 /// Locate the `vibe-tui` binary next to the current server executable or
 /// fall back to `cargo run -p tui --`.
 fn resolve_tui_command() -> (String, Vec<String>) {
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(parent) = exe.parent() {
-            let tui_bin = parent.join("vibe-tui");
-            if tui_bin.exists() {
-                return (tui_bin.to_string_lossy().to_string(), vec![]);
-            }
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(parent) = exe.parent()
+    {
+        let tui_bin = parent.join("vibe-tui");
+        if tui_bin.exists() {
+            return (tui_bin.to_string_lossy().to_string(), vec![]);
         }
     }
     (
@@ -252,19 +252,13 @@ async fn resolve_working_dir(
     query: &TerminalQuery,
 ) -> Result<PathBuf, ApiError> {
     match (&query.workspace_id, &query.repo_path) {
-        (None, None) => {
-            return Err(ApiError::BadRequest(
-                "Either workspace_id or repo_path is required".to_string(),
-            ));
-        }
-        (Some(_), Some(_)) => {
-            return Err(ApiError::BadRequest(
-                "Only one of workspace_id or repo_path is allowed".to_string(),
-            ));
-        }
-        (None, Some(repo_path)) => {
-            return validate_repo_path(repo_path);
-        }
+        (None, None) => Err(ApiError::BadRequest(
+            "Either workspace_id or repo_path is required".to_string(),
+        )),
+        (Some(_), Some(_)) => Err(ApiError::BadRequest(
+            "Only one of workspace_id or repo_path is allowed".to_string(),
+        )),
+        (None, Some(repo_path)) => validate_repo_path(repo_path),
         (Some(workspace_id), None) => {
             let attempt = Workspace::find_by_id(&deployment.db().pool, *workspace_id)
                 .await?
@@ -300,11 +294,12 @@ async fn resolve_working_dir(
                     );
                 }
             }
-            return Ok(working_dir);
+            Ok(working_dir)
         }
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_terminal_ws(
     mut socket: MaybeSignedWebSocket,
     deployment: DeploymentImpl,
@@ -508,13 +503,11 @@ async fn handle_terminal_ws(
     // killing the tmux session the `vibe-tui` process keeps running in the
     // background forever. Kill it so closing the tab actually stops the cockpit.
     // Attach/resume sessions are intentionally persistent and never killed here.
-    if is_tui {
-        if let Some(name) = &session_name {
-            let _ = tokio::process::Command::new("tmux")
-                .args(["kill-session", "-t", name])
-                .output()
-                .await;
-        }
+    if is_tui && let Some(name) = &session_name {
+        let _ = tokio::process::Command::new("tmux")
+            .args(["kill-session", "-t", name])
+            .output()
+            .await;
     }
 
     // For an attach session, the PTY ending means the tmux session died / the

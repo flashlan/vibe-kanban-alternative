@@ -7,6 +7,36 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-alternat
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.44] - 2026-08-26
+
+### Added
+
+- **Agent Work Coordinator and Integration Guard**: added automatic agent-work declarations, active-agent visibility, soft reservations, semantic dependency warnings, ten-minute leases, and a database-backed integration lease for parallel worktrees.
+- **HEAD-aware integration**: direct completion now compares the task and target changes from their original branch point and performs a Git three-way integration, allowing independent changes to land without an unnecessary rebase.
+- **Conflict-safe completion**: semantic overlap, real Git conflicts, dirty target worktrees, and concurrent integrations leave the card open instead of marking it as Done incorrectly.
+- Added an all-in-one Mem0 Docker Hub image bundling Mem0, Qdrant, Redis, health checks, and supervised services.
+- Limited the MCP pipeline surface to the Quick pipeline for the current local workflow.
+- Added protected card completion: `complete_workspace_card` integrates through
+  the Integration Guard and requires a Mem0 acknowledgement before moving a
+  card to a terminal status.
+
+### Changed
+
+- Pipeline completion stages now delegate to `complete_workspace_card` and the Integration Guard; agents no longer perform manual rebases, ref updates, or temporary merge locking.
+- Kanban drops into Done now require an explicit choice to merge, move without
+  merging, or cancel; silent agent-side terminal transitions are rejected.
+- Reworked the workspace chat scrolling behavior so manual wheel input keeps automatic scrolling paused.
+
+### Fixed
+
+- Updated Codex app-server requests to use named permission profiles and removed conflicting legacy permission fields.
+- Documented and guarded safe Mem0 volume migration and local backup handling.
+
+### Documentation
+
+- Added ADR-036 and a two-agent validation runbook covering observability, semantic conflicts, and serialized integration.
+- Updated the README and pipeline documentation with the Integration Guard terminology and workflow.
+
 ## [0.2.43] - 2026-08-25
 
 ### Added

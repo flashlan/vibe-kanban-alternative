@@ -1,5 +1,9 @@
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LinkIcon } from '@phosphor-icons/react';
 import { ProjectProvider } from '@/shared/providers/remote/ProjectProvider';
+import { useProjectContext } from '@/shared/hooks/useProjectContext';
+import { LinkPrToIssueDialog } from '@/shared/dialogs/command-bar/LinkPrToIssueDialog';
 import { IssueWorkspacesSectionContainer } from '@/pages/kanban/IssueWorkspacesSectionContainer';
 import { IssueRelationshipsSectionContainer } from '@/pages/kanban/IssueRelationshipsSectionContainer';
 import { IssueSubIssuesSectionContainer } from '@/pages/kanban/IssueSubIssuesSectionContainer';
@@ -34,6 +38,57 @@ function Placeholder({
     >
       <div className="p-base flex flex-col gap-half border-t">
         <p className="text-low py-half text-sm">{hint}</p>
+      </div>
+    </CollapsibleSectionHeader>
+  );
+}
+
+function PullRequestsSection({
+  projectId,
+  issueId,
+}: {
+  projectId: string;
+  issueId: string;
+}) {
+  const { t } = useTranslation(['common', 'tasks']);
+  const { getPullRequestsForIssue } = useProjectContext();
+  const pullRequests = getPullRequestsForIssue(issueId);
+
+  const handleLinkPullRequest = useCallback(() => {
+    void LinkPrToIssueDialog.show({ projectId, issueId });
+  }, [projectId, issueId]);
+
+  return (
+    <CollapsibleSectionHeader
+      title={t('tasks:linkPrToIssue.title')}
+      persistKey="create-issue-pull-requests"
+      defaultExpanded
+      actions={[
+        {
+          icon: LinkIcon,
+          onClick: handleLinkPullRequest,
+          title: t('tasks:linkPrToIssue.linkPr'),
+        },
+      ]}
+    >
+      <div className="flex flex-col gap-half border-t p-base">
+        {pullRequests.length === 0 ? (
+          <p className="text-low text-sm">
+            {t('tasks:linkPrToIssue.description')}
+          </p>
+        ) : (
+          pullRequests.map((pullRequest) => (
+            <a
+              key={pullRequest.id}
+              href={pullRequest.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-link hover:underline"
+            >
+              #{pullRequest.number} · {pullRequest.url}
+            </a>
+          ))
+        )}
       </div>
     </CollapsibleSectionHeader>
   );
@@ -80,6 +135,14 @@ export function CreateIssueLinkedSections({
             'Save the issue to add sub-issues.'
           )}
         />
+        <Placeholder
+          title={t('tasks:linkPrToIssue.title')}
+          persistKey="create-issue-pull-requests"
+          hint={t(
+            'tasks:linkPrToIssue.description',
+            'Save the issue to link a pull request.'
+          )}
+        />
       </div>
     );
   }
@@ -100,6 +163,7 @@ export function CreateIssueLinkedSections({
           projectId={projectId}
           issueId={issueId}
         />
+        <PullRequestsSection projectId={projectId} issueId={issueId} />
       </div>
     </ProjectProvider>
   );

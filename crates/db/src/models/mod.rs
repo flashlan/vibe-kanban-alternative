@@ -1,8 +1,10 @@
+pub mod agent_work;
 pub mod coding_agent_turn;
 pub mod execution_process;
 pub mod execution_process_logs;
 pub mod execution_process_repo_state;
 pub mod file;
+pub mod integration_guard;
 pub mod issue;
 pub mod issue_comment;
 pub mod issue_relationship;

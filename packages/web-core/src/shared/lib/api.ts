@@ -1,6 +1,7 @@
 // Import all necessary types from shared types
 
 import {
+  AgentWorkDeclaration,
   AndroidMirrorDevice,
   AndroidMirrorNavRequest,
   AndroidMirrorForceStopRequest,
@@ -108,6 +109,8 @@ import type { WorkspaceWithSession } from '@/shared/types/attempt';
 import { createWorkspaceWithSession } from '@/shared/types/attempt';
 import { resolveHostRequestScope } from '@/shared/lib/hostRequestScope';
 import { makeLocalApiRequest } from '@/shared/lib/localApiTransport';
+
+export type { AgentWorkDeclaration };
 
 export class ApiError<E = unknown> extends Error {
   public status?: number;
@@ -480,6 +483,22 @@ export const specKitApi = {
 };
 
 export const workspacesApi = {
+  listAgentWorkForProject: async (
+    projectId: string
+  ): Promise<AgentWorkDeclaration[]> => {
+    const response = await makeRequest(`/api/projects/${projectId}/agent-work`);
+    return handleApiResponse<AgentWorkDeclaration[]>(response);
+  },
+
+  listAgentWork: async (
+    workspaceId: string
+  ): Promise<AgentWorkDeclaration[]> => {
+    const response = await makeRequest(
+      `/api/workspaces/${workspaceId}/agent-work`
+    );
+    return handleApiResponse<AgentWorkDeclaration[]>(response);
+  },
+
   /** Run an issue in an existing workspace: dispatches its title + description
    *  to the workspace's latest session as a follow-up prompt. The backend
    *  returns a `FollowUpResponse`; callers ignore the body, so we surface `void`
@@ -696,7 +715,7 @@ export const workspacesApi = {
         body: JSON.stringify(data),
       }
     );
-    return handleApiResponse<void>(response);
+    return handleApiResponse<void, GitOperationError>(response);
   },
 
   commit: async (

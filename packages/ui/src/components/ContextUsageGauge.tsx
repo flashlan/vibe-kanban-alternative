@@ -75,7 +75,8 @@ export function ContextUsageGauge({
       else statusValue = 'critical';
 
       const cacheCreation = tokenUsageInfo.cache_creation_tokens ?? 0;
-      const totalInput = effectiveInputTokens + effectiveCacheRead + cacheCreation;
+      const totalInput =
+        effectiveInputTokens + effectiveCacheRead + cacheCreation;
 
       let cacheHitPct: number | null = null;
       if (totalInput > 0 && effectiveCacheRead > 0) {

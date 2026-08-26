@@ -406,7 +406,7 @@ impl GitHostProvider for GiteaProvider {
         })
         .await?;
         let mut prs: Vec<PullRequestDetail> = list.into_iter().map(Self::parse_pr).collect();
-        prs.sort_by(|a, b| b.number.cmp(&a.number));
+        prs.sort_by_key(|pr| std::cmp::Reverse(pr.number));
         Ok(prs)
     }
 

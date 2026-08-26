@@ -36,7 +36,9 @@ impl ToolError {
     }
 }
 
+mod agent_work;
 mod approvals;
+mod completion;
 mod context;
 mod issue_relationships;
 mod issue_tags;
@@ -55,6 +57,7 @@ impl McpServer {
     pub fn global_mode_router() -> rmcp::handler::server::tool::ToolRouter<Self> {
         Self::context_tools_router()
             + Self::workspaces_tools_router()
+            + Self::agent_work_tools_router()
             + Self::repos_tools_router()
             // The card surface every board-driving agent depends on
             // (orchestrator, intake, product). Deleted alongside the cloud
@@ -88,11 +91,15 @@ impl McpServer {
             // orchestrator doesn't do a card's actual work, so it doesn't
             // need this either.
             + Self::rules_tools_router()
+            // Card completion is an execution-agent operation; it is not
+            // exposed to the orchestrator control surface.
+            + Self::completion_tools_router()
     }
 
     pub fn orchestrator_mode_router() -> rmcp::handler::server::tool::ToolRouter<Self> {
         let mut router = Self::context_tools_router()
             + Self::workspaces_tools_router()
+            + Self::agent_work_tools_router()
             + Self::session_tools_router()
             // Orchestrators need to answer questions / approve plans (and stop
             // runaway executions) for the headed agents they drive.
@@ -463,13 +470,17 @@ mod tests {
         let actual = tool_names(McpServer::orchestrator_mode_router());
         let expected = BTreeSet::from([
             "create_session".to_string(),
+            "declare_agent_work".to_string(),
             "get_context".to_string(),
             "get_execution".to_string(),
             // ADR-016: per-tick orchestrator prompt lookup. Card-scoped
             // agents must NOT read sibling prompts, so this lives only
             // in the orchestrator router.
             "get_orchestrator_prompt".to_string(),
+            "heartbeat_agent_work".to_string(),
+            "list_agent_work".to_string(),
             "list_sessions".to_string(),
+            "release_agent_work".to_string(),
             // Approval-control tools so the orchestrator can read, unblock, and
             // stop the agents it drives (mirrors global mode).
             "list_pending_approvals".to_string(),
@@ -514,14 +525,17 @@ mod tests {
         let actual = tool_names(McpServer::global_mode_router());
         let expected = BTreeSet::from([
             "add_issue_tag".to_string(),
+            "complete_workspace_card".to_string(),
             "create_issue".to_string(),
             "create_issue_relationship".to_string(),
             "create_session".to_string(),
+            "declare_agent_work".to_string(),
             "delete_issue".to_string(),
             "delete_issue_relationship".to_string(),
             "delete_workspace".to_string(),
             "get_context".to_string(),
             "get_execution".to_string(),
+            "heartbeat_agent_work".to_string(),
             // ADR-016 reachability amendment: the per-tick prompt read is in
             // the global router (the mode the orchestrator connects with), so
             // one session can both read board prompts and sweep.
@@ -533,6 +547,7 @@ mod tests {
             "list_issue_priorities".to_string(),
             "list_issue_tags".to_string(),
             "list_issues".to_string(),
+            "list_agent_work".to_string(),
             "list_pending_approvals".to_string(),
             "list_projects".to_string(),
             "list_repos".to_string(),
@@ -547,6 +562,7 @@ mod tests {
             "get_rules".to_string(),
             "remove_issue_tag".to_string(),
             "report_pipeline_stage".to_string(),
+            "release_agent_work".to_string(),
             "respond_to_approval".to_string(),
             "run_issue_in_workspace".to_string(),
             "run_session_prompt".to_string(),

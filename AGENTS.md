@@ -27,6 +27,7 @@ Rules:
 - [ ] **In Review** — Livro Vibe Kanban na Amazon — checklist + manuscrito completo (15 caps + apêndice + Agradecimentos, ~1.830 linhas, 12 âncoras) (`vk/1f98-livre-vibo-kanba`)
 - [x] **Done** — Banner de estrela no GitHub na barra superior (`vk/6d8a-implementar-bann`)
 - [x] **Done** — Imagem Docker Hub all-in-one do mem0 (`vk/dockerhub-mem0-all-in-one`)
+- [x] **Done** — Protected terminal completion with Integration Guard and Mem0 (`main`)
 
 ## Card Pipeline Protocol (MCP)
 

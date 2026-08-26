@@ -249,11 +249,11 @@ fn url_host(input: &str) -> Option<String> {
 /// mem0: reachable (`/api/config` 2xx) AND its own `/health` reports `ok`.
 /// Returns `(reachable, healthy)`.
 async fn check_mem0(client: &reqwest::Client, base: &str) -> (bool, bool) {
-    let reachable = match client.get(&format!("{base}/api/config")).send().await {
+    let reachable = match client.get(format!("{base}/api/config")).send().await {
         Ok(r) if r.status().is_success() => true,
         _ => return (false, false),
     };
-    let healthy = match client.get(&format!("{base}/health")).send().await {
+    let healthy = match client.get(format!("{base}/health")).send().await {
         Ok(r) if r.status().is_success() => r
             .json::<Value>()
             .await
@@ -283,6 +283,28 @@ async fn check_json_ok(client: &reqwest::Client, url: &str) -> bool {
 async fn check_status(client: &reqwest::Client, url: &str) -> bool {
     match client.get(url).send().await {
         Ok(r) => r.status().is_success(),
+        _ => false,
+    }
+}
+
+/// Checks vector search through the mem0 API itself. This is the fallback for
+/// the all-in-one Docker image, where Qdrant and embeddings listen on private
+/// container ports and are intentionally not published to the host.
+///
+/// A successful search proves that the API can reach both dependencies without
+/// requiring the host-side health checker to reach their internal addresses.
+async fn check_mem0_vector_search(client: &reqwest::Client, base: &str) -> bool {
+    let body = serde_json::json!({
+        "query": "mem0 health check",
+        "limit": 1,
+    });
+    match client
+        .post(format!("{base}/api/search"))
+        .json(&body)
+        .send()
+        .await
+    {
+        Ok(response) => response.status().is_success(),
         _ => false,
     }
 }
@@ -343,14 +365,28 @@ async fn mem0_status() -> ResponseJson<ApiResponse<Mem0Status>> {
     );
     let (mem0_up, mem0_healthy) = mem0_res;
 
-    let (level, message) = compute_level(mem0_up, mem0_healthy, emb_res, qdrant_res);
+    // The all-in-one image exposes only port 8000. If both direct dependency
+    // probes fail, use a real search through mem0 before reporting a degraded
+    // state. This also remains conservative: a failed search leaves the
+    // direct probe results unchanged.
+    let (embeddings, qdrant) = if mem0_up && !emb_res && !qdrant_res {
+        if check_mem0_vector_search(&client, &mem0_base).await {
+            (true, true)
+        } else {
+            (emb_res, qdrant_res)
+        }
+    } else {
+        (emb_res, qdrant_res)
+    };
+
+    let (level, message) = compute_level(mem0_up, mem0_healthy, embeddings, qdrant);
 
     ResponseJson(ApiResponse::success(Mem0Status {
         level: level.to_string(),
         components: Mem0ComponentStatus {
             mem0: mem0_up && mem0_healthy,
-            embeddings: emb_res,
-            qdrant: qdrant_res,
+            embeddings,
+            qdrant,
         },
         message,
     }))
@@ -480,10 +516,7 @@ async fn fetch_mem0_tokens() -> Mem0TokenUsage {
         Ok(r) if r.status().is_success() => r,
         _ => return Mem0TokenUsage::default(),
     };
-    match resp.json::<Mem0TokenUsage>().await {
-        Ok(t) => t,
-        Err(_) => Mem0TokenUsage::default(),
-    }
+    resp.json::<Mem0TokenUsage>().await.unwrap_or_default()
 }
 
 async fn usage_summary(

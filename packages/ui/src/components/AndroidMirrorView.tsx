@@ -88,8 +88,14 @@ function toDevicePosition(
   const rect = canvas.getBoundingClientRect();
   const relX = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
   const relY = rect.height > 0 ? (clientY - rect.top) / rect.height : 0;
-  const x = Math.min(canvas.width - 1, Math.max(0, Math.round(relX * canvas.width)));
-  const y = Math.min(canvas.height - 1, Math.max(0, Math.round(relY * canvas.height)));
+  const x = Math.min(
+    canvas.width - 1,
+    Math.max(0, Math.round(relX * canvas.width))
+  );
+  const y = Math.min(
+    canvas.height - 1,
+    Math.max(0, Math.round(relY * canvas.height))
+  );
   return { x, y };
 }
 
@@ -139,8 +145,7 @@ function parseHeader(view: DataView): FrameHeader {
     };
   }
   const lo = view.getUint32(4, false);
-  const ptsRaw =
-    (BigInt(hi & PTS_HIGH_MASK) << 32n) | BigInt(lo >>> 0);
+  const ptsRaw = (BigInt(hi & PTS_HIGH_MASK) << 32n) | BigInt(lo >>> 0);
   return {
     kind: 'frame',
     config: (hi & CONFIG_FLAG_MASK) !== 0,
@@ -372,9 +377,7 @@ export const AndroidMirrorView = forwardRef<
         if (firstPtsRef.current === null) {
           firstPtsRef.current = header.ptsRaw ?? 0n;
         }
-        const relativePts = Number(
-          (header.ptsRaw ?? 0n) - firstPtsRef.current
-        );
+        const relativePts = Number((header.ptsRaw ?? 0n) - firstPtsRef.current);
 
         let chunkData = payload;
         if (pendingConfigPayloadRef.current) {
@@ -544,14 +547,16 @@ export const AndroidMirrorView = forwardRef<
             <>
               <DeviceMobileCameraIcon className="size-icon-lg" />
               <p className="text-sm">
-                This browser doesn&apos;t support WebCodecs — the Android
-                mirror needs Chrome or Edge.
+                This browser doesn&apos;t support WebCodecs — the Android mirror
+                needs Chrome or Edge.
               </p>
             </>
           ) : status === 'error' ? (
             <>
               <DeviceMobileCameraIcon className="size-icon-lg" />
-              <p className="text-sm">{errorMessage ?? 'Mirror disconnected.'}</p>
+              <p className="text-sm">
+                {errorMessage ?? 'Mirror disconnected.'}
+              </p>
               <PrimaryButton value="Retry" onClick={onRetry} />
             </>
           ) : status === 'idle' ? (

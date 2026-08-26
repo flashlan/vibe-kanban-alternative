@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FileTreeContainer } from './FileTreeContainer';
 import { ProcessListContainer } from './ProcessListContainer';
+import { AgentWorkPanel } from './AgentWorkPanel';
 import { PreviewControlsContainer } from './PreviewControlsContainer';
 import { AndroidMirrorControlsContainer } from './AndroidMirrorControlsContainer';
 import { GitPanelContainer } from './GitPanelContainer';
@@ -287,6 +288,7 @@ export const RightSidebar = memo(function RightSidebar({
     <div className="h-full border-l bg-secondary overflow-y-auto">
       {/* Headed (interactive tmux) session pane; renders null for non-headed sessions */}
       <HeadedSessionIds workspace={selectedWorkspace} />
+      <AgentWorkPanel workspaceId={selectedWorkspace?.id} />
       <div className="divide-y border-b">
         {sections
           .filter((section) => section.visible)

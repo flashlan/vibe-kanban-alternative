@@ -592,6 +592,17 @@ impl McpServer {
             None => None,
         };
 
+        if let Some(target_status_id) = status_id
+            && target_status_id != existing_issue.status_id
+            && project_statuses.iter().any(|project_status| {
+                project_status.id == target_status_id && project_status.is_terminal
+            })
+        {
+            return Ok(McpServer::tool_error(ToolError::message(
+                "Agents cannot move a card directly to Done. Call complete_workspace_card with a verified memory_summary so Integration Guard and Mem0 run first.",
+            )));
+        }
+
         // Expand @tagname references in description
         let expanded_description = match description {
             Some(desc) => Some(Some(self.expand_tags(&desc).await)),
@@ -608,6 +619,7 @@ impl McpServer {
         };
 
         let payload = UpdateIssueRequest {
+            allow_unmerged_done: None,
             status_id,
             title,
             description: expanded_description,
@@ -1110,6 +1122,8 @@ mod tests {
             "parent_issue_sort_order": null,
             "extension_metadata": {},
             "creator_user_id": null,
+            "archived": false,
+            "archived_at": null,
             "created_at": "2026-01-01T00:00:00Z",
             "updated_at": "2026-07-14T09:12:44.183Z"
         }))
@@ -1890,6 +1904,7 @@ mod tests {
             // copying the handler's own payload literal (`update_issue`'s
             // `UpdateIssueRequest { .. }`).
             let untouched = UpdateIssueRequest {
+                allow_unmerged_done: None,
                 status_id: None,
                 title: None,
                 description: None,
@@ -1999,6 +2014,8 @@ mod tests {
                 "extension_metadata": {},
                 "created_at": CREATED_STAMP,
                 "updated_at": CREATED_STAMP,
+                "archived": false,
+                "archived_at": null,
             })
         }
 
@@ -2070,6 +2087,8 @@ mod tests {
                 "extension_metadata": {},
                 "created_at": CREATED_STAMP,
                 "updated_at": CREATED_STAMP,
+                "archived": false,
+                "archived_at": null,
             });
             board.issues.push(issue.clone());
             envelope(serde_json::json!({ "data": issue, "txid": 1 }))

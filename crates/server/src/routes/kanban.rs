@@ -33,6 +33,7 @@ use axum::{
     routing::{delete, get, post},
 };
 use db::models::{
+    agent_work::AgentWorkDeclaration,
     execution_process::ExecutionProcess,
     file::{CommentAttachment, IssueAttachment},
     issue::Issue as DbIssue,
@@ -975,6 +976,15 @@ async fn resolve_project_orchestrator_prompt_with_pool(
     }))
 }
 
+async fn list_project_agent_work(
+    State(deployment): State<DeploymentImpl>,
+    Path(id): Path<Uuid>,
+) -> Result<ResponseJson<ApiResponse<Vec<AgentWorkDeclaration>>>, ApiError> {
+    let declarations =
+        AgentWorkDeclaration::list_active_for_project(&deployment.db().pool, id).await?;
+    Ok(ok(declarations))
+}
+
 /// Map `(path_id, source_project_id)` to the wire `OrchestratorPromptSource`
 /// enum. Pulled out so the mapping can be unit-tested without standing up an
 /// axum handler. The resolver walks the chain collecting a stack of prompts;
@@ -997,6 +1007,7 @@ pub fn router(_deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
         .route("/projects", get(list_projects))
         .route("/project-statuses", get(list_project_statuses))
         .route("/project-tags", get(list_project_tags))
+        .route("/projects/{id}/agent-work", get(list_project_agent_work))
         // ADR-016: orchestrator prompt endpoints. Envelope-wrapped because
         // BOTH consumers (MCP `get_orchestrator_prompt`, frontend editor)
         // speak the `ApiResponse` contract (see `routes/mod.rs` doc — the

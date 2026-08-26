@@ -36,12 +36,12 @@ use workspace_utils::approvals::{ApprovalStatus, QuestionStatus};
 
 use super::{
     AppServerCompatibility,
-    jsonrpc::{JsonRpcCallbacks, JsonRpcPeer},
+    jsonrpc::{ExitSignalSender, JsonRpcCallbacks, JsonRpcPeer},
 };
 use crate::{
     approvals::{ExecutorApprovalError, ExecutorApprovalService},
     env::RepoContext,
-    executors::{ExecutorError, codex::normalize_logs::Approval},
+    executors::{ExecutorError, ExecutorExitResult, codex::normalize_logs::Approval},
 };
 
 struct PendingPlan {
@@ -94,6 +94,7 @@ pub struct AppServerClient {
     commit_reminder_sent: AtomicBool,
     compatibility: AppServerCompatibility,
     cancel: CancellationToken,
+    exit_signal: ExitSignalSender,
 }
 
 impl AppServerClient {
@@ -108,6 +109,7 @@ impl AppServerClient {
         commit_reminder_prompt: String,
         compatibility: AppServerCompatibility,
         cancel: CancellationToken,
+        exit_signal: ExitSignalSender,
     ) -> Arc<Self> {
         Arc::new(Self {
             rpc: OnceLock::new(),
@@ -125,6 +127,7 @@ impl AppServerClient {
             commit_reminder_sent: AtomicBool::new(false),
             compatibility,
             cancel,
+            exit_signal,
         })
     }
 
@@ -838,17 +841,32 @@ impl AppServerClient {
                 ..Default::default()
             },
         };
+        let request_id = request_id(&request);
+        let request = match client_request_value(request, self.compatibility) {
+            Ok(request) => request,
+            Err(err) => {
+                tracing::error!("failed to serialize user message: {err}");
+                let exit_signal = self.exit_signal.clone();
+                tokio::spawn(async move {
+                    exit_signal
+                        .send_exit_signal(ExecutorExitResult::Failure)
+                        .await;
+                });
+                return;
+            }
+        };
+        let exit_signal = self.exit_signal.clone();
         tokio::spawn(async move {
             if let Err(err) = peer
-                .request::<TurnStartResponse, _>(
-                    request_id(&request),
-                    &request,
-                    "turn/start",
-                    cancel,
-                )
+                .request::<TurnStartResponse, _>(request_id, &request, "turn/start", cancel.clone())
                 .await
             {
                 tracing::error!("failed to send user message: {err}");
+                if !cancel.is_cancelled() {
+                    exit_signal
+                        .send_exit_signal(ExecutorExitResult::Failure)
+                        .await;
+                }
             }
         });
     }

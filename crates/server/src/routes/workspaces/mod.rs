@@ -1,3 +1,4 @@
+pub mod agent_work;
 pub mod attachments;
 pub mod codex_setup;
 pub mod core;
@@ -34,6 +35,7 @@ pub fn router(deployment: &DeploymentImpl) -> Router<DeploymentImpl> {
         .route("/pipeline-stage", post(core::report_pipeline_stage))
         .route("/pipeline/resolve", get(core::resolve_pipeline))
         .route("/open-terminal", post(core::open_terminal))
+        .nest("/agent-work", agent_work::router())
         .nest("/git", git::router())
         .nest("/execution", execution::router())
         .nest("/integration", integration::router())

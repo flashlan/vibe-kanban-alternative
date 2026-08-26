@@ -845,6 +845,7 @@ impl Codex {
                 commit_reminder_prompt,
                 compatibility,
                 cancel_for_task.clone(),
+                exit_signal_tx.clone(),
             );
             let rpc_peer = JsonRpcPeer::spawn(
                 child_stdin,

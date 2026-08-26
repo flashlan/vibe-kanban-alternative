@@ -29,6 +29,7 @@ use db::models::{
     issue_relationship::IssueRelationship as DbIssueRelationship,
     issue_workspace::{IssueWorkspace, LinkedWorkspaceRow},
     kanban_tag::{IssueTag as DbIssueTag, KanbanTag},
+    merge::{Merge, MergeStatus, PrMerge, PullRequestInfo},
     project::{self, NewProject, Project as DbProject, ProjectUpdate},
     project_repo::ProjectRepo,
     project_status::ProjectStatus as DbProjectStatus,
@@ -629,7 +630,7 @@ async fn delete_project_workspaces(
     project_id: Uuid,
 ) -> Result<(), ApiError> {
     let pool = &deployment.db().pool;
-    let workspace_rows = sqlx::query_as::<_, (Uuid,)>(&format!(
+    let workspace_rows = sqlx::query_as::<_, (Uuid,)>(
         r#"SELECT w.id FROM workspaces w
            JOIN issue_workspaces iw ON iw.workspace_id = w.id
            JOIN issues i ON i.id = iw.issue_id
@@ -639,8 +640,8 @@ async fn delete_project_workspaces(
            WHERE w.id IN (SELECT workspace_id FROM pull_requests pr
                           JOIN pull_request_issues pri ON pri.pull_request_id = pr.id
                           JOIN issues i ON i.id = pri.issue_id
-                          WHERE i.project_id = ?)"#
-    ))
+                          WHERE i.project_id = ?)"#,
+    )
     .bind(project_id)
     .bind(project_id)
     .fetch_all(pool)
@@ -946,6 +947,21 @@ pub(crate) async fn merge_and_update_issue(
         return Ok(None);
     };
     let status_id = req.status_id.unwrap_or(existing.status_id);
+
+    // A terminal transition is a completion claim. Agents must use the
+    // `complete_workspace_card` workflow, which integrates through the
+    // Integration Guard and records the durable Mem0 summary before marking
+    // the card Done. The only bypass is the explicit operator action exposed
+    // by the Kanban confirmation dialog (`allow_unmerged_done`).
+    if status_id != existing.status_id
+        && is_terminal_status(pool, existing.project_id, status_id).await?
+        && !req.allow_unmerged_done.unwrap_or(false)
+        && !issue_has_integrated_workspace(pool, id).await?
+    {
+        return Err(ApiError::Conflict(
+            "Cannot move this card to Done before it is integrated. Use complete_workspace_card, or explicitly choose Move without merging in the Kanban dialog.".into(),
+        ));
+    }
     let title = req.title.unwrap_or(existing.title);
     let description = match req.description {
         Some(v) => v,
@@ -1034,6 +1050,50 @@ pub(crate) async fn merge_and_update_issue(
     )
     .await?;
     Ok(updated)
+}
+
+async fn is_terminal_status(
+    pool: &sqlx::SqlitePool,
+    project_id: Uuid,
+    status_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    Ok(DbProjectStatus::list_by_project(pool, project_id)
+        .await?
+        .into_iter()
+        .any(|status| status.id == status_id && status.is_terminal))
+}
+
+async fn issue_has_integrated_workspace(
+    pool: &sqlx::SqlitePool,
+    issue_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let workspace_ids = IssueWorkspace::list_linked_all(pool)
+        .await?
+        .into_iter()
+        .filter(|link| link.issue_id == issue_id)
+        .map(|link| link.workspace_id)
+        .collect::<Vec<_>>();
+
+    for workspace_id in workspace_ids {
+        let merges = Merge::find_by_workspace_id(pool, workspace_id).await?;
+        if merges.into_iter().any(|merge| {
+            matches!(
+                merge,
+                Merge::Direct(_)
+                    | Merge::Pr(PrMerge {
+                        pr_info: PullRequestInfo {
+                            status: MergeStatus::Merged,
+                            ..
+                        },
+                        ..
+                    })
+            )
+        }) {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 async fn update_issue(
@@ -1727,9 +1787,9 @@ mod tests {
             .await
             .unwrap();
 
-        // Default: freshly created project → empty prompt → false.
+        // Default: freshly created project → baked-in prompt → true.
         let mapped = super::to_api_project(project.clone());
-        assert!(!mapped.has_orchestrator_prompt);
+        assert!(mapped.has_orchestrator_prompt);
 
         // Set a real prompt → true.
         let with_prompt = DbProject::update_orchestrator_prompt(&pool, project.id, "be terse")
@@ -1818,6 +1878,7 @@ mod tests {
         // Simulate an orchestrator status reflection carrying an EMPTY metadata
         // object — must NOT drop the pipeline provenance.
         let patch = |metadata: serde_json::Value| api_types::UpdateIssueRequest {
+            allow_unmerged_done: None,
             status_id: None,
             title: None,
             description: None,
@@ -1864,6 +1925,81 @@ mod tests {
         assert!(updated.extension_metadata.get("intake").is_some());
     }
 
+    #[tokio::test]
+    async fn terminal_issue_transition_requires_integration_or_explicit_override() {
+        clear_key_chain_cache();
+        let pool = pool().await;
+        let project = create_project_record(&pool, Uuid::new_v4(), "Completion", "#6366f1", None)
+            .await
+            .unwrap();
+        let todo = DbProjectStatus::create(
+            &pool,
+            Uuid::new_v4(),
+            project.id,
+            "In Progress",
+            "#6366f1",
+            0,
+            false,
+            false,
+        )
+        .await
+        .unwrap();
+        let done = DbProjectStatus::create(
+            &pool,
+            Uuid::new_v4(),
+            project.id,
+            "Done",
+            "#22c55e",
+            1,
+            false,
+            true,
+        )
+        .await
+        .unwrap();
+        let issue = create_issue_for(&pool, &project, &todo, "Protected completion")
+            .await
+            .unwrap();
+
+        let request = api_types::UpdateIssueRequest {
+            allow_unmerged_done: None,
+            status_id: Some(done.id),
+            title: None,
+            description: None,
+            priority: None,
+            start_date: None,
+            target_date: None,
+            completed_at: None,
+            sort_order: None,
+            parent_issue_id: None,
+            parent_issue_sort_order: None,
+            extension_metadata: None,
+        };
+        let error = super::merge_and_update_issue(&pool, issue.id, request)
+            .await
+            .expect_err("unmerged terminal transition must be rejected");
+        assert!(error.to_string().contains("complete_workspace_card"));
+
+        let override_request = api_types::UpdateIssueRequest {
+            allow_unmerged_done: Some(true),
+            status_id: Some(done.id),
+            title: None,
+            description: None,
+            priority: None,
+            start_date: None,
+            target_date: None,
+            completed_at: None,
+            sort_order: None,
+            parent_issue_id: None,
+            parent_issue_sort_order: None,
+            extension_metadata: None,
+        };
+        let updated = super::merge_and_update_issue(&pool, issue.id, override_request)
+            .await
+            .unwrap()
+            .expect("issue exists");
+        assert_eq!(updated.status_id, done.id);
+    }
+
     // -----------------------------------------------------------------
     // Hierarchy integrity guards (ADR-022)
     // -----------------------------------------------------------------
@@ -1893,6 +2029,7 @@ mod tests {
 
     fn patch_parent(parent: Option<Uuid>) -> api_types::UpdateIssueRequest {
         api_types::UpdateIssueRequest {
+            allow_unmerged_done: None,
             status_id: None,
             title: None,
             description: None,

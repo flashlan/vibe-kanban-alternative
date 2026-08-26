@@ -142,7 +142,9 @@ export function ChatBoxBase({
               {agentSelector}
               {footerLeft}
             </Toolbar>
-            <div className="flex shrink-0 items-center gap-half">{footerRight}</div>
+            <div className="flex shrink-0 items-center gap-half">
+              {footerRight}
+            </div>
           </div>
         </div>
       </div>

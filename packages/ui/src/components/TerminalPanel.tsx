@@ -101,7 +101,10 @@ export function TerminalPanel({
                 e.preventDefault();
               }}
             >
-              <XIcon className="size-icon-xs pointer-events-none" weight="bold" />
+              <XIcon
+                className="size-icon-xs pointer-events-none"
+                weight="bold"
+              />
             </button>
           )}
         </div>
@@ -162,7 +165,10 @@ export function TerminalPanel({
                           e.preventDefault();
                         }}
                       >
-                        <XIcon className="size-icon-xs pointer-events-none" weight="bold" />
+                        <XIcon
+                          className="size-icon-xs pointer-events-none"
+                          weight="bold"
+                        />
                       </button>
                     )}
                   </div>
@@ -184,7 +190,10 @@ export function TerminalPanel({
                     e.preventDefault();
                   }}
                 >
-                  <PlusIcon className="size-icon-xs pointer-events-none" weight="bold" />
+                  <PlusIcon
+                    className="size-icon-xs pointer-events-none"
+                    weight="bold"
+                  />
                 </button>
               )}
             </div>

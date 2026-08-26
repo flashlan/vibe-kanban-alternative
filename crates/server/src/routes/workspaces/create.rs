@@ -265,17 +265,16 @@ pub async fn create_and_start_workspace(
         }
     }
 
-    if let Some(issue) = &linked_local_issue {
-        if let Ok((project_prompt, _)) =
+    if let Some(issue) = &linked_local_issue
+        && let Ok((project_prompt, _)) =
             db::models::project::Project::resolve_orchestrator_prompt(pool, issue.project_id).await
-        {
-            let trimmed = project_prompt.trim();
-            if !trimmed.is_empty() {
-                final_prompt = format!(
-                    "{}\n\n---\n## Project Specifications & Instructions\n{}",
-                    final_prompt, trimmed
-                );
-            }
+    {
+        let trimmed = project_prompt.trim();
+        if !trimmed.is_empty() {
+            final_prompt = format!(
+                "{}\n\n---\n## Project Specifications & Instructions\n{}",
+                final_prompt, trimmed
+            );
         }
     }
 

@@ -57,10 +57,10 @@ async fn move_issue_forward(
     let statuses = ProjectStatus::list_by_project(pool, issue.project_id).await?;
     let current_pos = statuses.iter().position(|s| s.id == issue.status_id);
     let target_pos = statuses.iter().position(|s| s.id == target_status_id);
-    if let (Some(cur), Some(tgt)) = (current_pos, target_pos) {
-        if cur >= tgt {
-            return Ok(false);
-        }
+    if let (Some(cur), Some(tgt)) = (current_pos, target_pos)
+        && cur >= tgt
+    {
+        return Ok(false);
     }
     // Preserve title/description/etc — only status_id changes.
     // Use a direct status update to avoid clobbering other fields.
@@ -187,14 +187,14 @@ pub async fn on_workspace_created(pool: &SqlitePool, issue_id: Uuid) {
             return;
         }
     };
-    if let Some(pos) = statuses.iter().position(|s| s.id == issue.status_id) {
-        if pos != 0 {
-            tracing::info!(
-                "auto-move workspace_created skip: card {} not in first column (pos {pos})",
-                issue_id
-            );
-            return;
-        }
+    if let Some(pos) = statuses.iter().position(|s| s.id == issue.status_id)
+        && pos != 0
+    {
+        tracing::info!(
+            "auto-move workspace_created skip: card {} not in first column (pos {pos})",
+            issue_id
+        );
+        return;
     }
     let Some(target) =
         resolve_target_for_trigger(pool, issue.project_id, Trigger::WorkspaceCreated).await

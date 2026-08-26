@@ -4,7 +4,7 @@ use std::{
 };
 
 use chrono::{DateTime, Utc};
-use git2::{BranchType, DiffOptions, Error as GitError, Reference, Remote, Repository, Sort};
+use git2::{BranchType, DiffOptions, Error as GitError, Oid, Reference, Remote, Repository, Sort};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ts_rs::TS;
@@ -371,6 +371,70 @@ impl GitService {
         Ok(entries.into_iter().map(|e| e.path).collect())
     }
 
+    /// Return paths changed between two local branches without touching a
+    /// worktree. This is used by the integration guard to compare the branch
+    /// being merged with active agent declarations in sibling workspaces.
+    pub fn get_branch_diff_file_paths(
+        &self,
+        repo_path: &Path,
+        base_branch_name: &str,
+        task_branch_name: &str,
+    ) -> Result<HashSet<String>, GitServiceError> {
+        let repo = Repository::open(repo_path)?;
+        let base_branch = Self::find_branch(&repo, base_branch_name)?;
+        let task_branch = Self::find_branch(&repo, task_branch_name)?;
+        let base_tree = base_branch.get().peel_to_commit()?.tree()?;
+        let task_tree = task_branch.get().peel_to_commit()?.tree()?;
+        let diff = repo.diff_tree_to_tree(Some(&base_tree), Some(&task_tree), None)?;
+
+        Ok(diff
+            .deltas()
+            .filter_map(|delta| {
+                delta
+                    .new_file()
+                    .path()
+                    .or_else(|| delta.old_file().path())
+                    .map(|path| path.to_string_lossy().into_owned())
+            })
+            .collect())
+    }
+
+    /// Return paths changed between two commits without touching a worktree.
+    /// This is used by the HEAD-aware integration guard to keep the task diff
+    /// separate from changes made on the target branch after the task started.
+    pub fn get_commit_diff_file_paths(
+        &self,
+        repo_path: &Path,
+        base_commit: &str,
+        target_commit: &str,
+    ) -> Result<HashSet<String>, GitServiceError> {
+        let repo = Repository::open(repo_path)?;
+        let base_oid = Oid::from_str(base_commit).map_err(|error| {
+            GitServiceError::InvalidRepository(format!(
+                "invalid base commit '{base_commit}': {error}"
+            ))
+        })?;
+        let target_oid = Oid::from_str(target_commit).map_err(|error| {
+            GitServiceError::InvalidRepository(format!(
+                "invalid target commit '{target_commit}': {error}"
+            ))
+        })?;
+        let base_tree = repo.find_commit(base_oid)?.tree()?;
+        let target_tree = repo.find_commit(target_oid)?.tree()?;
+        let diff = repo.diff_tree_to_tree(Some(&base_tree), Some(&target_tree), None)?;
+
+        Ok(diff
+            .deltas()
+            .filter_map(|delta| {
+                delta
+                    .new_file()
+                    .path()
+                    .or_else(|| delta.old_file().path())
+                    .map(|path| path.to_string_lossy().into_owned())
+            })
+            .collect())
+    }
+
     /// Extract file path from a Diff (for indexing and ConversationPatch)
     pub fn diff_path(diff: &Diff) -> String {
         diff.new_path
@@ -583,17 +647,6 @@ impl GitService {
         // Open the repositories
         let task_repo = self.open_repo(task_worktree_path)?;
         let base_repo = self.open_repo(base_worktree_path)?;
-
-        // Check if base branch is ahead of task branch - this indicates the base has moved
-        // ahead since the task was created, which should block the merge
-        let (_, task_behind) =
-            self.get_branch_status(base_worktree_path, task_branch_name, base_branch_name)?;
-
-        if task_behind > 0 {
-            return Err(GitServiceError::BranchesDiverged(format!(
-                "Cannot merge: base branch '{base_branch_name}' is {task_behind} commits ahead of task branch '{task_branch_name}'. The base branch has moved forward since the task was created.",
-            )));
-        }
 
         // Check where base branch is checked out (if anywhere)
         match self.find_checkout_path_for_branch(base_worktree_path, base_branch_name)? {

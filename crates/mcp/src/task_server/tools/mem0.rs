@@ -379,6 +379,63 @@ struct Mem0SaveResponse {
 }
 
 impl McpServer {
+    /// Enqueue a memory write and return whether Mem0 acknowledged it. Normal
+    /// `memory_save` remains best-effort, while card completion uses this
+    /// helper as a hard gate before it marks the card Done.
+    pub(crate) async fn save_memory_for_completion(
+        &self,
+        content: &str,
+        user_id: &str,
+    ) -> Result<bool, ErrorData> {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
+        let commit_sha = self.resolve_commit_sha(user_id).await;
+        let url = format!("{}/api/memories", mem0_url());
+        let body = serde_json::json!({
+            "content": content,
+            "user_id": user_id,
+            "commit_sha": commit_sha,
+        });
+
+        let resp = match client.post(&url).json(&body).send().await {
+            Ok(response) if response.status().is_success() => response,
+            Ok(response) => {
+                tracing::warn!(
+                    target: "mem0",
+                    user_id,
+                    status = %response.status(),
+                    "memory_save: mem0 responded with a non-success status"
+                );
+                return Ok(false);
+            }
+            Err(error) => {
+                note_mem0_unreachable("memory_save", user_id, &error.to_string());
+                return Ok(false);
+            }
+        };
+
+        let parsed: Mem0SaveResponse = match resp.json().await {
+            Ok(parsed) => parsed,
+            Err(error) => {
+                tracing::warn!(
+                    target: "mem0",
+                    user_id,
+                    error = %error,
+                    "memory_save: unparseable mem0 response"
+                );
+                return Ok(false);
+            }
+        };
+        let stored = parsed.queued.unwrap_or(false);
+        let success = parsed.ok.unwrap_or(true);
+        if !(success && stored) {
+            tracing::warn!(target: "mem0", user_id, success, stored, "memory_save was not queued");
+        }
+        Ok(success && stored)
+    }
+
     /// Best-effort resolution of the calling workspace's current HEAD commit
     /// for the repo matching `user_id` (a repo slug — see ADR-028's
     /// multi-repo scoping addendum). `None` on ANY failure — no context, no
@@ -629,77 +686,8 @@ impl McpServer {
         &self,
         Parameters(McpMemorySaveRequest { content, user_id }): Parameters<McpMemorySaveRequest>,
     ) -> Result<CallToolResult, ErrorData> {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
-
-        // Best-effort provenance: tag this fact (and its graph node/edges,
-        // mem0-vk-side) with the calling workspace's HEAD commit, so a
-        // later staleness check has something to compare against instead
-        // of assuming every fact is permanently valid. A failed lookup just
-        // omits it — never blocks the save.
-        let commit_sha = self.resolve_commit_sha(&user_id).await;
-
-        let url = format!("{}/api/memories", mem0_url());
-        let body = serde_json::json!({
-            "content": content,
-            "user_id": user_id,
-            "commit_sha": commit_sha,
-        });
-
-        let resp = match client.post(&url).json(&body).send().await {
-            Ok(r) if r.status().is_success() => r,
-            Ok(r) => {
-                tracing::warn!(
-                    target: "mem0",
-                    user_id = %user_id,
-                    status = %r.status(),
-                    "memory_save: mem0 responded with a non-success status; degrading to stored=false"
-                );
-                return McpServer::success(&McpMemorySaveResult {
-                    success: false,
-                    stored: false,
-                });
-            }
-            Err(e) => {
-                note_mem0_unreachable("memory_save", &user_id, &e.to_string());
-                return McpServer::success(&McpMemorySaveResult {
-                    success: false,
-                    stored: false,
-                });
-            }
-        };
-
-        let parsed: Mem0SaveResponse = match resp.json().await {
-            Ok(parsed) => parsed,
-            Err(e) => {
-                tracing::warn!(
-                    target: "mem0",
-                    user_id = %user_id,
-                    error = %e,
-                    "memory_save: unparseable mem0 response; degrading to stored=false"
-                );
-                return McpServer::success(&McpMemorySaveResult {
-                    success: false,
-                    stored: false,
-                });
-            }
-        };
-
-        let stored = parsed.queued.unwrap_or(false);
-        let success = parsed.ok.unwrap_or(true);
-        if success && stored {
-            tracing::info!(target: "mem0", user_id = %user_id, "memory_save queued");
-        } else {
-            tracing::warn!(
-                target: "mem0",
-                user_id = %user_id,
-                success,
-                stored,
-                "memory_save returned ok status but did not confirm the save was queued"
-            );
-        }
+        let stored = self.save_memory_for_completion(&content, &user_id).await?;
+        let success = stored;
         McpServer::success(&McpMemorySaveResult { success, stored })
     }
 

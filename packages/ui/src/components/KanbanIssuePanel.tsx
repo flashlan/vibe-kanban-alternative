@@ -215,9 +215,7 @@ export function KanbanIssuePanel({
     useState(isCreateMode);
   const [isDescriptionCollapsed, setIsDescriptionCollapsed] = useState(() => {
     try {
-      return (
-        localStorage.getItem(KANBAN_DESCRIPTION_COLLAPSED_KEY) === 'true'
-      );
+      return localStorage.getItem(KANBAN_DESCRIPTION_COLLAPSED_KEY) === 'true';
     } catch {
       return false;
     }
