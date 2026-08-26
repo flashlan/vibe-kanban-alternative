@@ -54,7 +54,7 @@ export function KanbanWorkspaceDispatch({
         disabled={disabled || empty}
       >
         <SelectTrigger
-          className="h-6 min-w-0 flex-1 rounded-sm border-0 bg-secondary/60 px-1.5 py-0 text-xs data-[placeholder]:text-low"
+          className="h-6 min-w-0 flex-1 rounded border border-border/80 dark:border-white/15 bg-secondary/80 hover:bg-secondary px-2 py-0 text-xs data-[placeholder]:text-low shadow-xs transition-colors"
           aria-label={t('kanban.selectWorkspace')}
         >
           <SelectValue placeholder={t('kanban.selectWorkspace')} />
@@ -74,7 +74,7 @@ export function KanbanWorkspaceDispatch({
         type="button"
         disabled={disabled || empty || !value}
         onClick={() => value && onDispatch(value)}
-        className="rounded p-half -m-half shrink-0 text-low transition-colors hover:bg-secondary hover:text-normal disabled:cursor-not-allowed disabled:opacity-40"
+        className="rounded p-1 shrink-0 text-low transition-colors hover:bg-brand hover:text-white border border-border/80 dark:border-white/15 disabled:cursor-not-allowed disabled:opacity-40 shadow-xs"
         aria-label={t('kanban.dispatchIssue')}
         title={t('kanban.dispatchIssue')}
       >
