@@ -974,18 +974,18 @@ export function AppearanceSettingsSection() {
         description="Save your custom palette and typography, export as JSON to share, or import existing theme files."
       >
         {/* Save Current Theme */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pb-4 border-b border-border">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pb-4 border-b border-border/60">
           <input
             type="text"
             placeholder="Theme name (e.g. My Custom Dark Glow)"
             value={newThemeName}
             onChange={(e) => setNewThemeName(e.target.value)}
-            className="flex-1 bg-secondary border border-border rounded-sm px-3 py-1.5 text-sm text-high focus:outline-none focus:ring-1 focus:ring-brand placeholder:text-low"
+            className="flex-1 bg-secondary border border-border rounded px-3 py-1.5 text-sm text-high focus:outline-none focus:ring-1 focus:ring-brand placeholder:text-low"
           />
           <PrimaryButton
             value="Save Current Theme"
             onClick={handleSaveCurrentTheme}
-            actionIcon="check"
+            actionIcon={CheckIcon}
           />
         </div>
 
@@ -999,7 +999,7 @@ export function AppearanceSettingsSection() {
               {savedThemes.map((saved) => (
                 <div
                   key={saved.name}
-                  className="flex items-center justify-between p-2 rounded bg-secondary/60 border border-border text-sm"
+                  className="flex items-center justify-between p-2.5 rounded bg-secondary/60 border border-border text-sm"
                 >
                   <div className="flex items-center gap-2.5">
                     <div
@@ -1013,7 +1013,7 @@ export function AppearanceSettingsSection() {
                     <span className="font-medium text-high">{saved.name}</span>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={() => {
@@ -1021,14 +1021,14 @@ export function AppearanceSettingsSection() {
                         setThemeVariant(DEFAULT_THEME_VARIANT);
                         updateAndSaveConfig({ theme_variant: DEFAULT_THEME_VARIANT });
                       }}
-                      className="px-2.5 py-1 text-xs rounded bg-brand/10 hover:bg-brand/20 text-brand font-medium transition-colors"
+                      className="px-2.5 py-1 text-xs rounded border border-brand/40 bg-brand/10 hover:bg-brand/20 text-brand font-medium transition-colors shadow-xs"
                     >
                       Apply
                     </button>
                     <button
                       type="button"
                       onClick={() => removeTheme(saved.name)}
-                      className="p-1 rounded hover:bg-error/10 text-low hover:text-error transition-colors"
+                      className="p-1 rounded border border-transparent hover:border-error/40 hover:bg-error/10 text-low hover:text-error transition-colors"
                       title="Delete theme"
                     >
                       <TrashIcon className="size-4" />
@@ -1041,20 +1041,23 @@ export function AppearanceSettingsSection() {
         )}
 
         {/* Export / Import / Reset buttons */}
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <PrimaryButton
-              variant="tertiary"
-              value="Export Theme (JSON)"
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border/40">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
               onClick={handleExport}
-            />
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-border bg-secondary hover:bg-panel hover:border-brand/60 text-high transition-colors shadow-xs"
+            >
+              <DownloadSimpleIcon weight="bold" className="size-3.5 text-brand" />
+              Export Theme (JSON)
+            </button>
 
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-sm border border-border bg-secondary hover:bg-panel text-high transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-border bg-secondary hover:bg-panel hover:border-brand/60 text-high transition-colors shadow-xs"
             >
-              <UploadSimpleIcon className="size-4" />
+              <UploadSimpleIcon weight="bold" className="size-3.5 text-brand" />
               Import Theme (.json)
             </button>
             <input
@@ -1069,9 +1072,9 @@ export function AppearanceSettingsSection() {
           <button
             type="button"
             onClick={resetDefaults}
-            className="inline-flex items-center gap-1 text-xs text-low hover:text-warning transition-colors"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded border border-border/60 hover:border-warning/50 bg-secondary/30 hover:bg-warning/10 text-low hover:text-warning transition-colors"
           >
-            <ArrowClockwiseIcon className="size-3.5" />
+            <ArrowClockwiseIcon weight="bold" className="size-3.5" />
             Reset to Defaults
           </button>
         </div>
