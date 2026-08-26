@@ -1,5 +1,6 @@
 import {
   GearIcon,
+  PaletteIcon,
   GitBranchIcon,
   CpuIcon,
   PlugIcon,
@@ -12,6 +13,7 @@ import {
 } from '@phosphor-icons/react';
 import type { Icon } from '@phosphor-icons/react';
 import { GeneralSettingsSection } from './GeneralSettingsSection';
+import { AppearanceSettingsSection } from './AppearanceSettingsSection';
 import { PipelineSettingsSection } from './PipelineSettingsSection';
 import { RecurrentSettingsSection } from './RecurrentSettingsSection';
 import { ReposSettingsSection } from './ReposSettingsSection';
@@ -26,6 +28,7 @@ import { BackupSettingsSection } from './BackupSettingsSection';
 // Only host-scoped sections remain; the `universal` group is empty.
 export type SettingsSectionType =
   | 'general'
+  | 'appearance'
   | 'pipeline'
   | 'recurrent'
   | 'repos'
@@ -40,6 +43,7 @@ export type SettingsSectionGroup = 'host';
 
 export type SettingsSectionInitialState = {
   general: undefined;
+  appearance: undefined;
   pipeline: undefined;
   recurrent: undefined;
   repos: { repoId?: string } | undefined;
@@ -59,6 +63,7 @@ export interface SettingsSectionDefinition {
 
 export const SETTINGS_SECTION_DEFINITIONS: SettingsSectionDefinition[] = [
   { id: 'general', icon: GearIcon, group: 'host' },
+  { id: 'appearance', icon: PaletteIcon, group: 'host' },
   { id: 'pipeline', icon: FlowArrowIcon, group: 'host' },
   { id: 'recurrent', icon: ClockCountdownIcon, group: 'host' },
   { id: 'repos', icon: GitBranchIcon, group: 'host' },
@@ -87,6 +92,8 @@ export function renderSettingsSection(
   switch (type) {
     case 'general':
       return <GeneralSettingsSection />;
+    case 'appearance':
+      return <AppearanceSettingsSection />;
     case 'pipeline':
       return <PipelineSettingsSection />;
     case 'recurrent':

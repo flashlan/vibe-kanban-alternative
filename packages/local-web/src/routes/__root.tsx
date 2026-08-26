@@ -9,6 +9,7 @@ import {
   useApplyThemeVariant,
   useSyncThemeVariantFromConfig,
 } from '@/shared/lib/themeVariant';
+import { useApplyCustomAppearance } from '@/shared/lib/customTheme';
 import { WorkspacesProvider } from '@/shared/providers/remote/WorkspacesProvider';
 import '@/app/styles/new/index.css';
 
@@ -18,6 +19,7 @@ function RootRouteComponent() {
   useUiPreferencesScratch();
   useApplyThemeVariant();
   useSyncThemeVariantFromConfig();
+  useApplyCustomAppearance();
 
   return (
     <I18nextProvider i18n={i18n}>

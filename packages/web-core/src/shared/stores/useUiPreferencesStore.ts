@@ -40,6 +40,126 @@ const loadMobileFontScale = (): MobileFontScale => {
   return 'default';
 };
 
+export type UiFontFamily =
+  | 'ibm-plex-sans'
+  | 'inter'
+  | 'geist-sans'
+  | 'fira-sans'
+  | 'plus-jakarta-sans'
+  | 'roboto'
+  | 'system';
+export const DEFAULT_UI_FONT_FAMILY: UiFontFamily = 'ibm-plex-sans';
+const UI_FONT_FAMILY_KEY = 'vk-ui-font-family';
+
+const loadUiFontFamily = (): UiFontFamily => {
+  try {
+    const stored = localStorage.getItem(UI_FONT_FAMILY_KEY);
+    if (stored) return stored as UiFontFamily;
+  } catch {}
+  return DEFAULT_UI_FONT_FAMILY;
+};
+
+export type CodeFontFamily =
+  | 'ibm-plex-mono'
+  | 'jetbrains-mono'
+  | 'fira-code'
+  | 'geist-mono'
+  | 'source-code-pro'
+  | 'system-mono';
+export const DEFAULT_CODE_FONT_FAMILY: CodeFontFamily = 'ibm-plex-mono';
+const CODE_FONT_FAMILY_KEY = 'vk-code-font-family';
+
+const loadCodeFontFamily = (): CodeFontFamily => {
+  try {
+    const stored = localStorage.getItem(CODE_FONT_FAMILY_KEY);
+    if (stored) return stored as CodeFontFamily;
+  } catch {}
+  return DEFAULT_CODE_FONT_FAMILY;
+};
+
+export type UiFontScale = '85' | '92' | '100' | '110' | '120';
+export const DEFAULT_UI_FONT_SCALE: UiFontScale = '100';
+const UI_FONT_SCALE_KEY = 'vk-ui-font-scale';
+
+const loadUiFontScale = (): UiFontScale => {
+  try {
+    const stored = localStorage.getItem(UI_FONT_SCALE_KEY);
+    if (stored) return stored as UiFontScale;
+  } catch {}
+  return DEFAULT_UI_FONT_SCALE;
+};
+
+export type CodeFontSize = 11 | 12 | 13 | 14 | 15 | 16;
+export const DEFAULT_CODE_FONT_SIZE: CodeFontSize = 13;
+const CODE_FONT_SIZE_KEY = 'vk-code-font-size';
+
+const loadCodeFontSize = (): CodeFontSize => {
+  try {
+    const stored = localStorage.getItem(CODE_FONT_SIZE_KEY);
+    if (stored) {
+      const n = Number(stored);
+      if (n >= 11 && n <= 16) return n as CodeFontSize;
+    }
+  } catch {}
+  return DEFAULT_CODE_FONT_SIZE;
+};
+
+export interface CustomThemeConfig {
+  name: string;
+  canvasBg: string;
+  surfaceBg: string;
+  textColor: string;
+  textMutedColor: string;
+  borderColor?: string;
+  highlightColor: string;
+  enableGradient: boolean;
+  gradientColor1: string;
+  gradientColor2: string;
+  gradientAngle: number;
+}
+
+export const DEFAULT_CUSTOM_THEME: CustomThemeConfig = {
+  name: 'Default Aurapunk',
+  canvasBg: '#0f0f11',
+  surfaceBg: '#18181b',
+  textColor: '#f4f4f5',
+  textMutedColor: '#a1a1aa',
+  borderColor: '#27272a',
+  highlightColor: '#f97316',
+  enableGradient: false,
+  gradientColor1: '#f97316',
+  gradientColor2: '#ec4899',
+  gradientAngle: 135,
+};
+
+const CUSTOM_THEME_KEY = 'vk-custom-theme';
+const CUSTOM_THEME_ENABLED_KEY = 'vk-custom-theme-enabled';
+const SAVED_CUSTOM_THEMES_KEY = 'vk-saved-custom-themes';
+
+const loadCustomTheme = (): CustomThemeConfig => {
+  try {
+    const stored = localStorage.getItem(CUSTOM_THEME_KEY);
+    if (stored) return { ...DEFAULT_CUSTOM_THEME, ...JSON.parse(stored) };
+  } catch {}
+  return DEFAULT_CUSTOM_THEME;
+};
+
+const loadCustomThemeEnabled = (): boolean => {
+  try {
+    const stored = localStorage.getItem(CUSTOM_THEME_ENABLED_KEY);
+    if (stored !== null) return stored === 'true';
+  } catch {}
+  return false;
+};
+
+const loadSavedCustomThemes = (): CustomThemeConfig[] => {
+  try {
+    const stored = localStorage.getItem(SAVED_CUSTOM_THEMES_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch {}
+  return [];
+};
+
 // Theme variant ("skin") is a client-side visual preference applied on top
 // of the Light/Dark/System mode. 'default' means no extra theme (the built-in
 // look). Other values map to a drop-in CSS file under /themes/<id>.css.
@@ -660,6 +780,26 @@ type State = {
   // Animated running outline actions
   setAnimateRunningOutline: (value: boolean) => void;
 
+  // Typography and custom appearance
+  uiFontFamily: UiFontFamily;
+  codeFontFamily: CodeFontFamily;
+  uiFontScale: UiFontScale;
+  codeFontSize: CodeFontSize;
+  customThemeEnabled: boolean;
+  customTheme: CustomThemeConfig;
+  savedCustomThemes: CustomThemeConfig[];
+
+  setUiFontFamily: (font: UiFontFamily) => void;
+  setCodeFontFamily: (font: CodeFontFamily) => void;
+  setUiFontScale: (scale: UiFontScale) => void;
+  setCodeFontSize: (size: CodeFontSize) => void;
+  setCustomThemeEnabled: (enabled: boolean) => void;
+  setCustomTheme: (theme: Partial<CustomThemeConfig>) => void;
+  saveCurrentCustomTheme: (name: string) => void;
+  applySavedCustomTheme: (theme: CustomThemeConfig) => void;
+  deleteSavedCustomTheme: (name: string) => void;
+  resetAppearanceDefaults: () => void;
+
   // Last selected project actions
   setSelectedProjectId: (projectId: string | null) => void;
   // Last workspace actions (client-side only)
@@ -703,6 +843,15 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
   // Mobile font scale
   mobileFontScale: loadMobileFontScale(),
 
+  // Typography and custom appearance
+  uiFontFamily: loadUiFontFamily(),
+  codeFontFamily: loadCodeFontFamily(),
+  uiFontScale: loadUiFontScale(),
+  codeFontSize: loadCodeFontSize(),
+  customThemeEnabled: loadCustomThemeEnabled(),
+  customTheme: loadCustomTheme(),
+  savedCustomThemes: loadSavedCustomThemes(),
+
   // Theme variant
   themeVariant: loadThemeVariant(),
 
@@ -724,6 +873,87 @@ export const useUiPreferencesStore = create<State>()((set, get) => ({
       // localStorage unavailable
     }
     set({ compactionThreshold: threshold });
+  },
+
+  // Typography & Custom Theme actions
+  setUiFontFamily: (font) => {
+    try {
+      localStorage.setItem(UI_FONT_FAMILY_KEY, font);
+    } catch {}
+    set({ uiFontFamily: font });
+  },
+  setCodeFontFamily: (font) => {
+    try {
+      localStorage.setItem(CODE_FONT_FAMILY_KEY, font);
+    } catch {}
+    set({ codeFontFamily: font });
+  },
+  setUiFontScale: (scale) => {
+    try {
+      localStorage.setItem(UI_FONT_SCALE_KEY, scale);
+    } catch {}
+    set({ uiFontScale: scale });
+  },
+  setCodeFontSize: (size) => {
+    try {
+      localStorage.setItem(CODE_FONT_SIZE_KEY, String(size));
+    } catch {}
+    set({ codeFontSize: size });
+  },
+  setCustomThemeEnabled: (enabled) => {
+    try {
+      localStorage.setItem(CUSTOM_THEME_ENABLED_KEY, String(enabled));
+    } catch {}
+    set({ customThemeEnabled: enabled });
+  },
+  setCustomTheme: (themeUpdate) => {
+    const next = { ...get().customTheme, ...themeUpdate };
+    try {
+      localStorage.setItem(CUSTOM_THEME_KEY, JSON.stringify(next));
+    } catch {}
+    set({ customTheme: next });
+  },
+  saveCurrentCustomTheme: (name) => {
+    const themeToSave: CustomThemeConfig = { ...get().customTheme, name };
+    const filtered = get().savedCustomThemes.filter((t) => t.name !== name);
+    const updated = [...filtered, themeToSave];
+    try {
+      localStorage.setItem(SAVED_CUSTOM_THEMES_KEY, JSON.stringify(updated));
+      localStorage.setItem(CUSTOM_THEME_KEY, JSON.stringify(themeToSave));
+    } catch {}
+    set({ customTheme: themeToSave, savedCustomThemes: updated });
+  },
+  applySavedCustomTheme: (theme) => {
+    try {
+      localStorage.setItem(CUSTOM_THEME_KEY, JSON.stringify(theme));
+      localStorage.setItem(CUSTOM_THEME_ENABLED_KEY, 'true');
+    } catch {}
+    set({ customTheme: theme, customThemeEnabled: true });
+  },
+  deleteSavedCustomTheme: (name) => {
+    const updated = get().savedCustomThemes.filter((t) => t.name !== name);
+    try {
+      localStorage.setItem(SAVED_CUSTOM_THEMES_KEY, JSON.stringify(updated));
+    } catch {}
+    set({ savedCustomThemes: updated });
+  },
+  resetAppearanceDefaults: () => {
+    try {
+      localStorage.removeItem(UI_FONT_FAMILY_KEY);
+      localStorage.removeItem(CODE_FONT_FAMILY_KEY);
+      localStorage.removeItem(UI_FONT_SCALE_KEY);
+      localStorage.removeItem(CODE_FONT_SIZE_KEY);
+      localStorage.removeItem(CUSTOM_THEME_ENABLED_KEY);
+      localStorage.removeItem(CUSTOM_THEME_KEY);
+    } catch {}
+    set({
+      uiFontFamily: DEFAULT_UI_FONT_FAMILY,
+      codeFontFamily: DEFAULT_CODE_FONT_FAMILY,
+      uiFontScale: DEFAULT_UI_FONT_SCALE,
+      codeFontSize: DEFAULT_CODE_FONT_SIZE,
+      customThemeEnabled: false,
+      customTheme: DEFAULT_CUSTOM_THEME,
+    });
   },
 
   // Last selected project (ADR-018 — `selectedOrgId` removed)
@@ -1374,3 +1604,49 @@ export const useCompactionThreshold = () =>
   useUiPreferencesStore((s) => s.compactionThreshold);
 export const useSetCompactionThreshold = () =>
   useUiPreferencesStore((s) => s.setCompactionThreshold);
+
+// Hooks for typography & custom theme
+export function useUiFontFamily() {
+  const font = useUiPreferencesStore((s) => s.uiFontFamily);
+  const set = useUiPreferencesStore((s) => s.setUiFontFamily);
+  return [font, set] as const;
+}
+
+export function useCodeFontFamily() {
+  const font = useUiPreferencesStore((s) => s.codeFontFamily);
+  const set = useUiPreferencesStore((s) => s.setCodeFontFamily);
+  return [font, set] as const;
+}
+
+export function useUiFontScale() {
+  const scale = useUiPreferencesStore((s) => s.uiFontScale);
+  const set = useUiPreferencesStore((s) => s.setUiFontScale);
+  return [scale, set] as const;
+}
+
+export function useCodeFontSize() {
+  const size = useUiPreferencesStore((s) => s.codeFontSize);
+  const set = useUiPreferencesStore((s) => s.setCodeFontSize);
+  return [size, set] as const;
+}
+
+export function useCustomTheme() {
+  const theme = useUiPreferencesStore((s) => s.customTheme);
+  const set = useUiPreferencesStore((s) => s.setCustomTheme);
+  return [theme, set] as const;
+}
+
+export function useCustomThemeEnabled() {
+  const enabled = useUiPreferencesStore((s) => s.customThemeEnabled);
+  const set = useUiPreferencesStore((s) => s.setCustomThemeEnabled);
+  return [enabled, set] as const;
+}
+
+export function useSavedCustomThemes() {
+  const themes = useUiPreferencesStore((s) => s.savedCustomThemes);
+  const save = useUiPreferencesStore((s) => s.saveCurrentCustomTheme);
+  const apply = useUiPreferencesStore((s) => s.applySavedCustomTheme);
+  const remove = useUiPreferencesStore((s) => s.deleteSavedCustomTheme);
+  return { themes, save, apply, remove };
+}
+

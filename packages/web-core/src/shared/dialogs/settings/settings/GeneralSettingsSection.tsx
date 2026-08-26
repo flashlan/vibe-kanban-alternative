@@ -26,15 +26,7 @@ import { useTheme } from '@/shared/hooks/useTheme';
 import { useUserSystem } from '@/shared/hooks/useUserSystem';
 import { TagManager } from '@/shared/components/TagManager';
 import { useIsMobile } from '@/shared/hooks/useIsMobile';
-import {
-  DEFAULT_THEME_VARIANT,
-  type MobileFontScale,
-  useAnimateRunningOutline,
-  useMobileFontScale,
-  useThemeVariant,
-  useUiPreferencesStore,
-} from '@/shared/stores/useUiPreferencesStore';
-import { useThemeManifest } from '@/shared/lib/themeVariant';
+import { useUiPreferencesStore } from '@/shared/stores/useUiPreferencesStore';
 import { cn, playSound } from '@/shared/lib/utils';
 import { parseAllowedOriginsCsv } from '@/shared/lib/origin';
 import { PrimaryButton } from '@vibe/ui/components/PrimaryButton';
@@ -62,11 +54,6 @@ export function GeneralSettingsSection() {
   const { setDirty: setContextDirty } = useSettingsDirty();
 
   const isMobile = useIsMobile();
-  const [mobileFontScale, setMobileFontScale] = useMobileFontScale();
-  const [themeVariant, setThemeVariant] = useThemeVariant();
-  const [animateRunningOutline, setAnimateRunningOutline] =
-    useAnimateRunningOutline();
-  const { themes: themeVariantManifest } = useThemeManifest();
   const autoMoveCardsEnabled = useUiPreferencesStore(
     (s) => s.autoMoveCardsEnabled
   );
@@ -215,19 +202,6 @@ export function GeneralSettingsSection() {
     );
   }
 
-  const themeOptions = Object.values(ThemeMode).map((theme) => ({
-    value: theme,
-    label: toPrettyCase(theme),
-  }));
-
-  const themeVariantOptions = [
-    { value: DEFAULT_THEME_VARIANT, label: 'Default' },
-    ...themeVariantManifest.map((variant) => ({
-      value: variant.id,
-      label: variant.name,
-    })),
-  ];
-
   const editorOptions = Object.values(EditorType).map((editor) => ({
     value: editor,
     label: toPrettyCase(editor),
@@ -253,37 +227,11 @@ export function GeneralSettingsSection() {
         </div>
       )}
 
-      {/* Appearance */}
+      {/* Language & Regional */}
       <SettingsCard
-        title={t('settings.general.appearance.title')}
-        description={t('settings.general.appearance.description')}
+        title={t('settings.general.appearance.language.label', { defaultValue: 'Language' })}
+        description={t('settings.general.appearance.language.helper', { defaultValue: 'Choose your preferred interface language.' })}
       >
-        <SettingsField
-          label={t('settings.general.appearance.theme.label')}
-          description={t('settings.general.appearance.theme.helper')}
-        >
-          <SettingsSelect
-            value={draft?.theme}
-            options={themeOptions}
-            onChange={(value) => updateDraft({ theme: value })}
-            placeholder={t('settings.general.appearance.theme.placeholder')}
-          />
-        </SettingsField>
-
-        <SettingsField
-          label="Theme variant"
-          description="Optional CRT/terminal skin applied on top of the light/dark mode. Applies immediately."
-        >
-          <SettingsSelect
-            value={themeVariant}
-            options={themeVariantOptions}
-            onChange={(value) => {
-              setThemeVariant(value);
-              updateAndSaveConfig({ theme_variant: value });
-            }}
-          />
-        </SettingsField>
-
         <SettingsField
           label={t('settings.general.appearance.language.label')}
           description={t('settings.general.appearance.language.helper')}
@@ -295,36 +243,6 @@ export function GeneralSettingsSection() {
             placeholder={t('settings.general.appearance.language.placeholder')}
           />
         </SettingsField>
-
-        {isMobile && (
-          <SettingsField
-            label="Mobile Font Size"
-            description="Scale text size on mobile for better readability"
-          >
-            <SettingsSelect
-              value={mobileFontScale}
-              options={[
-                {
-                  value: 'default' as MobileFontScale,
-                  label: 'Default (100%)',
-                },
-                { value: 'small' as MobileFontScale, label: 'Small (95%)' },
-                { value: 'smaller' as MobileFontScale, label: 'Smaller (90%)' },
-              ]}
-              onChange={(value: MobileFontScale) => setMobileFontScale(value)}
-            />
-          </SettingsField>
-        )}
-
-        <SettingsCheckbox
-          id="animate-running-outline"
-          label={t('settings.general.appearance.animateRunningOutline.label')}
-          description={t(
-            'settings.general.appearance.animateRunningOutline.helper'
-          )}
-          checked={animateRunningOutline}
-          onChange={setAnimateRunningOutline}
-        />
       </SettingsCard>
 
       {/* Kanban auto-move */}
