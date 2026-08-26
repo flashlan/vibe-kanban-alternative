@@ -210,7 +210,7 @@ export function AppearanceSettingsSection() {
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                className="px-3 py-1.5 text-xs font-medium rounded text-white shadow-sm transition-transform active:scale-95"
+                className="px-3 py-1.5 text-xs font-medium rounded text-white shadow-xs border border-white/20 transition-transform active:scale-95"
                 style={{
                   background: activeGradient || (customThemeEnabled ? customTheme.highlightColor : 'hsl(var(--brand))'),
                 }}
@@ -291,7 +291,7 @@ export function AppearanceSettingsSection() {
                 }}
                 className={`group relative p-3 rounded-md border cursor-pointer transition-all duration-150 flex flex-col justify-between ${
                   isSelected
-                    ? 'border-brand ring-1 ring-brand bg-brand/5'
+                    ? 'border-brand ring-1 ring-brand bg-brand/5 shadow-xs'
                     : 'border-border hover:border-brand/60 bg-secondary/40 hover:bg-secondary'
                 }`}
               >
@@ -312,22 +312,22 @@ export function AppearanceSettingsSection() {
                 {/* Color swatches */}
                 <div className="flex items-center gap-1.5 pt-2 border-t border-border/40">
                   <div
-                    className="w-5 h-5 rounded-full border border-black/20"
+                    className="w-5 h-5 rounded-full border border-white/25 ring-1 ring-black/30 shadow-xs"
                     style={{ backgroundColor: preset.theme.canvasBg }}
                     title="Canvas Background"
                   />
                   <div
-                    className="w-5 h-5 rounded-full border border-black/20"
+                    className="w-5 h-5 rounded-full border border-white/25 ring-1 ring-black/30 shadow-xs"
                     style={{ backgroundColor: preset.theme.surfaceBg }}
                     title="Surface / Panels"
                   />
                   <div
-                    className="w-5 h-5 rounded-full border border-black/20"
+                    className="w-5 h-5 rounded-full border border-white/25 ring-1 ring-black/30 shadow-xs"
                     style={{ backgroundColor: preset.theme.textColor }}
                     title="Primary Text"
                   />
                   <div
-                    className="w-5 h-5 rounded-full ml-auto shadow-sm"
+                    className="w-5 h-5 rounded-full ml-auto border border-white/25 ring-1 ring-black/30 shadow-xs"
                     style={{ background: gradientStyle }}
                     title="Highlight / Gradient"
                   />
@@ -704,7 +704,7 @@ export function AppearanceSettingsSection() {
                 >
                   <div className="flex items-center gap-2.5">
                     <div
-                      className="w-4 h-4 rounded-full border border-black/30"
+                      className="w-4 h-4 rounded-full border border-white/25 ring-1 ring-black/30 shadow-xs"
                       style={{
                         background: saved.enableGradient
                           ? `linear-gradient(135deg, ${saved.gradientColor1} 0%, ${saved.gradientColor2} 100%)`
