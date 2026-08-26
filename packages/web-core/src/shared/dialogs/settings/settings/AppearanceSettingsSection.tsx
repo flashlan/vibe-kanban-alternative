@@ -508,7 +508,7 @@ export function AppearanceSettingsSection() {
                   className={`group relative p-3.5 rounded-md cursor-pointer transition-all duration-200 flex flex-col justify-between ${
                     isSelected
                       ? 'border-2 border-brand bg-brand/10 shadow-sm'
-                      : 'border border-border hover:border-text-low/60 bg-secondary/40 hover:bg-secondary/80'
+                      : 'border border-border dark:border-white/15 hover:border-brand/60 bg-secondary/40 hover:bg-secondary/80'
                   }`}
                 >
                   <div>
@@ -573,7 +573,7 @@ export function AppearanceSettingsSection() {
                   className={`group relative p-3.5 rounded-md cursor-pointer transition-all duration-200 flex flex-col justify-between ${
                     isSelected
                       ? 'border-2 border-brand bg-brand/10 shadow-sm'
-                      : 'border border-border hover:border-text-low/60 bg-secondary/40 hover:bg-secondary/80'
+                      : 'border border-border dark:border-white/15 hover:border-brand/60 bg-secondary/40 hover:bg-secondary/80'
                   }`}
                 >
                   <div>
