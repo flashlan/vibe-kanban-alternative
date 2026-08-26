@@ -37,7 +37,7 @@ export interface ExportedThemePackage {
 export const UI_FONT_OPTIONS: { value: UiFontFamily; label: string; family: string }[] = [
   {
     value: 'ibm-plex-sans',
-    label: 'IBM Plex Sans (Padrão)',
+    label: 'IBM Plex Sans (Default)',
     family: '"IBM Plex Sans", "Noto Emoji", sans-serif',
   },
   {
@@ -67,7 +67,7 @@ export const UI_FONT_OPTIONS: { value: UiFontFamily; label: string; family: stri
   },
   {
     value: 'system',
-    label: 'System UI (Nativo)',
+    label: 'System UI (Native)',
     family:
       '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif',
   },
@@ -76,7 +76,7 @@ export const UI_FONT_OPTIONS: { value: UiFontFamily; label: string; family: stri
 export const CODE_FONT_OPTIONS: { value: CodeFontFamily; label: string; family: string }[] = [
   {
     value: 'ibm-plex-mono',
-    label: 'IBM Plex Mono (Padrão)',
+    label: 'IBM Plex Mono (Default)',
     family: '"IBM Plex Mono", monospace',
   },
   {
@@ -101,24 +101,24 @@ export const CODE_FONT_OPTIONS: { value: CodeFontFamily; label: string; family: 
   },
   {
     value: 'system-mono',
-    label: 'Monospace (Sistema)',
+    label: 'Monospace (System)',
     family:
       'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace',
   },
 ];
 
 export const UI_SCALE_OPTIONS: { value: UiFontScale; label: string; percent: string }[] = [
-  { value: '85', label: 'Compacto (85%)', percent: '85%' },
-  { value: '92', label: 'Confortável (92%)', percent: '92%' },
-  { value: '100', label: 'Padrão (100%)', percent: '100%' },
-  { value: '110', label: 'Grande (110%)', percent: '110%' },
-  { value: '120', label: 'Extra Grande (120%)', percent: '120%' },
+  { value: '85', label: 'Compact (85%)', percent: '85%' },
+  { value: '92', label: 'Comfortable (92%)', percent: '92%' },
+  { value: '100', label: 'Standard (100%)', percent: '100%' },
+  { value: '110', label: 'Large (110%)', percent: '110%' },
+  { value: '120', label: 'Extra Large (120%)', percent: '120%' },
 ];
 
 export const CODE_FONT_SIZE_OPTIONS: { value: CodeFontSize; label: string }[] = [
   { value: 11, label: '11px' },
   { value: 12, label: '12px' },
-  { value: 13, label: '13px (Padrão)' },
+  { value: 13, label: '13px (Default)' },
   { value: 14, label: '14px' },
   { value: 15, label: '15px' },
   { value: 16, label: '16px' },
@@ -128,7 +128,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'aurapunk-default',
     name: 'Aurapunk Default',
-    description: 'Estilo clássico escuro com acentos em laranja vibrante.',
+    description: 'Classic dark base with vibrant warm orange accents.',
     theme: {
       name: 'Aurapunk Default',
       canvasBg: '#121214',
@@ -148,7 +148,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'cyberpunk-neon',
     name: 'Cyberpunk Neon',
-    description: 'Fundo ultra escuro com gradiente neon magenta e amarelo elétrico.',
+    description: 'Ultra dark background with neon magenta and electric yellow gradient.',
     theme: {
       name: 'Cyberpunk Neon',
       canvasBg: '#090a0f',
@@ -168,7 +168,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'tokyo-night',
     name: 'Tokyo Night',
-    description: 'Tons azulados profundos e lavanda inspirados nas noites de Tóquio.',
+    description: 'Deep navy tones and lavender inspired by Tokyo nights.',
     theme: {
       name: 'Tokyo Night',
       canvasBg: '#1a1b26',
@@ -188,7 +188,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'catppuccin-mocha',
     name: 'Catppuccin Mocha',
-    description: 'Paleta pastel aconchegante com gradiente mauve e rosa suave.',
+    description: 'Cozy pastel palette with soft mauve and pink gradient highlights.',
     theme: {
       name: 'Catppuccin Mocha',
       canvasBg: '#1e1e2e',
@@ -208,7 +208,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'sunset-synth',
     name: 'Sunset Synth',
-    description: 'Vibrações synthwave com gradiente pôr do sol rosa e âmbar.',
+    description: 'Synthwave vibes with sunset rose and amber gradient.',
     theme: {
       name: 'Sunset Synth',
       canvasBg: '#0f0c1b',
@@ -228,7 +228,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'nordic-frost',
     name: 'Nordic Frost',
-    description: 'Tons árticos calmos com gradiente azul glacial.',
+    description: 'Calm arctic tones with glacial blue gradient.',
     theme: {
       name: 'Nordic Frost',
       canvasBg: '#242933',
@@ -248,7 +248,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'emerald-matrix',
     name: 'Emerald Matrix',
-    description: 'Verde cibernético profundo com gradiente esmeralda.',
+    description: 'Deep cybernetic green with vibrant emerald gradient.',
     theme: {
       name: 'Emerald Matrix',
       canvasBg: '#07120a',
@@ -268,7 +268,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'midnight-oled',
     name: 'Midnight OLED',
-    description: 'Preto puro absoluto para telas OLED com gradiente azul elétrico.',
+    description: 'Pure black for OLED displays with electric blue gradient.',
     theme: {
       name: 'Midnight OLED',
       canvasBg: '#000000',
@@ -288,7 +288,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'paper-minimal-light',
     name: 'Paper Minimal (Light)',
-    description: 'Tema claro minimalista em tom papel quente com destaque terracota.',
+    description: 'Warm paper minimalist light theme with terracotta highlight.',
     theme: {
       name: 'Paper Minimal (Light)',
       canvasBg: '#f8f7f4',

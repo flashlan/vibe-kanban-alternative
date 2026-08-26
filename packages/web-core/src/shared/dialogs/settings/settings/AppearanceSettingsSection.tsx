@@ -125,7 +125,7 @@ export function AppearanceSettingsSection() {
       const content = event.target?.result as string;
       const parsed = parseImportedTheme(content);
       if (!parsed) {
-        setImportError('Arquivo de tema inválido ou corrompido.');
+        setImportError('Invalid or corrupted theme file.');
         return;
       }
 
@@ -137,17 +137,17 @@ export function AppearanceSettingsSection() {
         setUiFontScale(parsed.typography.uiFontScale);
         setCodeFontSize(parsed.typography.codeFontSize);
       }
-      setImportSuccess(`Tema "${parsed.theme.name || 'Importado'}" aplicado com sucesso!`);
+      setImportSuccess(`Theme "${parsed.theme.name || 'Imported'}" applied successfully!`);
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
     reader.readAsText(file);
   };
 
   const handleSaveCurrentTheme = () => {
-    const name = newThemeName.trim() || customTheme.name || 'Meu Tema Customizado';
+    const name = newThemeName.trim() || customTheme.name || 'My Custom Theme';
     saveTheme(name);
     setNewThemeName('');
-    setImportSuccess(`Tema "${name}" salvo em seus temas personalizados!`);
+    setImportSuccess(`Theme "${name}" saved to your custom themes!`);
   };
 
   const activeGradient = useMemo(() => {
@@ -156,7 +156,7 @@ export function AppearanceSettingsSection() {
   }, [customTheme]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       {/* Import / Notification Messages */}
       {importError && (
         <div className="bg-error/10 border border-error/50 rounded-sm p-4 text-error text-sm">
@@ -172,8 +172,8 @@ export function AppearanceSettingsSection() {
 
       {/* 1. Live Interactive Preview */}
       <SettingsCard
-        title="Pré-visualização em Tempo Real"
-        description="Veja como suas escolhas de tipografia, cores e gradientes aparecem na interface do Aurapunk."
+        title="Live Real-time Preview"
+        description="Preview how your typography, colors, borders, and gradient highlights look in the Aurapunk interface."
       >
         <div
           className="p-5 rounded-md border transition-all duration-200"
@@ -203,7 +203,7 @@ export function AppearanceSettingsSection() {
                   color: customThemeEnabled ? customTheme.textMutedColor : 'hsl(var(--text-low))',
                 }}
               >
-                Fonte da UI: <strong className="font-medium">{uiFontFamily}</strong> ({uiFontScale}%)
+                UI Font: <strong className="font-medium">{uiFontFamily}</strong> ({uiFontScale}%)
               </p>
             </div>
 
@@ -215,7 +215,7 @@ export function AppearanceSettingsSection() {
                   background: activeGradient || (customThemeEnabled ? customTheme.highlightColor : 'hsl(var(--brand))'),
                 }}
               >
-                Botão em Destaque
+                Highlighted Action
               </button>
             </div>
           </div>
@@ -229,14 +229,14 @@ export function AppearanceSettingsSection() {
                 borderColor: customThemeEnabled ? customTheme.borderColor : 'hsl(var(--border))',
               }}
             >
-              <div className="font-medium mb-1">Exemplo de Card / Tarefa</div>
+              <div className="font-medium mb-1">Sample Card / Task</div>
               <p
                 className="text-xs leading-relaxed"
                 style={{
                   color: customThemeEnabled ? customTheme.textMutedColor : 'hsl(var(--text-low))',
                 }}
               >
-                Este texto demonstra a legibilidade das fontes e o contraste entre fundo, superfície e texto secundário.
+                Demonstrates contrast between canvas background, surface cards, and muted secondary text.
               </p>
             </div>
 
@@ -250,7 +250,7 @@ export function AppearanceSettingsSection() {
                 fontSize: `${codeFontSize}px`,
               }}
             >
-              <div className="text-low opacity-60 mb-1">// Código ({codeFontFamily} - {codeFontSize}px)</div>
+              <div className="text-low opacity-60 mb-1">// Code View ({codeFontFamily} - {codeFontSize}px)</div>
               <div>
                 <span className="text-brand font-semibold">const</span> agent ={' '}
                 <span className="text-success">new AurapunkAgent</span>({'{'}
@@ -269,8 +269,8 @@ export function AppearanceSettingsSection() {
 
       {/* 2. Quick Presets */}
       <SettingsCard
-        title="Temas e Paletas Prontas"
-        description="Escolha um dos estilos pré-configurados com combinações selecionadas de cores, gradientes e tipografia."
+        title="Theme Presets"
+        description="Choose from pre-configured color palettes, gradient highlights, and typography pairings."
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {THEME_PRESETS.map((preset) => {
@@ -314,22 +314,22 @@ export function AppearanceSettingsSection() {
                   <div
                     className="w-5 h-5 rounded-full border border-black/20"
                     style={{ backgroundColor: preset.theme.canvasBg }}
-                    title="Fundo geral"
+                    title="Canvas Background"
                   />
                   <div
                     className="w-5 h-5 rounded-full border border-black/20"
                     style={{ backgroundColor: preset.theme.surfaceBg }}
-                    title="Superfície / Painéis"
+                    title="Surface / Panels"
                   />
                   <div
                     className="w-5 h-5 rounded-full border border-black/20"
                     style={{ backgroundColor: preset.theme.textColor }}
-                    title="Texto principal"
+                    title="Primary Text"
                   />
                   <div
                     className="w-5 h-5 rounded-full ml-auto shadow-sm"
                     style={{ background: gradientStyle }}
-                    title="Destaque / Gradiente"
+                    title="Highlight / Gradient"
                   />
                 </div>
               </div>
@@ -340,12 +340,12 @@ export function AppearanceSettingsSection() {
 
       {/* 3. Base Theme Mode & CRT Skin */}
       <SettingsCard
-        title="Modo Base & Variantes Retrô (CRT Skins)"
-        description="Alterne entre modo claro/escuro nativo ou ative skins retrô com scanlines e fósforo verde/âmbar."
+        title="Base Theme & CRT Terminal Skins"
+        description="Switch between light, dark, system mode, or apply retro phosphor and scanline skins."
       >
         <SettingsField
-          label={t('settings.general.appearance.theme.label')}
-          description={t('settings.general.appearance.theme.helper')}
+          label={t('settings.general.appearance.theme.label', { defaultValue: 'Theme Mode' })}
+          description={t('settings.general.appearance.theme.helper', { defaultValue: 'Select base dark, light, or system appearance.' })}
         >
           <SettingsSelect
             value={config?.theme || ThemeMode.SYSTEM}
@@ -354,13 +354,13 @@ export function AppearanceSettingsSection() {
               setTheme(value);
               updateAndSaveConfig({ theme: value });
             }}
-            placeholder={t('settings.general.appearance.theme.placeholder')}
+            placeholder={t('settings.general.appearance.theme.placeholder', { defaultValue: 'Select theme...' })}
           />
         </SettingsField>
 
         <SettingsField
-          label="Variante Retrô / CRT Skin"
-          description="Skins opcionais com estética de terminal clássico, scanlines e fósforo CRT."
+          label="Retro CRT Terminal Skin"
+          description="Drop-in skins with classic monochrome phosphor, scanlines, and CRT screen glow."
         >
           <SettingsSelect
             value={themeVariant}
@@ -374,9 +374,10 @@ export function AppearanceSettingsSection() {
 
         <SettingsCheckbox
           id="animate-running-outline-appearance"
-          label={t('settings.general.appearance.animateRunningOutline.label')}
+          label={t('settings.general.appearance.animateRunningOutline.label', { defaultValue: 'Animate running card border' })}
           description={t(
-            'settings.general.appearance.animateRunningOutline.helper'
+            'settings.general.appearance.animateRunningOutline.helper',
+            { defaultValue: 'Show animated shimmering outline around active workspace panels.' }
           )}
           checked={animateRunningOutline}
           onChange={setAnimateRunningOutline}
@@ -385,12 +386,12 @@ export function AppearanceSettingsSection() {
 
       {/* 4. Typography & Font Families */}
       <SettingsCard
-        title="Tipografia & Famílias de Fontes"
-        description="Escolha as fontes utilizadas na interface e no editor/diffs/terminal de código."
+        title="Typography & Font Families"
+        description="Choose custom font families for the user interface and for code diffs, logs, and terminals."
       >
         <SettingsField
-          label="Fonte da Interface (Sans-Serif)"
-          description="Tipografia aplicada em menus, botões, títulos, cards do Kanban e chat."
+          label="Interface Font (Sans-Serif)"
+          description="Applied to menus, sidebars, buttons, headings, kanban cards, and chat."
         >
           <SettingsSelect
             value={uiFontFamily}
@@ -403,8 +404,8 @@ export function AppearanceSettingsSection() {
         </SettingsField>
 
         <SettingsField
-          label="Fonte de Código & Terminal (Monospace)"
-          description="Tipografia aplicada a blocos de código, diffs de alteração, logs e terminal."
+          label="Code & Terminal Font (Monospace)"
+          description="Applied to code blocks, file diffs, agent execution logs, and embedded terminal."
         >
           <SettingsSelect
             value={codeFontFamily}
@@ -419,12 +420,12 @@ export function AppearanceSettingsSection() {
 
       {/* 5. Font Sizes & Scaling */}
       <SettingsCard
-        title="Tamanhos de Fonte & Escala Global"
-        description="Ajuste fino do tamanho do texto da aplicação inteira e das visualizações de código."
+        title="Font Sizes & UI Scaling"
+        description="Fine-tune the overall interface scale and monospace code font sizes."
       >
         <SettingsField
-          label="Escala Geral da Interface (UI Scale)"
-          description="Aumente ou diminua a proporção de todos os textos da interface."
+          label="Global UI Scale"
+          description="Scale all interface elements and fonts up or down proportionally."
         >
           <SettingsSelect
             value={uiFontScale}
@@ -437,8 +438,8 @@ export function AppearanceSettingsSection() {
         </SettingsField>
 
         <SettingsField
-          label="Tamanho da Fonte de Código (Diffs / Blocos)"
-          description="Tamanho base do texto mono nos editores e comparadores de código."
+          label="Code & Diff Font Size"
+          description="Base text size for code blocks, diff viewers, and editors."
         >
           <SettingsSelect
             value={codeFontSize}
@@ -452,18 +453,18 @@ export function AppearanceSettingsSection() {
 
         {isMobile && (
           <SettingsField
-            label="Escala de Fonte Mobile"
-            description="Ajuste de proporção específico para visualização em smartphones."
+            label="Mobile Font Scale"
+            description="Dedicated font scaling when viewing on smartphone screens."
           >
             <SettingsSelect
               value={mobileFontScale}
               options={[
                 {
                   value: 'default' as MobileFontScale,
-                  label: 'Padrão (100%)',
+                  label: 'Default (100%)',
                 },
-                { value: 'small' as MobileFontScale, label: 'Pequeno (95%)' },
-                { value: 'smaller' as MobileFontScale, label: 'Muito Pequeno (90%)' },
+                { value: 'small' as MobileFontScale, label: 'Small (95%)' },
+                { value: 'smaller' as MobileFontScale, label: 'Smaller (90%)' },
               ]}
               onChange={(value: MobileFontScale) => setMobileFontScale(value)}
             />
@@ -473,13 +474,13 @@ export function AppearanceSettingsSection() {
 
       {/* 6. Custom Colors, Backgrounds & Highlight Gradient */}
       <SettingsCard
-        title="Personalização de Cores, Planos de Fundo & Highlight"
-        description="Defina exatamente a cor de fundo atrás de tudo, cor da interface, cor da fonte e gradientes de destaque."
+        title="Custom Palette, Backgrounds & Gradient Highlights"
+        description="Customize canvas background (behind everything), interface surface, font color, and gradient highlights."
       >
         <SettingsCheckbox
           id="enable-custom-theme-colors"
-          label="Ativar Paleta Personalizada de Cores"
-          description="Substitui as cores base do sistema pelos valores selecionados abaixo."
+          label="Enable Custom Color Palette"
+          description="Overrides default system colors with your custom configuration below."
           checked={customThemeEnabled}
           onChange={(enabled) => setCustomThemeEnabled(enabled)}
         />
@@ -490,9 +491,9 @@ export function AppearanceSettingsSection() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-high">
-                  Cor de Fundo (Atrás de tudo / Canvas)
+                  Canvas Background (Behind Everything)
                 </label>
-                <p className="text-xs text-low">Fundo principal da tela e área de trabalho.</p>
+                <p className="text-xs text-low">Main root canvas and window background.</p>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
@@ -511,9 +512,9 @@ export function AppearanceSettingsSection() {
 
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-high">
-                  Cor da Interface (Superfície / Painéis / Cards)
+                  Interface Surface (Panels, Cards, Sidebars)
                 </label>
-                <p className="text-xs text-low">Fundo de sidebars, inputs e cartões.</p>
+                <p className="text-xs text-low">Elevated surface for cards, inputs, and sidebars.</p>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
@@ -535,9 +536,9 @@ export function AppearanceSettingsSection() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-high">
-                  Cor da Fonte (Texto Principal)
+                  Font Color (Primary Text)
                 </label>
-                <p className="text-xs text-low">Títulos, mensagens e conteúdo principal.</p>
+                <p className="text-xs text-low">High-contrast text for headings, messages, and titles.</p>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
@@ -556,9 +557,9 @@ export function AppearanceSettingsSection() {
 
               <div className="space-y-1.5">
                 <label className="text-sm font-medium text-high">
-                  Cor do Texto Secundário (Muted)
+                  Secondary Text Color (Muted)
                 </label>
-                <p className="text-xs text-low">Labels, timestamps, dicas e metadados.</p>
+                <p className="text-xs text-low">Labels, timestamps, hints, and secondary metadata.</p>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
@@ -580,7 +581,7 @@ export function AppearanceSettingsSection() {
             <div className="pt-2 border-t border-border/60">
               <div className="space-y-1.5 mb-3">
                 <label className="text-sm font-medium text-high">
-                  Cor de Destaque / Highlight (Brand Accent)
+                  Highlight Color (Brand Accent)
                 </label>
                 <div className="flex items-center gap-2">
                   <input
@@ -600,8 +601,8 @@ export function AppearanceSettingsSection() {
 
               <SettingsCheckbox
                 id="enable-highlight-gradient"
-                label="Ativar Gradiente no Highlight / Destaques"
-                description="Aplica transição suave de duas cores em botões principais, badges e títulos."
+                label="Enable Gradient on Highlights & Buttons"
+                description="Applies smooth two-color gradient to primary action buttons, active badges, and accents."
                 checked={customTheme.enableGradient}
                 onChange={(checked) => setCustomTheme({ enableGradient: checked })}
               />
@@ -610,7 +611,7 @@ export function AppearanceSettingsSection() {
                 <div className="mt-3 p-3.5 rounded bg-secondary/50 border border-border space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-medium text-high block mb-1">Cor Inicial</label>
+                      <label className="text-xs font-medium text-high block mb-1">Start Color</label>
                       <div className="flex items-center gap-2">
                         <input
                           type="color"
@@ -628,7 +629,7 @@ export function AppearanceSettingsSection() {
                     </div>
 
                     <div>
-                      <label className="text-xs font-medium text-high block mb-1">Cor Final</label>
+                      <label className="text-xs font-medium text-high block mb-1">End Color</label>
                       <div className="flex items-center gap-2">
                         <input
                           type="color"
@@ -648,7 +649,7 @@ export function AppearanceSettingsSection() {
 
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="font-medium text-high">Ângulo do Gradiente</span>
+                      <span className="font-medium text-high">Gradient Angle</span>
                       <span className="text-low font-mono">{customTheme.gradientAngle || 135}°</span>
                     </div>
                     <input
@@ -670,20 +671,20 @@ export function AppearanceSettingsSection() {
 
       {/* 7. Save, Export & Import Theme Management */}
       <SettingsCard
-        title="Salvar, Exportar e Importar Temas"
-        description="Salve sua combinação personalizada, faça download do arquivo JSON para compartilhar ou importe novos temas."
+        title="Save, Export & Import Themes"
+        description="Save your custom palette and typography, export as JSON to share, or import existing theme files."
       >
         {/* Save Current Theme */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pb-4 border-b border-border">
           <input
             type="text"
-            placeholder="Nome do tema (ex: Meu Tema Dark Glow)"
+            placeholder="Theme name (e.g. My Custom Dark Glow)"
             value={newThemeName}
             onChange={(e) => setNewThemeName(e.target.value)}
             className="flex-1 bg-secondary border border-border rounded-sm px-3 py-1.5 text-sm text-high focus:outline-none focus:ring-1 focus:ring-brand placeholder:text-low"
           />
           <PrimaryButton
-            value="Salvar Tema Atual"
+            value="Save Current Theme"
             onClick={handleSaveCurrentTheme}
             actionIcon="check"
           />
@@ -693,7 +694,7 @@ export function AppearanceSettingsSection() {
         {savedThemes.length > 0 && (
           <div className="space-y-2 py-2">
             <label className="text-xs font-medium text-low uppercase tracking-wider">
-              Seus Temas Salvos ({savedThemes.length})
+              Your Saved Themes ({savedThemes.length})
             </label>
             <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
               {savedThemes.map((saved) => (
@@ -719,13 +720,13 @@ export function AppearanceSettingsSection() {
                       onClick={() => applyTheme(saved)}
                       className="px-2.5 py-1 text-xs rounded bg-brand/10 hover:bg-brand/20 text-brand font-medium transition-colors"
                     >
-                      Aplicar
+                      Apply
                     </button>
                     <button
                       type="button"
                       onClick={() => removeTheme(saved.name)}
                       className="p-1 rounded hover:bg-error/10 text-low hover:text-error transition-colors"
-                      title="Excluir tema"
+                      title="Delete theme"
                     >
                       <TrashIcon className="size-4" />
                     </button>
@@ -741,7 +742,7 @@ export function AppearanceSettingsSection() {
           <div className="flex flex-wrap items-center gap-2">
             <PrimaryButton
               variant="tertiary"
-              value="Exportar Tema (JSON)"
+              value="Export Theme (JSON)"
               onClick={handleExport}
             />
 
@@ -751,7 +752,7 @@ export function AppearanceSettingsSection() {
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-sm border border-border bg-secondary hover:bg-panel text-high transition-colors"
             >
               <UploadSimpleIcon className="size-4" />
-              Importar Tema (.json)
+              Import Theme (.json)
             </button>
             <input
               ref={fileInputRef}
@@ -768,7 +769,7 @@ export function AppearanceSettingsSection() {
             className="inline-flex items-center gap-1 text-xs text-low hover:text-warning transition-colors"
           >
             <ArrowClockwiseIcon className="size-3.5" />
-            Restaurar Padrões de Fábrica
+            Reset to Defaults
           </button>
         </div>
       </SettingsCard>
