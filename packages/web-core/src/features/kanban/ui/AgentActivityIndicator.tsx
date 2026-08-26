@@ -14,14 +14,15 @@ import {
 } from '@vibe/ui/components/Popover';
 import { useAppNavigation } from '@/shared/hooks/useAppNavigation';
 import { useWorkspaceContext } from '@/shared/hooks/useWorkspaceContext';
-import { workspacesApi, type AgentWorkDeclaration } from '@/shared/lib/api';
+import { workspacesApi, type AgentActivity } from '@/shared/lib/api';
 import { cn } from '@/shared/lib/utils';
 
 interface AgentActivityIndicatorProps {
   projectId: string;
 }
 
-function formatRemaining(expiresAt: string): string {
+function formatRemaining(expiresAt: string | null): string {
+  if (!expiresAt) return 'No declaration';
   const remaining = Math.max(
     0,
     Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000)
@@ -30,7 +31,7 @@ function formatRemaining(expiresAt: string): string {
   return `${Math.ceil(remaining / 60)}min remaining`;
 }
 
-function hasOverlap(left: AgentWorkDeclaration, right: AgentWorkDeclaration) {
+function hasOverlap(left: AgentActivity, right: AgentActivity) {
   const overlaps = (values: string[], otherValues: string[]) =>
     values.some((value) => otherValues.includes(value));
 
@@ -43,12 +44,12 @@ function hasOverlap(left: AgentWorkDeclaration, right: AgentWorkDeclaration) {
 }
 
 function ActivityRow({
-  declaration,
+  activity,
   workspaceName,
   branch,
   onOpen,
 }: {
-  declaration: AgentWorkDeclaration;
+  activity: AgentActivity;
   workspaceName: string;
   branch: string;
   onOpen: () => void;
@@ -60,24 +61,29 @@ function ActivityRow({
       className="w-full rounded-sm border border-border bg-primary p-half text-left transition-colors hover:border-brand/60 hover:bg-secondary"
     >
       <div className="flex items-center gap-half">
-        <span className="size-1.5 shrink-0 rounded-full bg-success" />
+        <span
+          className={cn(
+            'size-1.5 shrink-0 rounded-full',
+            activity.is_running ? 'bg-success' : 'bg-warning'
+          )}
+        />
         <span className="min-w-0 flex-1 truncate text-xs font-medium text-normal">
-          {declaration.agent_name}
+          {activity.agent_name}
         </span>
         <ArrowSquareOutIcon className="size-icon-xs shrink-0 text-low" />
       </div>
       <p className="mt-quarter truncate text-[11px] text-low">
-        {workspaceName}
+        {workspaceName} · {activity.is_running ? 'Running' : 'Declared'}
       </p>
       <div className="mt-quarter flex items-center gap-quarter text-[10px] text-low">
         <GitBranchIcon className="size-icon-xs" />
         <span className="truncate">{branch}</span>
         <span className="ml-auto shrink-0">
-          {formatRemaining(declaration.lease_expires_at)}
+          {formatRemaining(activity.lease_expires_at)}
         </span>
       </div>
       <p className="mt-quarter truncate text-[11px] text-low">
-        {declaration.intent}
+        {activity.intent}
       </p>
     </button>
   );
@@ -104,6 +110,11 @@ export function AgentActivityIndicator({
       new Map(activeWorkspaces.map((workspace) => [workspace.id, workspace])),
     [activeWorkspaces]
   );
+  const runningCount = useMemo(
+    () => data.filter((activity) => activity.is_running).length,
+    [data]
+  );
+  const declaredOnlyCount = data.length - runningCount;
   const overlapCount = useMemo(() => {
     let count = 0;
     for (let index = 0; index < data.length; index += 1) {
@@ -129,7 +140,7 @@ export function AgentActivityIndicator({
           type="button"
           className={cn(
             'flex min-w-0 items-center gap-half rounded-sm border px-base py-half text-left transition-colors',
-            data.length > 0
+            runningCount > 0
               ? 'border-success/40 bg-success/5 hover:border-success/70'
               : 'border-border bg-secondary hover:border-brand/50'
           )}
@@ -141,7 +152,7 @@ export function AgentActivityIndicator({
             <ShieldCheckIcon
               className={cn(
                 'size-icon-sm',
-                data.length > 0 ? 'text-success' : 'text-low'
+                runningCount > 0 ? 'text-success' : 'text-low'
               )}
               weight="fill"
             />
@@ -154,7 +165,10 @@ export function AgentActivityIndicator({
               <UsersThreeIcon className="size-icon-xs" />
               {isError
                 ? 'Unable to load activity'
-                : `${data.length} active agent${data.length === 1 ? '' : 's'}`}
+                : `${runningCount} running agent${runningCount === 1 ? '' : 's'}`}
+              {declaredOnlyCount > 0 && (
+                <span> · {declaredOnlyCount} declared</span>
+              )}
               {overlapCount > 0 && (
                 <span className="text-warning">
                   · {overlapCount} overlap warning
@@ -175,22 +189,24 @@ export function AgentActivityIndicator({
               <p className="text-[11px] text-low">Across this project</p>
             </div>
             <span className="rounded-full bg-secondary px-half text-[10px] text-low">
-              {data.length}
+              {runningCount}
             </span>
           </div>
           {data.length === 0 ? (
-            <p className="text-xs text-low">No agents have declared work.</p>
+            <p className="text-xs text-low">No agent activity detected.</p>
           ) : (
             <div className="max-h-64 space-y-half overflow-y-auto">
-              {data.map((declaration) => {
-                const workspace = workspaceById.get(declaration.workspace_id);
+              {data.map((activity) => {
+                const workspace = workspaceById.get(activity.workspace_id);
                 return (
                   <ActivityRow
-                    key={declaration.id}
-                    declaration={declaration}
+                    key={
+                      activity.declaration_id ?? activity.execution_process_id
+                    }
+                    activity={activity}
                     workspaceName={workspace?.name ?? 'Workspace'}
                     branch={workspace?.branch ?? 'Unknown branch'}
-                    onOpen={() => openWorkspace(declaration.workspace_id)}
+                    onOpen={() => openWorkspace(activity.workspace_id)}
                   />
                 );
               })}

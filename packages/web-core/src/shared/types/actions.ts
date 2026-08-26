@@ -73,6 +73,7 @@ export interface ActionExecutorContext {
   stopDevServer: () => void;
   // Logs panel state
   currentLogs: LogEntry[] | null;
+  currentLogsError: string | null;
   logsPanelContent: LogsPanelContent | null;
   // Command bar navigation
   openStatusSelection: (projectId: string, issueIds: string[]) => Promise<void>;

@@ -1649,4 +1649,3 @@ export function useSavedCustomThemes() {
   const remove = useUiPreferencesStore((s) => s.deleteSavedCustomTheme);
   return { themes, save, apply, remove };
 }
-

@@ -33,7 +33,9 @@ const PIPELINE_POINTER_INSTRUCTION =
   'This card has pipeline stages defined via `get_pipeline` — call that MCP tool ' +
   'BEFORE any code edits, execute the returned stages in order (do not add, skip, ' +
   "or reorder), and report each one via `report_pipeline_stage` as instructed in the tool's " +
-  'response.';
+  'response. When the `Integration Guard → Done` stage is reached, commit the verified ' +
+  'work and call `complete_workspace_card` yourself as the final action; do not stop, ' +
+  'ask the operator to click Merge/Done, or claim completion without a successful tool response.';
 
 /** Matches an executor-pin line in any pinned form (any agent name). */
 const EXECUTOR_LINE_RE =

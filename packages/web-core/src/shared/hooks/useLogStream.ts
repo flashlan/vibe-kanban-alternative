@@ -18,6 +18,7 @@ export const useLogStream = (processId: string): UseLogStreamResult => {
   const isIntentionallyClosed = useRef<boolean>(false);
   // Prevent reconnection after the server signals the stream is done
   const finishedRef = useRef<boolean>(false);
+  const cancelPendingLogFlushRef = useRef<(() => void) | null>(null);
   // Track current processId to prevent stale WebSocket messages from contaminating logs
   const currentProcessIdRef = useRef<string>(processId);
 
@@ -63,6 +64,39 @@ export const useLogStream = (processId: string): UseLogStreamResult => {
           // the server replaying history.
           const isReconnect = retryCountRef.current > 0;
           let pendingReplace = isReconnect;
+          let pendingEntries: LogEntry[] = [];
+          let flushFrame: number | null = null;
+
+          const flushPendingEntries = () => {
+            flushFrame = null;
+            if (pendingEntries.length === 0) return;
+
+            const entries = pendingEntries;
+            pendingEntries = [];
+
+            if (pendingReplace) {
+              // Replace once with the full replay batch instead of rendering once
+              // per replayed log entry after a reconnect.
+              pendingReplace = false;
+              setLogs(entries);
+            } else {
+              setLogs((prev) => [...prev, ...entries]);
+            }
+          };
+
+          const scheduleFlush = () => {
+            if (flushFrame === null) {
+              flushFrame = window.requestAnimationFrame(flushPendingEntries);
+            }
+          };
+
+          cancelPendingLogFlushRef.current = () => {
+            if (flushFrame !== null) {
+              window.cancelAnimationFrame(flushFrame);
+              flushFrame = null;
+            }
+            pendingEntries = [];
+          };
 
           ws.onopen = () => {
             // Ignore if processId has changed since WebSocket was opened
@@ -88,14 +122,10 @@ export const useLogStream = (processId: string): UseLogStreamResult => {
             ) {
               return;
             }
-            if (pendingReplace) {
-              // First entry after reconnect: replace old logs to avoid
-              // duplicates from the history replay.
-              pendingReplace = false;
-              setLogs([entry]);
-            } else {
-              setLogs((prev) => [...prev, entry]);
-            }
+            // The first replay batch after reconnect replaces old logs;
+            // flushPendingEntries applies the whole batch atomically.
+            pendingEntries.push(entry);
+            scheduleFlush();
           };
 
           // Handle WebSocket messages
@@ -121,6 +151,10 @@ export const useLogStream = (processId: string): UseLogStreamResult => {
                   }
                 });
               } else if (data.finished === true) {
+                if (flushFrame !== null) {
+                  window.cancelAnimationFrame(flushFrame);
+                  flushPendingEntries();
+                }
                 finishedRef.current = true;
                 isIntentionallyClosed.current = true;
                 ws.close();
@@ -137,6 +171,11 @@ export const useLogStream = (processId: string): UseLogStreamResult => {
           };
 
           ws.onclose = (event) => {
+            if (flushFrame !== null) {
+              window.cancelAnimationFrame(flushFrame);
+              flushPendingEntries();
+            }
+
             // Don't retry for stale WebSocket connections
             if (
               cancelled ||
@@ -184,6 +223,10 @@ export const useLogStream = (processId: string): UseLogStreamResult => {
       if (retryTimerRef.current) {
         clearTimeout(retryTimerRef.current);
         retryTimerRef.current = null;
+      }
+      if (cancelPendingLogFlushRef.current) {
+        cancelPendingLogFlushRef.current();
+        cancelPendingLogFlushRef.current = null;
       }
     };
   }, [processId]);

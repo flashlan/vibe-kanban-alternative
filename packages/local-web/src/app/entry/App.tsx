@@ -6,6 +6,7 @@ import { localAppNavigation } from '@web/app/navigation/AppNavigation';
 import { LocalAuthProvider } from '@/shared/providers/auth/LocalAuthProvider';
 import { AppRuntimeProvider } from '@/shared/hooks/useAppRuntime';
 import { AppNavigationProvider } from '@/shared/hooks/useAppNavigation';
+import { ApprovalsProvider } from '@/shared/providers/ApprovalsProvider';
 import { useTauriNotificationNavigation } from '@web/app/hooks/useTauriNotificationNavigation';
 import { useTauriUpdateReady } from '@web/app/hooks/useTauriUpdateReady';
 import { router } from '@web/app/router';
@@ -32,7 +33,9 @@ function App() {
                   'projects',
                 ]}
               >
-                <RouterProvider router={router} />
+                <ApprovalsProvider>
+                  <RouterProvider router={router} />
+                </ApprovalsProvider>
               </HotkeysProvider>
             </ClickedElementsProvider>
           </LocalAuthProvider>

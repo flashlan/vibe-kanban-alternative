@@ -117,6 +117,14 @@ export function resolveScrollIntent(
     return { type: 'initial-bottom', purgeEstimatedSizes: true };
   }
 
+  // Older history is inserted above the current conversation. Keep the
+  // existing viewport/anchor while the virtualizer accounts for that growth;
+  // issuing a new follow-bottom command for every history batch fights manual
+  // scrolling and is unnecessary while the initial bottom lock is active.
+  if (addType === 'historic') {
+    return { type: 'preserve-anchor' };
+  }
+
   if (addType === 'plan') {
     return isAtBottom
       ? { type: 'plan-reveal', align: 'start' }

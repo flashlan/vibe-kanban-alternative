@@ -70,7 +70,7 @@ prompt = "MANUAL REVIEW: stop here and hand the work to the operator. Commit all
 id = "merge"
 label = "Integration Guard → Done"
 default_enabled = false
-prompt = "When the work is implemented and reviewed, call `complete_workspace_card` through the normal card workflow. The Integration Guard records the task's original target HEAD and performs a three-way integration, so independent target changes do not require a rebase. If semantic or Git overlap is reported, leave the card open and report the conflict for review. Do not manually rebase, update refs, push, or open a PR."
+prompt = "When the work is implemented and reviewed, commit the verified work and call `complete_workspace_card` yourself as the final action through the normal card workflow. Do not stop after committing, ask the operator to click Merge or Done, or claim completion without a successful tool response. The Integration Guard records the task's original target HEAD and performs a three-way integration, so independent target changes do not require a rebase. If semantic or Git overlap is reported, leave the card open and report the conflict for review. Do not manually merge, rebase, update refs, push, or open a PR."
 
 [[stage]]
 id = "pr"

@@ -41,6 +41,10 @@ A card's description now carries only a **compact pointer** to its pipeline, not
 
 A card whose description has no such reference has nothing to fetch — proceed normally.
 
+## Completion and Integration Guard Protocol
+
+When the selected pipeline reaches `Integration Guard → Done`, the execution agent must commit its verified work in the workspace and call `complete_workspace_card` itself as the final action. Do not stop after committing, ask the operator to click Merge or Done, wait for the UI, or claim integration without a successful tool response. Do not run `git merge`, `git rebase`, `git update-ref`, or `git push` manually for this stage. If the tool reports a conflict, dirty target, concurrent integration, or Mem0 failure, leave the card open and report the blocker.
+
 ## Project Rules Protocol (MCP)
 
 Unlike the pipeline pointer above, this one is **unconditional** — general project rules apply to every card, so there's no pointer text to look for in the description.

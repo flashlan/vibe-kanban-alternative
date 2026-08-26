@@ -1,3 +1,5 @@
+use std::collections::{HashMap, HashSet};
+
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
@@ -44,6 +46,29 @@ pub struct AgentWorkDeclarationResult {
     pub conflicts: Vec<AgentWorkConflict>,
 }
 
+/// Unified activity row used by the UI. A row can represent a genuinely
+/// running coding-agent process, a declaration waiting for its process to
+/// start, or a running process that missed the mandatory declaration hook.
+/// The latter is intentionally visible so the panel exposes coordination
+/// gaps instead of silently reporting zero activity.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+pub struct AgentActivity {
+    pub declaration_id: Option<Uuid>,
+    pub workspace_id: Uuid,
+    pub session_id: Option<Uuid>,
+    pub execution_process_id: Option<Uuid>,
+    pub owner_id: Option<Uuid>,
+    pub agent_name: String,
+    pub intent: String,
+    pub files: Vec<String>,
+    pub symbols: Vec<String>,
+    pub dependencies: Vec<String>,
+    pub lease_expires_at: Option<DateTime<Utc>>,
+    pub is_running: bool,
+    pub started_at: Option<DateTime<Utc>>,
+    pub updated_at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct DeclareAgentWork {
     pub workspace_id: Uuid,
@@ -72,6 +97,16 @@ struct AgentWorkRow {
     updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, Clone, FromRow)]
+struct RunningAgentRow {
+    execution_process_id: Uuid,
+    session_id: Uuid,
+    workspace_id: Uuid,
+    executor: Option<String>,
+    started_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
 impl AgentWorkRow {
     fn into_declaration(self) -> AgentWorkDeclaration {
         AgentWorkDeclaration {
@@ -92,6 +127,37 @@ impl AgentWorkRow {
 }
 
 impl AgentWorkDeclaration {
+    pub async fn list_activity_for_workspace(
+        pool: &SqlitePool,
+        workspace_id: Uuid,
+    ) -> Result<Vec<AgentActivity>, sqlx::Error> {
+        let declarations = Self::list_active(pool, workspace_id).await?;
+        let running = sqlx::query_as::<_, RunningAgentRow>(
+            "SELECT ep.id AS execution_process_id, ep.session_id, s.workspace_id, s.executor, ep.started_at, ep.updated_at FROM execution_processes ep JOIN sessions s ON s.id = ep.session_id WHERE s.workspace_id = ? AND ep.status = 'running' AND ep.run_reason = 'codingagent' AND ep.dropped = FALSE ORDER BY ep.created_at DESC",
+        )
+        .bind(workspace_id)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(build_activity(declarations, running))
+    }
+
+    pub async fn list_activity_for_project(
+        pool: &SqlitePool,
+        project_id: Uuid,
+    ) -> Result<Vec<AgentActivity>, sqlx::Error> {
+        let declarations = Self::list_active_for_project(pool, project_id).await?;
+        let running = sqlx::query_as::<_, RunningAgentRow>(
+            "SELECT ep.id AS execution_process_id, ep.session_id, s.workspace_id, s.executor, ep.started_at, ep.updated_at FROM execution_processes ep JOIN sessions s ON s.id = ep.session_id WHERE ep.status = 'running' AND ep.run_reason = 'codingagent' AND ep.dropped = FALSE AND (EXISTS (SELECT 1 FROM workspace_repos wr JOIN project_repos pr ON pr.repo_id = wr.repo_id WHERE wr.workspace_id = s.workspace_id AND pr.project_id = ?) OR EXISTS (SELECT 1 FROM issue_workspaces iw JOIN issues i ON i.id = iw.issue_id WHERE iw.workspace_id = s.workspace_id AND i.project_id = ?)) ORDER BY ep.created_at DESC",
+        )
+        .bind(project_id)
+        .bind(project_id)
+        .fetch_all(pool)
+        .await?;
+
+        Ok(build_activity(declarations, running))
+    }
+
     pub async fn declare(
         pool: &SqlitePool,
         input: &DeclareAgentWork,
@@ -333,6 +399,94 @@ impl AgentWorkDeclaration {
             lease_expires_at: other.lease_expires_at,
         })
     }
+}
+
+fn build_activity(
+    declarations: Vec<AgentWorkDeclaration>,
+    running: Vec<RunningAgentRow>,
+) -> Vec<AgentActivity> {
+    let declarations_by_process: HashMap<Uuid, AgentWorkDeclaration> = declarations
+        .iter()
+        .filter_map(|declaration| {
+            declaration
+                .execution_process_id
+                .map(|process_id| (process_id, declaration.clone()))
+        })
+        .collect();
+    let mut matched_declarations = HashSet::new();
+    let mut activity = Vec::with_capacity(running.len() + declarations.len());
+
+    for process in running {
+        if let Some(declaration) = declarations_by_process.get(&process.execution_process_id) {
+            matched_declarations.insert(declaration.id);
+            activity.push(AgentActivity {
+                declaration_id: Some(declaration.id),
+                workspace_id: process.workspace_id,
+                session_id: Some(process.session_id),
+                execution_process_id: Some(process.execution_process_id),
+                owner_id: Some(declaration.owner_id),
+                agent_name: declaration.agent_name.clone(),
+                intent: declaration.intent.clone(),
+                files: declaration.files.clone(),
+                symbols: declaration.symbols.clone(),
+                dependencies: declaration.dependencies.clone(),
+                lease_expires_at: Some(declaration.lease_expires_at),
+                is_running: true,
+                started_at: Some(process.started_at),
+                updated_at: process.updated_at,
+            });
+        } else {
+            activity.push(AgentActivity {
+                declaration_id: None,
+                workspace_id: process.workspace_id,
+                session_id: Some(process.session_id),
+                execution_process_id: Some(process.execution_process_id),
+                owner_id: None,
+                agent_name: process
+                    .executor
+                    .filter(|executor| !executor.trim().is_empty())
+                    .unwrap_or_else(|| "Coding agent".to_string()),
+                intent: "Running without a work declaration".to_string(),
+                files: vec![],
+                symbols: vec![],
+                dependencies: vec![],
+                lease_expires_at: None,
+                is_running: true,
+                started_at: Some(process.started_at),
+                updated_at: process.updated_at,
+            });
+        }
+    }
+
+    for declaration in declarations {
+        if matched_declarations.contains(&declaration.id) {
+            continue;
+        }
+        activity.push(AgentActivity {
+            declaration_id: Some(declaration.id),
+            workspace_id: declaration.workspace_id,
+            session_id: None,
+            execution_process_id: declaration.execution_process_id,
+            owner_id: Some(declaration.owner_id),
+            agent_name: declaration.agent_name,
+            intent: declaration.intent,
+            files: declaration.files,
+            symbols: declaration.symbols,
+            dependencies: declaration.dependencies,
+            lease_expires_at: Some(declaration.lease_expires_at),
+            is_running: false,
+            started_at: None,
+            updated_at: declaration.updated_at,
+        });
+    }
+
+    activity.sort_by(|left, right| {
+        right
+            .is_running
+            .cmp(&left.is_running)
+            .then_with(|| right.updated_at.cmp(&left.updated_at))
+    });
+    activity
 }
 
 fn lists_overlap<F>(left: &[String], right: &[String], overlaps: F) -> bool
@@ -583,6 +737,52 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[tokio::test]
+    async fn activity_uses_running_processes_as_source_of_truth() {
+        let pool = pool().await;
+        let workspace_id = workspace(&pool).await;
+        let session_id = Uuid::new_v4();
+        let execution_id = Uuid::new_v4();
+        sqlx::query("INSERT INTO sessions (id, workspace_id, executor) VALUES (?, ?, 'CODEX')")
+            .bind(session_id)
+            .bind(workspace_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "INSERT INTO execution_processes (id, session_id, run_reason, executor_action, status) VALUES (?, ?, 'codingagent', '{}', 'running')",
+        )
+        .bind(execution_id)
+        .bind(session_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let activity = AgentWorkDeclaration::list_activity_for_workspace(&pool, workspace_id)
+            .await
+            .unwrap();
+        assert_eq!(activity.len(), 1);
+        assert!(activity[0].is_running);
+        assert_eq!(activity[0].execution_process_id, Some(execution_id));
+        assert_eq!(activity[0].agent_name, "CODEX");
+        assert!(activity[0].declaration_id.is_none());
+
+        let owner_id = Uuid::new_v4();
+        let mut declaration = declaration_input(workspace_id, owner_id);
+        declaration.execution_process_id = Some(execution_id);
+        AgentWorkDeclaration::declare(&pool, &declaration)
+            .await
+            .unwrap();
+
+        let activity = AgentWorkDeclaration::list_activity_for_workspace(&pool, workspace_id)
+            .await
+            .unwrap();
+        assert_eq!(activity.len(), 1);
+        assert!(activity[0].is_running);
+        assert!(activity[0].declaration_id.is_some());
+        assert_eq!(activity[0].agent_name, "agent-a");
     }
 
     #[test]

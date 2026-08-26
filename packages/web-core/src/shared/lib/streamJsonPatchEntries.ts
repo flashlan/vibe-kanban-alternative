@@ -45,6 +45,7 @@ export function streamJsonPatchEntries<E = unknown>(
 ): StreamController<E> {
   let connected = false;
   let closed = false;
+  let finished = false;
   let ws: WebSocket | null = null;
   let snapshot: PatchContainer<E> = structuredClone(
     opts.initial ?? ({ entries: [] } as PatchContainer<E>)
@@ -95,6 +96,7 @@ export function streamJsonPatchEntries<E = unknown>(
 
       // Handle Finished messages — flush synchronously before closing
       if (msg.finished !== undefined) {
+        finished = true;
         if (rafId !== null) {
           cancelAnimationFrame(rafId);
         }
@@ -134,6 +136,9 @@ export function streamJsonPatchEntries<E = unknown>(
         if (rafId !== null) {
           cancelAnimationFrame(rafId);
           rafId = null;
+        }
+        if (!closed && !finished) {
+          opts.onError?.(new Error('Log stream closed before finishing'));
         }
       });
     } catch (error) {

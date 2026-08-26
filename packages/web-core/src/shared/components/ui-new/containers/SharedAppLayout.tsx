@@ -11,6 +11,7 @@ import { Sidebar } from '@vibe/ui/components/Sidebar';
 import { MobileDrawer } from '@vibe/ui/components/MobileDrawer';
 import { SidebarBottomActions } from './SidebarBottomActions';
 import { SidebarProjectTasksRegistry } from '@/shared/components/sidebar/SidebarProjectTasksRegistry';
+import { Mem0SetupNotice } from '@/shared/components/Mem0SetupNotice';
 
 import { useAppNavigation } from '@/shared/hooks/useAppNavigation';
 import { useCurrentAppDestination } from '@/shared/hooks/useCurrentAppDestination';
@@ -931,6 +932,7 @@ export function SharedAppLayout() {
                     <NavbarContainer
                       onOpenDrawer={() => setIsDrawerOpen(true)}
                     />
+                    <Mem0SetupNotice />
                     <div className="relative flex-1 min-h-0 overflow-hidden">
                       <Outlet />
                     </div>
@@ -944,6 +946,7 @@ export function SharedAppLayout() {
                     mobileMode={isMobile}
                     onOpenDrawer={() => setIsDrawerOpen(true)}
                   />
+                  <Mem0SetupNotice />
                   <div className="flex-1 min-h-0 overflow-hidden">
                     <Outlet />
                   </div>

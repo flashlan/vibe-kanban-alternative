@@ -34,7 +34,11 @@ export interface ExportedThemePackage {
   };
 }
 
-export const UI_FONT_OPTIONS: { value: UiFontFamily; label: string; family: string }[] = [
+export const UI_FONT_OPTIONS: {
+  value: UiFontFamily;
+  label: string;
+  family: string;
+}[] = [
   {
     value: 'ibm-plex-sans',
     label: 'IBM Plex Sans (Default)',
@@ -73,7 +77,11 @@ export const UI_FONT_OPTIONS: { value: UiFontFamily; label: string; family: stri
   },
 ];
 
-export const CODE_FONT_OPTIONS: { value: CodeFontFamily; label: string; family: string }[] = [
+export const CODE_FONT_OPTIONS: {
+  value: CodeFontFamily;
+  label: string;
+  family: string;
+}[] = [
   {
     value: 'ibm-plex-mono',
     label: 'IBM Plex Mono (Default)',
@@ -107,7 +115,11 @@ export const CODE_FONT_OPTIONS: { value: CodeFontFamily; label: string; family: 
   },
 ];
 
-export const UI_SCALE_OPTIONS: { value: UiFontScale; label: string; percent: string }[] = [
+export const UI_SCALE_OPTIONS: {
+  value: UiFontScale;
+  label: string;
+  percent: string;
+}[] = [
   { value: '85', label: 'Compact (85%)', percent: '85%' },
   { value: '92', label: 'Comfortable (92%)', percent: '92%' },
   { value: '100', label: 'Standard (100%)', percent: '100%' },
@@ -115,14 +127,15 @@ export const UI_SCALE_OPTIONS: { value: UiFontScale; label: string; percent: str
   { value: '120', label: 'Extra Large (120%)', percent: '120%' },
 ];
 
-export const CODE_FONT_SIZE_OPTIONS: { value: CodeFontSize; label: string }[] = [
-  { value: 11, label: '11px' },
-  { value: 12, label: '12px' },
-  { value: 13, label: '13px (Default)' },
-  { value: 14, label: '14px' },
-  { value: 15, label: '15px' },
-  { value: 16, label: '16px' },
-];
+export const CODE_FONT_SIZE_OPTIONS: { value: CodeFontSize; label: string }[] =
+  [
+    { value: 11, label: '11px' },
+    { value: 12, label: '12px' },
+    { value: 13, label: '13px (Default)' },
+    { value: 14, label: '14px' },
+    { value: 15, label: '15px' },
+    { value: 16, label: '16px' },
+  ];
 
 export const THEME_PRESETS: ThemePreset[] = [
   {
@@ -148,7 +161,8 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'cyberpunk-neon',
     name: 'Cyberpunk Neon',
-    description: 'Ultra dark background with neon magenta and electric yellow gradient.',
+    description:
+      'Ultra dark background with neon magenta and electric yellow gradient.',
     theme: {
       name: 'Cyberpunk Neon',
       canvasBg: '#090a0f',
@@ -188,7 +202,8 @@ export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'catppuccin-mocha',
     name: 'Catppuccin Mocha',
-    description: 'Cozy pastel palette with soft mauve and pink gradient highlights.',
+    description:
+      'Cozy pastel palette with soft mauve and pink gradient highlights.',
     theme: {
       name: 'Catppuccin Mocha',
       canvasBg: '#1e1e2e',
@@ -373,7 +388,9 @@ export function applyCustomAppearance(state: {
   root.style.setProperty('--app-code-font-size', `${state.codeFontSize}px`);
 
   // 2. Custom theme & colors
-  let styleEl = document.getElementById(STYLE_TAG_ID) as HTMLStyleElement | null;
+  let styleEl = document.getElementById(
+    STYLE_TAG_ID
+  ) as HTMLStyleElement | null;
 
   if (!state.customThemeEnabled) {
     if (styleEl) styleEl.remove();

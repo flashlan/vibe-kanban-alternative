@@ -18,7 +18,7 @@ import { create, useModal } from '@ebay/nice-modal-react';
 import { defineModal } from '@/shared/lib/modals';
 import { workspacesApi } from '@/shared/lib/api';
 import { useAppNavigation } from '@/shared/hooks/useAppNavigation';
-import { useWorkspaces } from '@/shared/hooks/useWorkspaces';
+import { useWorkspaceContext } from '@/shared/hooks/useWorkspaceContext';
 import { workspaceSummaryKeys } from '@/shared/hooks/workspaceSummaryKeys';
 import {
   ORCHESTRATOR_DIRECTIVES,
@@ -49,7 +49,7 @@ const SpawnOrchestratorDialogImpl = create<SpawnOrchestratorDialogProps>(() => {
 
   // The orchestrator is a singleton; detect a live one so we can offer to open
   // it instead of spawning. The backend enforces the singleton regardless.
-  const { workspaces } = useWorkspaces();
+  const { activeWorkspaces: workspaces } = useWorkspaceContext();
   const runningOrchestrator = useMemo(
     () =>
       workspaces.find(

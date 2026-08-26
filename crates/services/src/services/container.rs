@@ -363,14 +363,61 @@ pub trait ContainerService {
             ExecutionProcessRunReason::CleanupScript
         );
 
-        let title = if is_cleanup {
+        // A successful execution is not a completed card when the selected
+        // pipeline requires Integration Guard and no guarded merge exists.
+        // Keep the operator-facing notification honest: this is an open
+        // integration task, not a completed workspace.
+        let missing_integration = matches!(
+            ctx.execution_process.status,
+            ExecutionProcessStatus::Completed
+        )
+            && match crate::services::pipelines::integration_guard_required_for_workspace(
+                &self.db().pool,
+                ctx.workspace.id,
+            )
+            .await
+            {
+                Ok(true) => match db::models::merge::Merge::find_by_workspace_id(
+                    &self.db().pool,
+                    ctx.workspace.id,
+                )
+                .await
+                {
+                    Ok(merges) => merges.is_empty(),
+                    Err(error) => {
+                        tracing::warn!(
+                            workspace_id = %ctx.workspace.id,
+                            %error,
+                            "Could not verify Integration Guard merge before final notification"
+                        );
+                        true
+                    }
+                },
+                Ok(false) => false,
+                Err(error) => {
+                    tracing::warn!(
+                        workspace_id = %ctx.workspace.id,
+                        %error,
+                        "Could not resolve selected pipeline before final notification"
+                    );
+                    false
+                }
+            };
+
+        let title = if missing_integration {
+            format!("Integration required: {workspace_name}")
+        } else if is_cleanup {
             format!("✓ Cleanup finished: {workspace_name}")
         } else {
             format!("Workspace Complete: {workspace_name}")
         };
         let message = match ctx.execution_process.status {
             ExecutionProcessStatus::Completed => {
-                if is_cleanup {
+                if missing_integration {
+                    format!(
+                        "'{workspace_name}' finished without a guarded merge. The card remains open; call complete_workspace_card for Done, or use merge_workspace to integrate without closing the card."
+                    )
+                } else if is_cleanup {
                     format!(
                         "▶ '{}' finished the cleanup hook (branch {})\nAll agent work is done.",
                         workspace_name, ctx.workspace.branch

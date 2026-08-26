@@ -26,7 +26,7 @@ impl ServerHandler for McpServer {
             }
         };
         let mut instruction = format!(
-            "{} Use list/read tools first when you need IDs or current state. Before editing code, call `declare_agent_work` with files, symbols, and semantic dependencies; refresh it during long work with `heartbeat_agent_work`, and call `release_agent_work` when done. TOOLS: {}.",
+            "{} Use list/read tools first when you need IDs or current state. Before editing code, call `declare_agent_work` with files, symbols, and semantic dependencies; refresh it during long work with `heartbeat_agent_work`, and call `release_agent_work` when done. If the user asks to close or mark a card Done, use `complete_workspace_card`; if the user asks only to merge into main, use `merge_workspace` and keep the card open. Never report coding work as complete without a successful guarded merge unless the user explicitly asks to leave it unmerged. TOOLS: {}.",
             preamble,
             tool_names.join(", ")
         );

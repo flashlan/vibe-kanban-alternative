@@ -83,8 +83,12 @@ export function AppearanceSettingsSection() {
   // Custom Themes
   const [customTheme, setCustomTheme] = useCustomTheme();
   const [customThemeEnabled, setCustomThemeEnabled] = useCustomThemeEnabled();
-  const { themes: savedThemes, save: saveTheme, apply: applyTheme, remove: removeTheme } =
-    useSavedCustomThemes();
+  const {
+    themes: savedThemes,
+    save: saveTheme,
+    apply: applyTheme,
+    remove: removeTheme,
+  } = useSavedCustomThemes();
   const resetDefaults = useUiPreferencesStore((s) => s.resetAppearanceDefaults);
 
   const [newThemeName, setNewThemeName] = useState('');
@@ -137,7 +141,9 @@ export function AppearanceSettingsSection() {
         setUiFontScale(parsed.typography.uiFontScale);
         setCodeFontSize(parsed.typography.codeFontSize);
       }
-      setImportSuccess(`Theme "${parsed.theme.name || 'Imported'}" applied successfully!`);
+      setImportSuccess(
+        `Theme "${parsed.theme.name || 'Imported'}" applied successfully!`
+      );
       if (fileInputRef.current) fileInputRef.current.value = '';
     };
     reader.readAsText(file);
@@ -178,8 +184,12 @@ export function AppearanceSettingsSection() {
         <div
           className="p-5 rounded-md border transition-all duration-200"
           style={{
-            backgroundColor: customThemeEnabled ? customTheme.canvasBg : undefined,
-            borderColor: customThemeEnabled ? customTheme.borderColor : undefined,
+            backgroundColor: customThemeEnabled
+              ? customTheme.canvasBg
+              : undefined,
+            borderColor: customThemeEnabled
+              ? customTheme.borderColor
+              : undefined,
             color: customThemeEnabled ? customTheme.textColor : undefined,
           }}
         >
@@ -189,7 +199,11 @@ export function AppearanceSettingsSection() {
                 <span
                   className="text-xs font-semibold px-2 py-0.5 rounded"
                   style={{
-                    background: activeGradient || (customThemeEnabled ? customTheme.highlightColor : 'hsl(var(--brand))'),
+                    background:
+                      activeGradient ||
+                      (customThemeEnabled
+                        ? customTheme.highlightColor
+                        : 'hsl(var(--brand))'),
                     color: '#ffffff',
                   }}
                 >
@@ -200,10 +214,13 @@ export function AppearanceSettingsSection() {
               <p
                 className="text-xs mt-1"
                 style={{
-                  color: customThemeEnabled ? customTheme.textMutedColor : 'hsl(var(--text-low))',
+                  color: customThemeEnabled
+                    ? customTheme.textMutedColor
+                    : 'hsl(var(--text-low))',
                 }}
               >
-                UI Font: <strong className="font-medium">{uiFontFamily}</strong> ({uiFontScale}%)
+                UI Font: <strong className="font-medium">{uiFontFamily}</strong>{' '}
+                ({uiFontScale}%)
               </p>
             </div>
 
@@ -212,7 +229,11 @@ export function AppearanceSettingsSection() {
                 type="button"
                 className="px-3 py-1.5 text-xs font-medium rounded text-white shadow-xs border border-white/20 transition-transform active:scale-95"
                 style={{
-                  background: activeGradient || (customThemeEnabled ? customTheme.highlightColor : 'hsl(var(--brand))'),
+                  background:
+                    activeGradient ||
+                    (customThemeEnabled
+                      ? customTheme.highlightColor
+                      : 'hsl(var(--brand))'),
                 }}
               >
                 Highlighted Action
@@ -225,18 +246,25 @@ export function AppearanceSettingsSection() {
             <div
               className="p-3.5 rounded border text-sm"
               style={{
-                backgroundColor: customThemeEnabled ? customTheme.surfaceBg : 'hsl(var(--bg-secondary))',
-                borderColor: customThemeEnabled ? customTheme.borderColor : 'hsl(var(--border))',
+                backgroundColor: customThemeEnabled
+                  ? customTheme.surfaceBg
+                  : 'hsl(var(--bg-secondary))',
+                borderColor: customThemeEnabled
+                  ? customTheme.borderColor
+                  : 'hsl(var(--border))',
               }}
             >
               <div className="font-medium mb-1">Sample Card / Task</div>
               <p
                 className="text-xs leading-relaxed"
                 style={{
-                  color: customThemeEnabled ? customTheme.textMutedColor : 'hsl(var(--text-low))',
+                  color: customThemeEnabled
+                    ? customTheme.textMutedColor
+                    : 'hsl(var(--text-low))',
                 }}
               >
-                Demonstrates contrast between canvas background, surface cards, and muted secondary text.
+                Demonstrates contrast between canvas background, surface cards,
+                and muted secondary text.
               </p>
             </div>
 
@@ -244,22 +272,37 @@ export function AppearanceSettingsSection() {
             <div
               className="p-3.5 rounded border text-xs overflow-x-auto"
               style={{
-                backgroundColor: customThemeEnabled ? customTheme.surfaceBg : 'hsl(var(--bg-panel))',
-                borderColor: customThemeEnabled ? customTheme.borderColor : 'hsl(var(--border))',
-                fontFamily: CODE_FONT_OPTIONS.find((o) => o.value === codeFontFamily)?.family,
+                backgroundColor: customThemeEnabled
+                  ? customTheme.surfaceBg
+                  : 'hsl(var(--bg-panel))',
+                borderColor: customThemeEnabled
+                  ? customTheme.borderColor
+                  : 'hsl(var(--border))',
+                fontFamily: CODE_FONT_OPTIONS.find(
+                  (o) => o.value === codeFontFamily
+                )?.family,
                 fontSize: `${codeFontSize}px`,
               }}
             >
-              <div className="text-low opacity-60 mb-1">// Code View ({codeFontFamily} - {codeFontSize}px)</div>
+              <div className="text-low opacity-60 mb-1">
+                // Code View ({codeFontFamily} - {codeFontSize}px)
+              </div>
               <div>
                 <span className="text-brand font-semibold">const</span> agent ={' '}
                 <span className="text-success">new AurapunkAgent</span>({'{'}
               </div>
               <div className="pl-3">
-                theme: <span className="text-warning">'{customTheme.name || 'custom'}'</span>,
+                theme:{' '}
+                <span className="text-warning">
+                  '{customTheme.name || 'custom'}'
+                </span>
+                ,
               </div>
               <div className="pl-3">
-                gradient: <span className="text-info">{customTheme.enableGradient ? 'true' : 'false'}</span>
+                gradient:{' '}
+                <span className="text-info">
+                  {customTheme.enableGradient ? 'true' : 'false'}
+                </span>
               </div>
               <div>{'}'});</div>
             </div>
@@ -287,7 +330,8 @@ export function AppearanceSettingsSection() {
                   setCustomTheme(preset.theme);
                   setCustomThemeEnabled(true);
                   if (preset.uiFontFamily) setUiFontFamily(preset.uiFontFamily);
-                  if (preset.codeFontFamily) setCodeFontFamily(preset.codeFontFamily);
+                  if (preset.codeFontFamily)
+                    setCodeFontFamily(preset.codeFontFamily);
                 }}
                 className={`group relative p-3 rounded-md border cursor-pointer transition-all duration-150 flex flex-col justify-between ${
                   isSelected
@@ -344,8 +388,12 @@ export function AppearanceSettingsSection() {
         description="Switch between light, dark, system mode, or apply retro phosphor and scanline skins."
       >
         <SettingsField
-          label={t('settings.general.appearance.theme.label', { defaultValue: 'Theme Mode' })}
-          description={t('settings.general.appearance.theme.helper', { defaultValue: 'Select base dark, light, or system appearance.' })}
+          label={t('settings.general.appearance.theme.label', {
+            defaultValue: 'Theme Mode',
+          })}
+          description={t('settings.general.appearance.theme.helper', {
+            defaultValue: 'Select base dark, light, or system appearance.',
+          })}
         >
           <SettingsSelect
             value={config?.theme || ThemeMode.SYSTEM}
@@ -354,7 +402,9 @@ export function AppearanceSettingsSection() {
               setTheme(value);
               updateAndSaveConfig({ theme: value });
             }}
-            placeholder={t('settings.general.appearance.theme.placeholder', { defaultValue: 'Select theme...' })}
+            placeholder={t('settings.general.appearance.theme.placeholder', {
+              defaultValue: 'Select theme...',
+            })}
           />
         </SettingsField>
 
@@ -374,10 +424,15 @@ export function AppearanceSettingsSection() {
 
         <SettingsCheckbox
           id="animate-running-outline-appearance"
-          label={t('settings.general.appearance.animateRunningOutline.label', { defaultValue: 'Animate running card border' })}
+          label={t('settings.general.appearance.animateRunningOutline.label', {
+            defaultValue: 'Animate running card border',
+          })}
           description={t(
             'settings.general.appearance.animateRunningOutline.helper',
-            { defaultValue: 'Show animated shimmering outline around active workspace panels.' }
+            {
+              defaultValue:
+                'Show animated shimmering outline around active workspace panels.',
+            }
           )}
           checked={animateRunningOutline}
           onChange={setAnimateRunningOutline}
@@ -493,18 +548,24 @@ export function AppearanceSettingsSection() {
                 <label className="text-sm font-medium text-high">
                   Canvas Background (Behind Everything)
                 </label>
-                <p className="text-xs text-low">Main root canvas and window background.</p>
+                <p className="text-xs text-low">
+                  Main root canvas and window background.
+                </p>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
                     value={customTheme.canvasBg}
-                    onChange={(e) => setCustomTheme({ canvasBg: e.target.value })}
+                    onChange={(e) =>
+                      setCustomTheme({ canvasBg: e.target.value })
+                    }
                     className="w-9 h-8 p-0 rounded border border-border cursor-pointer bg-transparent"
                   />
                   <input
                     type="text"
                     value={customTheme.canvasBg}
-                    onChange={(e) => setCustomTheme({ canvasBg: e.target.value })}
+                    onChange={(e) =>
+                      setCustomTheme({ canvasBg: e.target.value })
+                    }
                     className="flex-1 bg-secondary border border-border rounded-sm px-2.5 py-1 text-sm text-high font-mono"
                   />
                 </div>
@@ -514,18 +575,24 @@ export function AppearanceSettingsSection() {
                 <label className="text-sm font-medium text-high">
                   Interface Surface (Panels, Cards, Sidebars)
                 </label>
-                <p className="text-xs text-low">Elevated surface for cards, inputs, and sidebars.</p>
+                <p className="text-xs text-low">
+                  Elevated surface for cards, inputs, and sidebars.
+                </p>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
                     value={customTheme.surfaceBg}
-                    onChange={(e) => setCustomTheme({ surfaceBg: e.target.value })}
+                    onChange={(e) =>
+                      setCustomTheme({ surfaceBg: e.target.value })
+                    }
                     className="w-9 h-8 p-0 rounded border border-border cursor-pointer bg-transparent"
                   />
                   <input
                     type="text"
                     value={customTheme.surfaceBg}
-                    onChange={(e) => setCustomTheme({ surfaceBg: e.target.value })}
+                    onChange={(e) =>
+                      setCustomTheme({ surfaceBg: e.target.value })
+                    }
                     className="flex-1 bg-secondary border border-border rounded-sm px-2.5 py-1 text-sm text-high font-mono"
                   />
                 </div>
@@ -538,18 +605,24 @@ export function AppearanceSettingsSection() {
                 <label className="text-sm font-medium text-high">
                   Font Color (Primary Text)
                 </label>
-                <p className="text-xs text-low">High-contrast text for headings, messages, and titles.</p>
+                <p className="text-xs text-low">
+                  High-contrast text for headings, messages, and titles.
+                </p>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
                     value={customTheme.textColor}
-                    onChange={(e) => setCustomTheme({ textColor: e.target.value })}
+                    onChange={(e) =>
+                      setCustomTheme({ textColor: e.target.value })
+                    }
                     className="w-9 h-8 p-0 rounded border border-border cursor-pointer bg-transparent"
                   />
                   <input
                     type="text"
                     value={customTheme.textColor}
-                    onChange={(e) => setCustomTheme({ textColor: e.target.value })}
+                    onChange={(e) =>
+                      setCustomTheme({ textColor: e.target.value })
+                    }
                     className="flex-1 bg-secondary border border-border rounded-sm px-2.5 py-1 text-sm text-high font-mono"
                   />
                 </div>
@@ -559,18 +632,24 @@ export function AppearanceSettingsSection() {
                 <label className="text-sm font-medium text-high">
                   Secondary Text Color (Muted)
                 </label>
-                <p className="text-xs text-low">Labels, timestamps, hints, and secondary metadata.</p>
+                <p className="text-xs text-low">
+                  Labels, timestamps, hints, and secondary metadata.
+                </p>
                 <div className="flex items-center gap-2">
                   <input
                     type="color"
                     value={customTheme.textMutedColor}
-                    onChange={(e) => setCustomTheme({ textMutedColor: e.target.value })}
+                    onChange={(e) =>
+                      setCustomTheme({ textMutedColor: e.target.value })
+                    }
                     className="w-9 h-8 p-0 rounded border border-border cursor-pointer bg-transparent"
                   />
                   <input
                     type="text"
                     value={customTheme.textMutedColor}
-                    onChange={(e) => setCustomTheme({ textMutedColor: e.target.value })}
+                    onChange={(e) =>
+                      setCustomTheme({ textMutedColor: e.target.value })
+                    }
                     className="flex-1 bg-secondary border border-border rounded-sm px-2.5 py-1 text-sm text-high font-mono"
                   />
                 </div>
@@ -587,13 +666,17 @@ export function AppearanceSettingsSection() {
                   <input
                     type="color"
                     value={customTheme.highlightColor}
-                    onChange={(e) => setCustomTheme({ highlightColor: e.target.value })}
+                    onChange={(e) =>
+                      setCustomTheme({ highlightColor: e.target.value })
+                    }
                     className="w-9 h-8 p-0 rounded border border-border cursor-pointer bg-transparent"
                   />
                   <input
                     type="text"
                     value={customTheme.highlightColor}
-                    onChange={(e) => setCustomTheme({ highlightColor: e.target.value })}
+                    onChange={(e) =>
+                      setCustomTheme({ highlightColor: e.target.value })
+                    }
                     className="flex-1 bg-secondary border border-border rounded-sm px-2.5 py-1 text-sm text-high font-mono"
                   />
                 </div>
@@ -604,43 +687,57 @@ export function AppearanceSettingsSection() {
                 label="Enable Gradient on Highlights & Buttons"
                 description="Applies smooth two-color gradient to primary action buttons, active badges, and accents."
                 checked={customTheme.enableGradient}
-                onChange={(checked) => setCustomTheme({ enableGradient: checked })}
+                onChange={(checked) =>
+                  setCustomTheme({ enableGradient: checked })
+                }
               />
 
               {customTheme.enableGradient && (
                 <div className="mt-3 p-3.5 rounded bg-secondary/50 border border-border space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                      <label className="text-xs font-medium text-high block mb-1">Start Color</label>
+                      <label className="text-xs font-medium text-high block mb-1">
+                        Start Color
+                      </label>
                       <div className="flex items-center gap-2">
                         <input
                           type="color"
                           value={customTheme.gradientColor1}
-                          onChange={(e) => setCustomTheme({ gradientColor1: e.target.value })}
+                          onChange={(e) =>
+                            setCustomTheme({ gradientColor1: e.target.value })
+                          }
                           className="w-8 h-7 p-0 rounded border border-border cursor-pointer bg-transparent"
                         />
                         <input
                           type="text"
                           value={customTheme.gradientColor1}
-                          onChange={(e) => setCustomTheme({ gradientColor1: e.target.value })}
+                          onChange={(e) =>
+                            setCustomTheme({ gradientColor1: e.target.value })
+                          }
                           className="flex-1 bg-secondary border border-border rounded-sm px-2 py-0.5 text-xs font-mono"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className="text-xs font-medium text-high block mb-1">End Color</label>
+                      <label className="text-xs font-medium text-high block mb-1">
+                        End Color
+                      </label>
                       <div className="flex items-center gap-2">
                         <input
                           type="color"
                           value={customTheme.gradientColor2}
-                          onChange={(e) => setCustomTheme({ gradientColor2: e.target.value })}
+                          onChange={(e) =>
+                            setCustomTheme({ gradientColor2: e.target.value })
+                          }
                           className="w-8 h-7 p-0 rounded border border-border cursor-pointer bg-transparent"
                         />
                         <input
                           type="text"
                           value={customTheme.gradientColor2}
-                          onChange={(e) => setCustomTheme({ gradientColor2: e.target.value })}
+                          onChange={(e) =>
+                            setCustomTheme({ gradientColor2: e.target.value })
+                          }
                           className="flex-1 bg-secondary border border-border rounded-sm px-2 py-0.5 text-xs font-mono"
                         />
                       </div>
@@ -649,8 +746,12 @@ export function AppearanceSettingsSection() {
 
                   <div>
                     <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="font-medium text-high">Gradient Angle</span>
-                      <span className="text-low font-mono">{customTheme.gradientAngle || 135}°</span>
+                      <span className="font-medium text-high">
+                        Gradient Angle
+                      </span>
+                      <span className="text-low font-mono">
+                        {customTheme.gradientAngle || 135}°
+                      </span>
                     </div>
                     <input
                       type="range"
@@ -658,7 +759,11 @@ export function AppearanceSettingsSection() {
                       max="360"
                       step="5"
                       value={customTheme.gradientAngle || 135}
-                      onChange={(e) => setCustomTheme({ gradientAngle: Number(e.target.value) })}
+                      onChange={(e) =>
+                        setCustomTheme({
+                          gradientAngle: Number(e.target.value),
+                        })
+                      }
                       className="w-full accent-brand cursor-pointer"
                     />
                   </div>

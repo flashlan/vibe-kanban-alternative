@@ -251,6 +251,8 @@ export type AgentWorkConflict = { workspace_id: string, owner_id: string, agent_
 
 export type AgentWorkDeclarationResult = { declaration: AgentWorkDeclaration, conflicts: Array<AgentWorkConflict>, };
 
+export type AgentActivity = { declaration_id: string | null, workspace_id: string, session_id: string | null, execution_process_id: string | null, owner_id: string | null, agent_name: string, intent: string, files: Array<string>, symbols: Array<string>, dependencies: Array<string>, lease_expires_at: string | null, is_running: boolean, started_at: string | null, updated_at: string, };
+
 export type ExecutionProcessRepoState = { id: string, execution_process_id: string, repo_id: string, before_head_commit: string | null, after_head_commit: string | null, merge_commit: string | null, created_at: Date, updated_at: Date, };
 
 export type Merge = { "type": "direct" } & DirectMerge | { "type": "pr" } & PrMerge;
@@ -381,7 +383,7 @@ export type AddWorkspaceRepoRequest = { repo_id: string, target_branch: string, 
 
 export type AddWorkspaceRepoResponse = { workspace: Workspace, repo: RepoWithTargetBranch, };
 
-export type MergeWorkspaceRequest = { repo_id: string, suppress_auto_move?: boolean, };
+export type MergeWorkspaceRequest = { repo_id: string, suppress_auto_move?: boolean, keep_workspace_open?: boolean, };
 
 export type CommitWorkspaceRequest = { repo_id: string, };
 

@@ -30,6 +30,16 @@ struct McpCompleteWorkspaceCardRequest {
     user_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+struct McpMergeWorkspaceRequest {
+    #[schemars(description = "Workspace ID. Optional when running inside that workspace context.")]
+    workspace_id: Option<Uuid>,
+    #[schemars(
+        description = "Repository ID to integrate. Optional when the current workspace has one repository."
+    )]
+    repo_id: Option<Uuid>,
+}
+
 #[derive(Debug, Serialize, schemars::JsonSchema)]
 struct McpCompleteWorkspaceCardResponse {
     success: bool,
@@ -42,7 +52,53 @@ struct McpCompleteWorkspaceCardResponse {
 #[tool_router(router = completion_tools_router, vis = "pub")]
 impl McpServer {
     #[tool(
-        description = "Complete a card safely. Integrates the workspace through Integration Guard, then requires Mem0 to acknowledge the verified durable summary, and only then moves the card to its terminal Done status. On any merge conflict, dirty target, concurrent integration, or Mem0 failure, the card remains open. Do not use update_issue to set Done."
+        description = "Integrate the current workspace branch into its target branch through Integration Guard without closing the card or moving it to Done. Use this when the user asks to merge into main but does not ask to finish or close the card. Commit verified work first. Do not ask for confirmation unless the tool reports a merge conflict, dirty target, concurrent integration, or another explicit blocker."
+    )]
+    async fn merge_workspace(
+        &self,
+        Parameters(request): Parameters<McpMergeWorkspaceRequest>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let workspace_id = match self.resolve_workspace_id(request.workspace_id) {
+            Ok(id) => id,
+            Err(error) => return Ok(Self::tool_error(error)),
+        };
+        if let Err(error) = self.scope_allows_workspace(workspace_id) {
+            return Ok(Self::tool_error(error));
+        }
+
+        let repo_id = request.repo_id.or_else(|| {
+            self.context
+                .as_ref()
+                .and_then(|context| context.workspace_repos.first().map(|repo| repo.repo_id))
+        });
+        let Some(repo_id) = repo_id else {
+            return Ok(Self::tool_error(super::ToolError::message(
+                "repo_id is required when the workspace has no repository in MCP context",
+            )));
+        };
+
+        let url = self.url(&format!("/api/workspaces/{workspace_id}/git/merge"));
+        if let Err(error) = self
+            .send_empty_json(self.client.post(url).json(&serde_json::json!({
+                "repo_id": repo_id,
+                "suppress_auto_move": true,
+                "keep_workspace_open": true,
+            })))
+            .await
+        {
+            return Ok(Self::tool_error(error));
+        }
+
+        McpServer::success(&serde_json::json!({
+            "success": true,
+            "workspace_id": workspace_id.to_string(),
+            "repo_id": repo_id.to_string(),
+            "card_closed": false,
+        }))
+    }
+
+    #[tool(
+        description = "Complete a card safely. After you finish and commit the verified work, you MUST call this tool yourself as the final action; do not stop and ask the operator to click Merge or Done, and do not claim completion without a successful response. It integrates the workspace through Integration Guard, then requires Mem0 to acknowledge the verified durable summary, and only then moves the card to its terminal Done status. On any merge conflict, dirty target, concurrent integration, or Mem0 failure, the card remains open. Do not use update_issue to set Done, and do not run manual git merge/rebase/push for this stage."
     )]
     async fn complete_workspace_card(
         &self,

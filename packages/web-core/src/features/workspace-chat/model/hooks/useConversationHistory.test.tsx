@@ -7,6 +7,7 @@ import { ExecutionProcessesContext } from '@/shared/hooks/useExecutionProcessesC
 import { useConversationHistory } from './useConversationHistory';
 import {
   getCachedEntries,
+  setCachedExecutionProcesses,
   setCachedEntries,
   clearConversationEntryCache,
 } from '../conversationEntryCache';
@@ -77,6 +78,14 @@ function makeContextList(processes: import('shared/types').ExecutionProcess[]) {
     isLoading: false,
     isConnected: true,
     error: null,
+  } as unknown as import('@/shared/hooks/useExecutionProcessesContext').ExecutionProcessesContextType;
+}
+
+function makeLoadingContext() {
+  return {
+    ...makeContextList([]),
+    isLoading: true,
+    isConnected: false,
   } as unknown as import('@/shared/hooks/useExecutionProcessesContext').ExecutionProcessesContextType;
 }
 
@@ -154,6 +163,42 @@ describe('useConversationHistory — conversation cache skips re-stream', () => 
 
     await waitFor(() => expect(onTimelineUpdated).toHaveBeenCalled());
     // The key assertion: no websocket stream is opened for the cached process.
+    expect(streamJsonPatchEntries).toHaveBeenCalledTimes(0);
+    unmount();
+  });
+
+  it('renders cached history before the live process snapshot arrives', async () => {
+    const process = makeFinishedProcess(PROCESS_ID);
+    const onTimelineUpdated = vi.fn();
+
+    setCachedExecutionProcesses('ws-1', [process]);
+    setCachedEntries(PROCESS_ID, [cachedEntry(PROCESS_ID)]);
+    vi.mocked(streamJsonPatchEntries).mockClear();
+
+    const { unmount } = renderHook(
+      () => useConversationHistory({ onTimelineUpdated, scopeKey: 'ws-1' }),
+      {
+        wrapper: ({ children }) => (
+          <ExecutionProcessesContext.Provider value={makeLoadingContext()}>
+            {children}
+          </ExecutionProcessesContext.Provider>
+        ),
+      }
+    );
+
+    await waitFor(() => {
+      expect(onTimelineUpdated).toHaveBeenCalledWith(
+        expect.objectContaining({
+          executionProcessState: expect.objectContaining({
+            [PROCESS_ID]: expect.objectContaining({
+              entries: [cachedEntry(PROCESS_ID)],
+            }),
+          }),
+        }),
+        'initial',
+        false
+      );
+    });
     expect(streamJsonPatchEntries).toHaveBeenCalledTimes(0);
     unmount();
   });

@@ -9,7 +9,7 @@ import {
   type LogEntry,
   VirtualizedProcessLogs,
 } from '@/shared/components/VirtualizedProcessLogs';
-import { useLogStream } from '@/shared/hooks/useLogStream';
+import { useActions } from '@/shared/hooks/useActions';
 import { useLogsPanel } from '@/shared/hooks/useLogsPanel';
 import { useExecutionProcessesContext } from '@/shared/hooks/useExecutionProcessesContext';
 import { TerminalPanelContainer } from '@/shared/components/TerminalPanelContainer';
@@ -43,12 +43,16 @@ export function LogsContentContainer({ className }: LogsContentContainerProps) {
     setLogMatchIndices: onMatchIndicesChange,
     collapseTerminal,
   } = useLogsPanel();
+  const { executorContext } = useActions();
   const { t } = useTranslation('common');
   const { executionProcessesByIdVisible, executionProcessesByIdAll } =
     useExecutionProcessesContext();
   // Get logs for process content (only when type is 'process')
   const processId = content?.type === 'process' ? content.processId : '';
-  const { logs, error } = useLogStream(processId);
+  const logs =
+    content?.type === 'process' ? (executorContext.currentLogs ?? []) : [];
+  const error =
+    content?.type === 'process' ? executorContext.currentLogsError : null;
 
   // Resolve the selected process so we can offer interactive (headed) controls.
   const selectedProcess = processId

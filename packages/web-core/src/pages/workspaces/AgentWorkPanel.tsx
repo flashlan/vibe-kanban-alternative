@@ -1,13 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { CircleNotchIcon, UsersThreeIcon } from '@phosphor-icons/react';
-import { workspacesApi, type AgentWorkDeclaration } from '@/shared/lib/api';
+import { workspacesApi, type AgentActivity } from '@/shared/lib/api';
 import { cn } from '@/shared/lib/utils';
 
 interface AgentWorkPanelProps {
   workspaceId?: string;
 }
 
-function formatLease(expiresAt: string): string {
+function formatLease(expiresAt: string | null): string {
+  if (!expiresAt) return 'No declaration';
   const remaining = Math.max(
     0,
     Math.round((new Date(expiresAt).getTime() - Date.now()) / 1000)
@@ -16,26 +17,28 @@ function formatLease(expiresAt: string): string {
   return `${Math.ceil(remaining / 60)}min remaining`;
 }
 
-function DeclarationRow({
-  declaration,
-}: {
-  declaration: AgentWorkDeclaration;
-}) {
+function DeclarationRow({ activity }: { activity: AgentActivity }) {
   return (
     <div className="rounded-md border bg-primary px-2 py-2 text-xs">
       <div className="flex items-center gap-1.5">
-        <span className="size-1.5 rounded-full bg-success" />
-        <span className="font-medium text-normal truncate">
-          {declaration.agent_name}
+        <span
+          className={cn(
+            'size-1.5 rounded-full',
+            activity.is_running ? 'bg-success' : 'bg-warning'
+          )}
+        />
+        <span className="truncate font-medium text-normal">
+          {activity.agent_name}
         </span>
         <span className="ml-auto shrink-0 text-low">
-          {formatLease(declaration.lease_expires_at)}
+          {activity.is_running ? 'Running' : 'Declared'} ·{' '}
+          {formatLease(activity.lease_expires_at)}
         </span>
       </div>
-      <p className="mt-1 text-low leading-4">{declaration.intent}</p>
-      {declaration.files.length > 0 && (
+      <p className="mt-1 text-low leading-4">{activity.intent}</p>
+      {activity.files.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
-          {declaration.files.slice(0, 5).map((file) => (
+          {activity.files.slice(0, 5).map((file) => (
             <code
               key={file}
               className="max-w-full truncate rounded bg-secondary px-1 text-[10px] text-low"
@@ -43,21 +46,21 @@ function DeclarationRow({
               {file}
             </code>
           ))}
-          {declaration.files.length > 5 && (
-            <span className="text-low">+{declaration.files.length - 5}</span>
+          {activity.files.length > 5 && (
+            <span className="text-low">+{activity.files.length - 5}</span>
           )}
         </div>
       )}
-      {declaration.symbols.length > 0 && (
+      {activity.symbols.length > 0 && (
         <p className="mt-1 truncate font-mono text-[10px] text-low">
-          {declaration.symbols.slice(0, 3).join(' · ')}
-          {declaration.symbols.length > 3 ? ' · …' : ''}
+          {activity.symbols.slice(0, 3).join(' · ')}
+          {activity.symbols.length > 3 ? ' · …' : ''}
         </p>
       )}
-      {declaration.dependencies.length > 0 && (
+      {activity.dependencies.length > 0 && (
         <p className="mt-1 truncate text-[10px] text-low">
-          Depends on: {declaration.dependencies.slice(0, 3).join(' · ')}
-          {declaration.dependencies.length > 3 ? ' · …' : ''}
+          Depends on: {activity.dependencies.slice(0, 3).join(' · ')}
+          {activity.dependencies.length > 3 ? ' · …' : ''}
         </p>
       )}
     </div>
@@ -76,15 +79,16 @@ export function AgentWorkPanel({ workspaceId }: AgentWorkPanelProps) {
     refetchInterval: 3000,
     refetchOnWindowFocus: false,
   });
+  const runningCount = data.filter((activity) => activity.is_running).length;
 
   return (
     <div className="border-b bg-secondary px-base py-2">
       <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-normal">
         <UsersThreeIcon className="size-icon-sm text-low" />
         <span>Active agents</span>
-        {data.length > 0 && (
+        {runningCount > 0 && (
           <span className="rounded-full bg-tertiary px-1.5 text-[10px] text-low">
-            {data.length}
+            {runningCount}
           </span>
         )}
         {isLoading && (
@@ -96,7 +100,7 @@ export function AgentWorkPanel({ workspaceId }: AgentWorkPanelProps) {
       ) : isError ? (
         <p className="text-xs text-low">Unable to load agent activity.</p>
       ) : data.length === 0 ? (
-        <p className="text-xs text-low">No agents have declared work.</p>
+        <p className="text-xs text-low">No agent activity detected.</p>
       ) : (
         <div
           className={cn(
@@ -104,8 +108,11 @@ export function AgentWorkPanel({ workspaceId }: AgentWorkPanelProps) {
             data.length > 3 && 'max-h-48 overflow-y-auto'
           )}
         >
-          {data.map((declaration) => (
-            <DeclarationRow key={declaration.id} declaration={declaration} />
+          {data.map((activity) => (
+            <DeclarationRow
+              key={activity.declaration_id ?? activity.execution_process_id}
+              activity={activity}
+            />
           ))}
         </div>
       )}

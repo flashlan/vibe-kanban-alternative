@@ -533,12 +533,12 @@ body.dnd-dragging * {
 
 /* Dynamic UI font & Mono font custom properties */
 html {
-  font-family: var(--app-font-sans, "IBM Plex Sans", "Noto Emoji", sans-serif);
+  font-family: var(--app-font-sans, 'IBM Plex Sans', 'Noto Emoji', sans-serif);
   font-size: var(--app-ui-scale, var(--mobile-font-scale, 100%));
 }
 
 .font-ibm-plex-sans {
-  font-family: var(--app-font-sans, "IBM Plex Sans", "Noto Emoji", sans-serif);
+  font-family: var(--app-font-sans, 'IBM Plex Sans', 'Noto Emoji', sans-serif);
 }
 
 .font-ibm-plex-mono,
@@ -547,6 +547,5 @@ pre,
 code,
 kbd,
 samp {
-  font-family: var(--app-font-mono, "IBM Plex Mono", monospace);
+  font-family: var(--app-font-mono, 'IBM Plex Mono', monospace);
 }
-

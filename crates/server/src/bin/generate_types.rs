@@ -57,6 +57,7 @@ fn generate_types_content() -> String {
         db::models::agent_work::AgentWorkDeclaration::decl(),
         db::models::agent_work::AgentWorkConflict::decl(),
         db::models::agent_work::AgentWorkDeclarationResult::decl(),
+        db::models::agent_work::AgentActivity::decl(),
         db::models::execution_process_repo_state::ExecutionProcessRepoState::decl(),
         db::models::merge::Merge::decl(),
         db::models::merge::DirectMerge::decl(),

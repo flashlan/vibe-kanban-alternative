@@ -292,6 +292,17 @@ export function useConversationVirtualizer({
       }
 
       prevScrollTopRef.current = currentScrollTop;
+
+      // A manual scroll pauses live follow. If the user later scrolls back to
+      // the end themselves, resume follow so subsequent messages are tracked
+      // naturally without requiring the explicit "scroll to bottom" action.
+      if (
+        userScrollPausedRef.current &&
+        isNearBottom(currentScrollTop, el.clientHeight, el.scrollHeight)
+      ) {
+        userScrollPausedRef.current = false;
+      }
+
       syncIsAtBottom();
     };
 
@@ -440,8 +451,12 @@ export function useConversationVirtualizer({
   const checkIsAtBottom = useCallback((): boolean => {
     const el = scrollContainerRef.current;
     if (!el) return !userScrollPausedRef.current;
-    if (userScrollPausedRef.current) return false;
-    return isNearBottom(el.scrollTop, el.clientHeight, el.scrollHeight);
+    const atBottom = isNearBottom(
+      el.scrollTop,
+      el.clientHeight,
+      el.scrollHeight
+    );
+    return atBottom && !userScrollPausedRef.current;
   }, [scrollContainerRef]);
 
   const releaseBottomLock = useCallback(() => {

@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from 'react';
 import type { CreateModeInitialState } from '@/shared/types/createMode';
 import { useCreateModeState } from '@/features/create-mode/model/useCreateModeState';
-import { useWorkspaces } from '@/shared/hooks/useWorkspaces';
+import { useWorkspaceContext } from '@/shared/hooks/useWorkspaceContext';
 import { useWorkspacesContext } from '@/shared/hooks/useWorkspacesContext';
 import {
   CreateModeContext,
@@ -21,10 +21,10 @@ export function CreateModeProvider({
 }: CreateModeProviderProps) {
   // Fetch most recent workspace to seed project selection only
   const {
-    workspaces: activeWorkspaces,
+    activeWorkspaces,
     archivedWorkspaces,
-    isLoading: localWorkspacesLoading,
-  } = useWorkspaces();
+    isWorkspacesListLoading: localWorkspacesLoading,
+  } = useWorkspaceContext();
   const { workspaces: remoteWorkspaces, isLoading: remoteWorkspacesLoading } =
     useWorkspacesContext();
   const mostRecentWorkspace = activeWorkspaces[0] ?? archivedWorkspaces[0];

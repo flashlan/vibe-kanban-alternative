@@ -80,7 +80,8 @@ export function ActionsProvider({ children }: ActionsProviderProps) {
   const { logsPanelContent } = useLogsPanel();
   const processId =
     logsPanelContent?.type === 'process' ? logsPanelContent.processId : '';
-  const { logs: processLogs } = useLogStream(processId);
+  const { logs: processLogs, error: processLogsError } =
+    useLogStream(processId);
 
   // Compute currentLogs based on content type
   const currentLogs = useMemo(() => {
@@ -191,6 +192,7 @@ export function ActionsProvider({ children }: ActionsProviderProps) {
       startDevServer: start,
       stopDevServer: stop,
       currentLogs,
+      currentLogsError: processLogsError,
       logsPanelContent,
       openStatusSelection,
       openPrioritySelection,
@@ -222,6 +224,7 @@ export function ActionsProvider({ children }: ActionsProviderProps) {
     start,
     stop,
     currentLogs,
+    processLogsError,
     logsPanelContent,
     openStatusSelection,
     openPrioritySelection,

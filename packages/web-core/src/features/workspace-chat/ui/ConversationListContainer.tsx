@@ -746,7 +746,8 @@ export const ConversationList = forwardRef<
   );
 
   const showLoader = loading && conversationRows.length === 0;
-  const showEmptyState = !loading && conversationRows.length === 0;
+  const showEmptyState =
+    !loading && !isLoadingHistory && conversationRows.length === 0;
 
   const { virtualItems, totalSize, measureElement } = conversationVirtualizer;
 
@@ -771,7 +772,7 @@ export const ConversationList = forwardRef<
           onWheelCapture={() => conversationVirtualizer.releaseBottomLock()}
           onClickCapture={handleConversationClickCapture}
         >
-          <div className="pt-2">
+          <div className="flex min-h-full flex-col pt-2">
             {showSetupPlaceholder && (
               <div className="my-base px-double">
                 <ChatScriptPlaceholder
@@ -780,109 +781,115 @@ export const ConversationList = forwardRef<
                 />
               </div>
             )}
-          </div>
-
-          {isLoadingHistory && !showLoader && (
-            <div className="flex flex-col items-center gap-2 px-double py-3">
-              <div className="flex w-full max-w-md flex-col gap-1.5">
-                <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-16 animate-pulse rounded-full bg-foreground/10" />
-                  <div className="h-2.5 flex-1 animate-pulse rounded-full bg-foreground/[0.06]" />
+            <div className="mt-auto">
+              {isLoadingHistory && !showLoader && (
+                <div className="flex flex-col items-center gap-2 px-double py-3">
+                  <div className="flex w-full max-w-md flex-col gap-1.5">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2.5 w-16 animate-pulse rounded-full bg-foreground/10" />
+                      <div className="h-2.5 flex-1 animate-pulse rounded-full bg-foreground/[0.06]" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="h-2.5 w-24 animate-pulse rounded-full bg-foreground/[0.07]"
+                        style={{ animationDelay: '150ms' }}
+                      />
+                      <div
+                        className="h-2.5 w-32 animate-pulse rounded-full bg-foreground/[0.05]"
+                        style={{ animationDelay: '150ms' }}
+                      />
+                    </div>
+                  </div>
+                  <span className="text-xs text-low">
+                    {t('conversation.loadingEarlierMessages')}
+                  </span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-2.5 w-24 animate-pulse rounded-full bg-foreground/[0.07]"
-                    style={{ animationDelay: '150ms' }}
-                  />
-                  <div
-                    className="h-2.5 w-32 animate-pulse rounded-full bg-foreground/[0.05]"
-                    style={{ animationDelay: '150ms' }}
+              )}
+
+              {showEmptyState && (
+                <div className="flex min-h-full items-center justify-center px-double py-12">
+                  <ChatEmptyState
+                    title={t('conversation.emptyTitle', {
+                      defaultValue: 'Send a message to start the conversation.',
+                    })}
+                    description={t('conversation.emptyDescription', {
+                      defaultValue:
+                        'Your workspace conversation will appear here once a new turn starts.',
+                    })}
                   />
                 </div>
-              </div>
-              <span className="text-xs text-low">
-                {t('conversation.loadingEarlierMessages')}
-              </span>
-            </div>
-          )}
+              )}
 
-          {showEmptyState && (
-            <div className="flex min-h-full items-center justify-center px-double py-12">
-              <ChatEmptyState
-                title={t('conversation.emptyTitle', {
-                  defaultValue: 'Send a message to start the conversation.',
-                })}
-                description={t('conversation.emptyDescription', {
-                  defaultValue:
-                    'Your workspace conversation will appear here once a new turn starts.',
-                })}
-              />
-            </div>
-          )}
+              {virtualizedRows.length > 0 && (
+                <div
+                  style={{
+                    height: `${totalSize}px`,
+                    width: '100%',
+                    position: 'relative',
+                  }}
+                >
+                  {virtualItems.map((virtualItem) => {
+                    const row = virtualizedRows[virtualItem.index];
+                    if (!row) return null;
+                    return (
+                      <div
+                        key={row.semanticKey}
+                        data-index={virtualItem.index}
+                        data-row-index={virtualItem.index}
+                        data-semantic-key={row.semanticKey}
+                        ref={measureElement}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          transform: `translateY(${virtualItem.start}px)`,
+                        }}
+                      >
+                        {renderRowContent(
+                          row.entry,
+                          attempt,
+                          resetAction,
+                          repos
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-          {virtualizedRows.length > 0 && (
-            <div
-              style={{
-                height: `${totalSize}px`,
-                width: '100%',
-                position: 'relative',
-              }}
-            >
-              {virtualItems.map((virtualItem) => {
-                const row = virtualizedRows[virtualItem.index];
-                if (!row) return null;
+              {unvirtualizedTailRows.map((row, tailIndex) => {
+                const rowIndex = firstUnvirtualizedRowIndex + tailIndex;
                 return (
                   <div
                     key={row.semanticKey}
-                    data-index={virtualItem.index}
-                    data-row-index={virtualItem.index}
+                    data-row-index={rowIndex}
                     data-semantic-key={row.semanticKey}
-                    ref={measureElement}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      transform: `translateY(${virtualItem.start}px)`,
-                    }}
                   >
                     {renderRowContent(row.entry, attempt, resetAction, repos)}
                   </div>
                 );
               })}
+
+              {/* Plan-reveal spacer: provides extra scroll room so plan-reveal
+                  can align the plan entry to the top of the viewport. Height is set
+                  imperatively in scrollToAbsoluteIndex and cleared on scrollToBottom. */}
+              <div ref={planRevealSpacerRef} style={{ height: 0 }} />
+
+              {/* Footer placeholder */}
+              <div className="pb-2">
+                {showCleanupPlaceholder && (
+                  <div className="my-base px-double">
+                    <ChatScriptPlaceholder
+                      type="cleanup"
+                      onConfigure={
+                        canConfigure ? handleConfigureCleanup : undefined
+                      }
+                    />
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-
-          {unvirtualizedTailRows.map((row, tailIndex) => {
-            const rowIndex = firstUnvirtualizedRowIndex + tailIndex;
-            return (
-              <div
-                key={row.semanticKey}
-                data-row-index={rowIndex}
-                data-semantic-key={row.semanticKey}
-              >
-                {renderRowContent(row.entry, attempt, resetAction, repos)}
-              </div>
-            );
-          })}
-
-          {/* Plan-reveal spacer: provides extra scroll room so plan-reveal
-              can align the plan entry to the top of the viewport. Height is set
-              imperatively in scrollToAbsoluteIndex and cleared on scrollToBottom. */}
-          <div ref={planRevealSpacerRef} style={{ height: 0 }} />
-
-          {/* Footer placeholder */}
-          <div className="pb-2">
-            {showCleanupPlaceholder && (
-              <div className="my-base px-double">
-                <ChatScriptPlaceholder
-                  type="cleanup"
-                  onConfigure={
-                    canConfigure ? handleConfigureCleanup : undefined
-                  }
-                />
-              </div>
-            )}
           </div>
         </div>
       </div>

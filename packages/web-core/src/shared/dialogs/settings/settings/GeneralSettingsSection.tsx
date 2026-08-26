@@ -229,8 +229,12 @@ export function GeneralSettingsSection() {
 
       {/* Language & Regional */}
       <SettingsCard
-        title={t('settings.general.appearance.language.label', { defaultValue: 'Language' })}
-        description={t('settings.general.appearance.language.helper', { defaultValue: 'Choose your preferred interface language.' })}
+        title={t('settings.general.appearance.language.label', {
+          defaultValue: 'Language',
+        })}
+        description={t('settings.general.appearance.language.helper', {
+          defaultValue: 'Choose your preferred interface language.',
+        })}
       >
         <SettingsField
           label={t('settings.general.appearance.language.label')}

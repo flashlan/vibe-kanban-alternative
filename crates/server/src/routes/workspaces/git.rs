@@ -71,6 +71,9 @@ pub struct MergeWorkspaceRequest {
     #[serde(default)]
     #[ts(optional)]
     pub suppress_auto_move: Option<bool>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub keep_workspace_open: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]
@@ -399,7 +402,8 @@ pub async fn merge_workspace(
         });
     }
 
-    if !workspace.pinned
+    if !request.keep_workspace_open.unwrap_or(false)
+        && !workspace.pinned
         && let Err(e) = deployment.container().archive_workspace(workspace.id).await
     {
         tracing::error!("Failed to archive workspace {}: {}", workspace.id, e);

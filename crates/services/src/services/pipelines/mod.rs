@@ -25,8 +25,12 @@ use std::{collections::HashSet, path::Path};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ts_rs::TS;
+use uuid::Uuid;
 
 use super::config::PipelineStep;
+use db::models::{issue::Issue, issue_workspace::IssueWorkspace};
+use sqlx::SqlitePool;
+use utils::path::pipelines_dir;
 
 /// Bundled default pipeline files, seeded to `pipelines_dir()` on first run and
 /// used by the reset actions. Order here defines the display order of bundled
@@ -126,6 +130,12 @@ const RETIRED: &[(&str, &[&str])] = &[
 /// invisible to `load_pipelines`, `load_pipeline_statuses`, and the Settings
 /// UI (all iterate `*.toml` only).
 const MANIFEST_FILE: &str = ".seed-manifest.json";
+
+const LEGACY_MERGE_LABELS: &[&str] = &[
+    "Merge to base",
+    "Squash-merge to base",
+    "5. Squash-merge to base",
+];
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SeedManifest {
@@ -586,6 +596,9 @@ fn ensure_seeded_with(
     };
 
     for (name, content) in bundled {
+        if migrate_legacy_merge_stage(&dir.join(name), content)? {
+            dirty = true;
+        }
         if seeded.contains(*name) {
             continue;
         }
@@ -611,6 +624,88 @@ fn ensure_seeded_with(
     }
 
     Ok(())
+}
+
+/// Update only the shipped merge-stage defaults from pre-Integration-Guard
+/// pipeline files. A file is migrated only when its merge label and prompt
+/// still have the unmistakable old squash-merge defaults; edited pipeline
+/// content remains user-owned and is left untouched.
+fn migrate_legacy_merge_stage(path: &Path, bundled: &str) -> Result<bool, PipelineError> {
+    let existing = match std::fs::read_to_string(path) {
+        Ok(content) => content,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.into()),
+    };
+    let old_label = stage_field_line(&existing, "merge", "label");
+    let old_prompt = stage_field_line(&existing, "merge", "prompt");
+    if !old_label
+        .map(|line| {
+            LEGACY_MERGE_LABELS
+                .iter()
+                .any(|label| line.trim() == format!("label = \"{label}\""))
+        })
+        .unwrap_or(false)
+        || !old_prompt
+            .map(|line| line.to_ascii_lowercase().contains("squash-merge"))
+            .unwrap_or(false)
+    {
+        return Ok(false);
+    }
+
+    let Some(new_label) = stage_field_line(bundled, "merge", "label") else {
+        return Ok(false);
+    };
+    let Some(new_prompt) = stage_field_line(bundled, "merge", "prompt") else {
+        return Ok(false);
+    };
+
+    let mut in_merge_stage = false;
+    let mut changed = false;
+    let migrated = existing
+        .lines()
+        .map(|line| {
+            let trimmed = line.trim();
+            if trimmed == "[[stage]]" {
+                in_merge_stage = false;
+            } else if trimmed == "id = \"merge\"" {
+                in_merge_stage = true;
+            }
+
+            if in_merge_stage && trimmed.starts_with("label = ") {
+                changed = true;
+                new_label
+            } else if in_merge_stage && trimmed.starts_with("prompt = ") {
+                changed = true;
+                new_prompt
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    if !changed {
+        return Ok(false);
+    }
+    std::fs::write(path, format!("{migrated}\n"))?;
+    Ok(true)
+}
+
+fn stage_field_line<'a>(content: &'a str, stage_id: &str, field: &str) -> Option<&'a str> {
+    let stage_marker = format!("id = \"{stage_id}\"");
+    let field_marker = format!("{field} = ");
+    let mut in_stage = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed == "[[stage]]" {
+            in_stage = false;
+        } else if trimmed == stage_marker {
+            in_stage = true;
+        } else if in_stage && trimmed.starts_with(&field_marker) {
+            return Some(line);
+        }
+    }
+    None
 }
 
 /// Load every valid pipeline from `dir`, seeding defaults first if empty.
@@ -807,6 +902,82 @@ pub fn ordered_enabled_stages(
         .into_iter()
         .filter(|s| enabled_ids.contains(&s.id))
         .collect()
+}
+
+/// Whether an enabled pipeline stage delegates completion to Integration Guard.
+/// The stage id is the stable contract; the label check keeps older/customized
+/// pipeline files recognizable when they retained the user-facing label.
+pub fn is_integration_guard_stage(stage: &PipelineStep) -> bool {
+    stage.id == "merge"
+        || stage
+            .label
+            .to_ascii_lowercase()
+            .contains("integration guard")
+}
+
+pub fn contains_integration_guard_stage(stages: &[PipelineStep]) -> bool {
+    stages.iter().any(is_integration_guard_stage)
+}
+
+fn legacy_description_requires_integration(description: Option<&str>) -> bool {
+    let Some(description) = description else {
+        return false;
+    };
+    let description = description.to_ascii_lowercase();
+    description.contains("squash-merge") || description.contains("integration guard")
+}
+
+/// Resolve the selected card pipeline without relying on the prompt text. This
+/// is used at execution finalization so a model that stops before the merge
+/// stage still produces an explicit operator-visible warning.
+pub async fn integration_guard_required_for_workspace(
+    pool: &SqlitePool,
+    workspace_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let Some((issue_id, _)) =
+        IssueWorkspace::find_issue_and_project_by_workspace(pool, workspace_id).await?
+    else {
+        return Ok(false);
+    };
+    let Some(issue) = Issue::find_by_id(pool, issue_id).await? else {
+        return Ok(false);
+    };
+
+    let Some(metadata) = issue.extension_metadata.get("pipeline") else {
+        return Ok(legacy_description_requires_integration(
+            issue.description.as_deref(),
+        ));
+    };
+    let pipeline_ids: Vec<&str> = metadata
+        .get("pipelineIds")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .collect();
+    let enabled_ids: HashSet<String> = metadata
+        .get("enabledIds")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .map(str::to_owned)
+        .collect();
+    if pipeline_ids.is_empty() || enabled_ids.is_empty() {
+        return Ok(legacy_description_requires_integration(
+            issue.description.as_deref(),
+        ));
+    }
+
+    let all_pipelines = load_pipelines(&pipelines_dir());
+    let selected: Vec<&Pipeline> = all_pipelines
+        .iter()
+        .filter(|pipeline| pipeline_ids.contains(&pipeline.id.as_str()))
+        .collect();
+    Ok(contains_integration_guard_stage(&ordered_enabled_stages(
+        &selected,
+        &enabled_ids,
+    )))
 }
 
 #[cfg(test)]
@@ -1043,6 +1214,24 @@ mod tests {
         // (brittle: any future prompt tweak breaks it, and it invites escaping bugs).
         assert!(!spec.prompt_fragment.contains("repo root"));
         assert!(spec.prompt_fragment.contains("workspace root"));
+    }
+
+    #[test]
+    fn legacy_merge_stage_is_migrated_without_overwriting_other_content() {
+        let d = TmpDir::new();
+        std::fs::write(
+            d.path().join("basic.toml"),
+            "name = \"Basic\"\n\ndescription = \"Custom description\"\n\n[[stage]]\nid = \"merge\"\nlabel = \"Squash-merge to base\"\ndefault_enabled = true\nprompt = \"Squash-merge this card's branch into the base branch yourself.\"\n",
+        )
+        .unwrap();
+        let bundled = "name = \"Basic\"\n\n[[stage]]\nid = \"merge\"\nlabel = \"Integration Guard → Done\"\ndefault_enabled = true\nprompt = \"Call complete_workspace_card.\"\n";
+
+        ensure_seeded_with(d.path(), &[("basic.toml", bundled)], &[], &["basic.toml"]).unwrap();
+
+        let migrated = std::fs::read_to_string(d.path().join("basic.toml")).unwrap();
+        assert!(migrated.contains("description = \"Custom description\""));
+        assert!(migrated.contains("label = \"Integration Guard → Done\""));
+        assert!(migrated.contains("prompt = \"Call complete_workspace_card.\""));
     }
 
     // --- Seed-manifest tests (via the private `ensure_seeded_with` seam) ---
@@ -1294,6 +1483,30 @@ mod tests {
         let stages = ordered_enabled_stages(&[&a], &enabled);
         let ids: Vec<&str> = stages.iter().map(|s| s.id.as_str()).collect();
         assert_eq!(ids, vec!["code", "merge"]);
+    }
+
+    #[test]
+    fn detects_integration_guard_stage_by_stable_id_or_label() {
+        assert!(is_integration_guard_stage(&step("merge")));
+        assert!(is_integration_guard_stage(&PipelineStep {
+            id: "custom-finalize".to_string(),
+            label: "Integration Guard → Done".to_string(),
+            ..step("custom-finalize")
+        }));
+        assert!(!contains_integration_guard_stage(&[step("review")]));
+    }
+
+    #[test]
+    fn recognizes_legacy_merge_instruction_for_cards_without_metadata() {
+        assert!(legacy_description_requires_integration(Some(
+            "## Pipeline\n- Squash-merge to base"
+        )));
+        assert!(legacy_description_requires_integration(Some(
+            "Integration Guard → Done"
+        )));
+        assert!(!legacy_description_requires_integration(Some(
+            "Implement and run tests"
+        )));
     }
 
     #[test]

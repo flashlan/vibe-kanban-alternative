@@ -33,7 +33,7 @@ use axum::{
     routing::{delete, get, post},
 };
 use db::models::{
-    agent_work::AgentWorkDeclaration,
+    agent_work::{AgentActivity, AgentWorkDeclaration},
     execution_process::ExecutionProcess,
     file::{CommentAttachment, IssueAttachment},
     issue::Issue as DbIssue,
@@ -979,10 +979,10 @@ async fn resolve_project_orchestrator_prompt_with_pool(
 async fn list_project_agent_work(
     State(deployment): State<DeploymentImpl>,
     Path(id): Path<Uuid>,
-) -> Result<ResponseJson<ApiResponse<Vec<AgentWorkDeclaration>>>, ApiError> {
-    let declarations =
-        AgentWorkDeclaration::list_active_for_project(&deployment.db().pool, id).await?;
-    Ok(ok(declarations))
+) -> Result<ResponseJson<ApiResponse<Vec<AgentActivity>>>, ApiError> {
+    let activity =
+        AgentWorkDeclaration::list_activity_for_project(&deployment.db().pool, id).await?;
+    Ok(ok(activity))
 }
 
 /// Map `(path_id, source_project_id)` to the wire `OrchestratorPromptSource`

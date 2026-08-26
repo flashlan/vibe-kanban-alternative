@@ -4,7 +4,9 @@ use axum::{
     response::Json as ResponseJson,
     routing::{delete, get, post},
 };
-use db::models::agent_work::{AgentWorkDeclaration, AgentWorkDeclarationResult, DeclareAgentWork};
+use db::models::agent_work::{
+    AgentActivity, AgentWorkDeclaration, AgentWorkDeclarationResult, DeclareAgentWork,
+};
 use deployment::Deployment;
 use serde::Deserialize;
 use utils::response::ApiResponse;
@@ -34,10 +36,11 @@ pub struct AgentWorkOwnerRequest {
 pub async fn list_agent_work(
     Extension(workspace): Extension<db::models::workspace::Workspace>,
     State(deployment): State<DeploymentImpl>,
-) -> Result<ResponseJson<ApiResponse<Vec<AgentWorkDeclaration>>>, ApiError> {
-    let declarations =
-        AgentWorkDeclaration::list_active(&deployment.db().pool, workspace.id).await?;
-    Ok(ResponseJson(ApiResponse::success(declarations)))
+) -> Result<ResponseJson<ApiResponse<Vec<AgentActivity>>>, ApiError> {
+    let activity =
+        AgentWorkDeclaration::list_activity_for_workspace(&deployment.db().pool, workspace.id)
+            .await?;
+    Ok(ResponseJson(ApiResponse::success(activity)))
 }
 
 pub async fn declare_agent_work(
