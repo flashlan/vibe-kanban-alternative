@@ -62,3 +62,21 @@ build("docs/livro-en", """# Modern Vibe Coding Manual
 ---
 
 """)
+
+# --- EPUB generation (Kobo/Google Play/KDP) ---
+import subprocess, shutil
+if shutil.which("pandoc"):
+    for src, dst in [("docs/livro/manuscript.md", "docs/livro/manuscript.epub"),
+                     ("docs/livro-en/manuscript.md", "docs/livro-en/manuscript.epub")]:
+        # cover only if exists
+        cover = "docs/images/livro/capa-ebook.png"
+        cmd = ["pandoc", src, "-o", dst]
+        if Path(cover).exists():
+            cmd += [f"--epub-cover-image={cover}"]
+        try:
+            subprocess.run(cmd, check=True)
+            print(f"epub {dst} ({Path(dst).stat().st_size} bytes)")
+        except subprocess.CalledProcessError as e:
+            print(f"pandoc falhou para {src}: {e}")
+else:
+    print("pandoc nao encontrado — pulei EPUB. Instale com: brew install pandoc")
