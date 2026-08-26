@@ -10,6 +10,8 @@ import {
   TriangleIcon,
   CircleIcon,
   PaperPlaneTiltIcon,
+  TerminalWindowIcon,
+  CaretRightIcon,
 } from '@phosphor-icons/react';
 import { UserAvatar, type UserAvatarUser } from './UserAvatar';
 import { RunningDots } from './RunningDots';
@@ -78,8 +80,8 @@ function IssueWorkspaceCardContainer({
   return (
     <div
       className={cn(
-        'flex flex-col gap-half p-base bg-panel rounded-sm transition-all duration-150',
-        onClick && 'cursor-pointer hover:bg-secondary/70',
+        'group flex flex-col gap-half p-base bg-secondary/60 hover:bg-secondary border border-border dark:border-white/15 hover:border-brand/60 rounded-md transition-all duration-150 shadow-xs',
+        onClick && 'cursor-pointer',
         className
       )}
       onClick={
@@ -149,27 +151,45 @@ export function IssueWorkspaceCard({
 
   if (compact) {
     return (
-      <IssueWorkspaceCardContainer onClick={onClick} className={className}>
-        <div className="flex items-center gap-half min-w-0">
-          {isRunning && <RunningDots />}
-          {!isRunning && isFailed && (
-            <TriangleIcon
-              className="size-icon-xs text-error shrink-0"
-              weight="fill"
+      <IssueWorkspaceCardContainer
+        onClick={onClick}
+        className={cn('py-1.5 px-2.5', className)}
+      >
+        <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <TerminalWindowIcon
+              className="size-3.5 text-brand shrink-0"
+              weight="bold"
             />
-          )}
-          {hasUnseenActivity && !isRunning && !isFailed && (
-            <CircleIcon
-              className="size-icon-xs text-brand shrink-0"
-              weight="fill"
-            />
-          )}
-          <span className="text-sm text-high truncate">
-            {workspace.name ?? workspace.id}
-          </span>
-          <span className="text-xs text-low whitespace-nowrap shrink-0">
-            {timeAgo}
-          </span>
+            {isRunning && <RunningDots />}
+            {!isRunning && isFailed && (
+              <TriangleIcon
+                className="size-icon-xs text-error shrink-0"
+                weight="fill"
+              />
+            )}
+            {hasUnseenActivity && !isRunning && !isFailed && (
+              <CircleIcon
+                className="size-icon-xs text-brand shrink-0"
+                weight="fill"
+              />
+            )}
+            <span className="text-xs font-mono font-medium text-high truncate">
+              {workspace.name ?? workspace.id}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="text-[11px] text-low whitespace-nowrap">
+              {timeAgo}
+            </span>
+            {onClick && (
+              <CaretRightIcon
+                className="size-3 text-low group-hover:text-brand group-hover:translate-x-0.5 transition-transform"
+                weight="bold"
+              />
+            )}
+          </div>
         </div>
       </IssueWorkspaceCardContainer>
     );
