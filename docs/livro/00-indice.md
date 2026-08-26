@@ -1,6 +1,6 @@
 # Manual Moderno de Vibe Coding — Índice
 
-**Subtítulo:** *Manual prático da interface do Vibe Kanban Alternative — do `npx` ao SaaS em produção, com um projeto-guia.*
+**Subtítulo:** *Manual prático da interface do Aurapunk IDE — do `npx` ao SaaS em produção, com um projeto-guia.*
 
 Este livro foi escrito dentro do próprio repositório que ele ensina a usar. Todo caminho de arquivo citado existe no código; quando uma regra externa muda (ex.: preços do KDP), o capítulo marca a data de verificação.
 

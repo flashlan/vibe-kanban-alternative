@@ -39,9 +39,9 @@ def build(livro_dir, title):
 
 build("docs/livro", """# Manual Moderno de Vibe Coding
 
-### Uso pratico do Vibe Kanban Alternative — do `npx` ao SaaS em producao
+### Uso pratico do Aurapunk IDE — do `npx` ao SaaS em producao
 
-**Subtitulo:** *Manual pratico da interface do Vibe Kanban Alternative, com um projeto-guia SaaS (AssinaFacil).*
+**Subtitulo:** *Manual pratico da interface do Aurapunk IDE, com um projeto-guia SaaS (AssinaFacil).*
 
 > Manuscrito gerado a partir de `docs/livro/*.md` (branch `vk/1f98-livre-vibo-kanba`).
 > Regras externas (precos KDP) verificadas em ago/2026 — revalide antes de publicar.
@@ -52,9 +52,9 @@ build("docs/livro", """# Manual Moderno de Vibe Coding
 
 build("docs/livro-en", """# Modern Vibe Coding Manual
 
-### Practical use of Vibe Kanban Alternative — from `npx` to a production SaaS
+### Practical use of Aurapunk IDE — from `npx` to a production SaaS
 
-**Subtitle:** *A practical interface guide for Vibe Kanban Alternative, with the guided SaaS project AssinaFacil.*
+**Subtitle:** *A practical interface guide for Aurapunk IDE, with the guided SaaS project AssinaFacil.*
 
 > Manuscript generated from `docs/livro-en/*.md` (branch `vk/1f98-livre-vibo-kanba`).
 > External KDP rules verified Aug/2026 — revalidate before publishing.
