@@ -1,0 +1,11 @@
+{
+  "name": "aurapunk-demo-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A dependency-free demo service for AuraPunk workspaces",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  }
+}

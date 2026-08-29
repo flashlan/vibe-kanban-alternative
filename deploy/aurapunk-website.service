@@ -1,0 +1,21 @@
+[Unit]
+Description=AuraPunk website
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aurapunk
+Group=aurapunk
+WorkingDirectory=/home/aurapunk/website
+Environment=HOME=/home/aurapunk
+Environment=PATH=/home/aurapunk/.local/node22/bin:/home/aurapunk/.opencode/bin:/home/aurapunk/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PORT=3200
+ExecStart=/home/aurapunk/.local/node22/bin/npm run start -- --port 3200 --hostname 127.0.0.1
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

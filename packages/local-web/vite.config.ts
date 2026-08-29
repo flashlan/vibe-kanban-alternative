@@ -79,6 +79,9 @@ export default schemas;
 
 export default defineConfig({
   customLogger: createFilteredLogger(),
+  base: process.env.VITE_APP_BASE_PATH
+    ? `${process.env.VITE_APP_BASE_PATH.replace(/\/$/, '')}/`
+    : '/',
   publicDir: path.resolve(__dirname, '../public'),
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),

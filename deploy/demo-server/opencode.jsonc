@@ -1,0 +1,12 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "share": "disabled",
+  "compaction": {
+    "auto": true
+  },
+  "lsp": true,
+  "watcher": {
+    "ignore": ["node_modules/**", ".git/**"]
+  }
+}
