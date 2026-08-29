@@ -11,6 +11,9 @@ WorkingDirectory=/home/aurapunk/website
 Environment=HOME=/home/aurapunk
 Environment=PATH=/home/aurapunk/.local/node22/bin:/home/aurapunk/.opencode/bin:/home/aurapunk/.local/bin:/usr/local/bin:/usr/bin:/bin
 Environment=PORT=3200
+Environment=AURAPUNK_LOCAL_MODE=true
+Environment=VIBE_API_URL=http://127.0.0.1:3100
+Environment=MEM0_URL=http://127.0.0.1:8000
 ExecStart=/home/aurapunk/.local/node22/bin/npm run start -- --port 3200 --hostname 127.0.0.1
 Restart=on-failure
 RestartSec=3
