@@ -108,6 +108,15 @@ impl PushNotifier for TauriNotifier {
 }
 
 fn main() {
+    // The NPX launcher forwards `--cloud` to the desktop bundle. Preserve the
+    // same runtime mode used by the browser launcher for the embedded server.
+    if std::env::args().any(|arg| arg == "--cloud") {
+        // Environment mutation is process-wide and intentionally happens
+        // before the backend is started; this is safe during single-threaded
+        // application initialization.
+        unsafe { std::env::set_var("VIBE_KANBAN_MODE", "cloud") };
+    }
+
     // Install rustls crypto provider before any TLS operations
     rustls::crypto::aws_lc_rs::default_provider()
         .install_default()

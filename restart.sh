@@ -6,10 +6,15 @@ cd "$(dirname "$0")"
 
 # Check if window/desktop mode is requested
 WINDOW_MODE=false
+APP_MODE="local"
 for arg in "$@"; do
   case $arg in
     --window|-w|--desktop|-d)
       WINDOW_MODE=true
+      shift
+      ;;
+    --cloud)
+      APP_MODE="cloud"
       shift
       ;;
   esac
@@ -42,8 +47,8 @@ pnpm run generate-types
 
 if [ "$WINDOW_MODE" = true ]; then
   echo "🚀 Iniciando Vibe Kanban em MODO JANELA DESKTOP (Tauri)..."
-  pnpm run dev:window
+  VIBE_KANBAN_MODE="$APP_MODE" pnpm run dev:window
 else
   echo "🚀 Iniciando servidor Vibe Kanban no NAVEGADOR (Frontend :3001 | Backend :3002)..."
-  pnpm run dev
+  VIBE_KANBAN_MODE="$APP_MODE" pnpm run dev
 fi

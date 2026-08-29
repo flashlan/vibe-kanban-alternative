@@ -19,6 +19,7 @@ type RootOptions = {
   desktop?: boolean;
   window?: boolean;
   w?: boolean;
+  cloud?: boolean;
 };
 
 // Resolve effective arch for our published 64-bit binaries only.
@@ -251,8 +252,16 @@ async function runTui(args: string[]): Promise<void> {
   });
 }
 
-async function runMain(desktopMode: boolean): Promise<void> {
+async function runMain(
+  desktopMode: boolean,
+  cloudMode: boolean
+): Promise<void> {
   checkForUpdates();
+
+  const launchEnv = {
+    ...process.env,
+    ...(cloudMode ? { VIBE_KANBAN_MODE: 'cloud' } : {}),
+  };
 
   const modeLabel = LOCAL_DEV_MODE ? " (local dev)" : "";
   const tauriPlatform = getTauriPlatform(platformDir);
@@ -276,7 +285,11 @@ async function runMain(desktopMode: boolean): Promise<void> {
           showProgress,
         );
         console.error(""); // newline after progress
-        const exitCode = await installAndLaunch(bundleInfo, platform);
+        const exitCode = await installAndLaunch(
+          bundleInfo,
+          platform,
+          cloudMode ? ['--cloud'] : []
+        );
         process.exit(exitCode);
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -289,7 +302,7 @@ async function runMain(desktopMode: boolean): Promise<void> {
   // Browser mode (default — headless server + opens browser)
   console.log(`Starting vibe-kanban-alternative v${CLI_VERSION}${modeLabel}...`);
   await extractAndRun("vibe-kanban", (bin) => {
-    execSync(`"${bin}"`, { stdio: "inherit" });
+    execSync(`"${bin}"`, { stdio: "inherit", env: launchEnv });
   });
 }
 
@@ -328,9 +341,15 @@ async function main(): Promise<void> {
     .command("[...args]", "Launch the local vibe-kanban app")
     .option("--desktop", "Launch the desktop app instead of browser mode")
     .option("--window, -w", "Launch in desktop window mode (alias for --desktop)")
+    .option("--cloud", "Launch with cloud-mode authentication controls")
     .allowUnknownOptions()
     .action((_args: string[], options: RootOptions) => {
-      runOrExit(runMain(Boolean(options.desktop || options.window || options.w)));
+      runOrExit(
+        runMain(
+          Boolean(options.desktop || options.window || options.w),
+          Boolean(options.cloud)
+        )
+      );
     });
 
   cli

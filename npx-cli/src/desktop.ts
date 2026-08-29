@@ -83,13 +83,14 @@ function tryCopyApp(
 
 // macOS: extract .app.tar.gz, copy to /Applications, remove quarantine, launch with `open`
 async function installAndLaunchMacOS(
-  bundleInfo: DesktopBundleInfo
+  bundleInfo: DesktopBundleInfo,
+  args: string[]
 ): Promise<number> {
   const { archivePath, dir } = bundleInfo;
 
   const sentinel = readSentinel(dir);
   if (sentinel?.appPath && fs.existsSync(sentinel.appPath)) {
-    return launchMacOSApp(sentinel.appPath);
+    return launchMacOSApp(sentinel.appPath, args);
   }
 
   if (!archivePath || !fs.existsSync(archivePath)) {
@@ -130,13 +131,15 @@ async function installAndLaunchMacOS(
 
   writeSentinel(dir, { type: 'app-tar-gz', appPath: finalAppPath });
 
-  return launchMacOSApp(finalAppPath);
+  return launchMacOSApp(finalAppPath, args);
 }
 
-function launchMacOSApp(appPath: string): Promise<number> {
+function launchMacOSApp(appPath: string, args: string[]): Promise<number> {
   const appName = path.basename(appPath);
   console.error(`Launching ${appName}...`);
-  const proc = spawn('open', ['--wait-apps', appPath], {
+  const openArgs = ['--wait-apps', appPath];
+  if (args.length > 0) openArgs.push('--args', ...args);
+  const proc = spawn('open', openArgs, {
     stdio: 'inherit',
   });
   return new Promise((resolve) => {
@@ -146,13 +149,14 @@ function launchMacOSApp(appPath: string): Promise<number> {
 
 // Linux: extract AppImage.tar.gz, chmod +x, run
 async function installAndLaunchLinux(
-  bundleInfo: DesktopBundleInfo
+  bundleInfo: DesktopBundleInfo,
+  args: string[]
 ): Promise<number> {
   const { archivePath, dir } = bundleInfo;
 
   const sentinel = readSentinel(dir);
   if (sentinel?.appPath && fs.existsSync(sentinel.appPath)) {
-    return launchLinuxAppImage(sentinel.appPath);
+    return launchLinuxAppImage(sentinel.appPath, args);
   }
 
   if (!archivePath || !fs.existsSync(archivePath)) {
@@ -176,13 +180,16 @@ async function installAndLaunchLinux(
     appPath: appImagePath,
   });
 
-  return launchLinuxAppImage(appImagePath);
+  return launchLinuxAppImage(appImagePath, args);
 }
 
-function launchLinuxAppImage(appImagePath: string): Promise<number> {
+function launchLinuxAppImage(
+  appImagePath: string,
+  args: string[]
+): Promise<number> {
   const appImage = path.basename(appImagePath);
   console.error(`Launching ${appImage}...`);
-  const proc = spawn(appImagePath, [], {
+  const proc = spawn(appImagePath, args, {
     stdio: 'inherit',
     detached: false,
   });
@@ -193,7 +200,8 @@ function launchLinuxAppImage(appImagePath: string): Promise<number> {
 
 // Windows: run NSIS setup.exe silently, then launch installed app
 async function installAndLaunchWindows(
-  bundleInfo: DesktopBundleInfo
+  bundleInfo: DesktopBundleInfo,
+  args: string[]
 ): Promise<number> {
   const { dir } = bundleInfo;
 
@@ -201,7 +209,7 @@ async function installAndLaunchWindows(
   if (sentinel?.appPath) {
     const appExe = path.join(sentinel.appPath, 'Vibe Kanban.exe');
     if (fs.existsSync(appExe)) {
-      return launchWindowsApp(appExe);
+      return launchWindowsApp(appExe, args);
     }
   }
 
@@ -242,9 +250,7 @@ async function installAndLaunchWindows(
         type: 'nsis-exe',
         appPath: defaultDir,
       });
-      return launchWindowsApp(
-        path.join(defaultDir, 'Vibe Kanban.exe')
-      );
+      return launchWindowsApp(path.join(defaultDir, 'Vibe Kanban.exe'), args);
     }
     console.error(
       'Installation complete. Please launch Vibe Kanban from your Start menu.'
@@ -256,7 +262,7 @@ async function installAndLaunchWindows(
 
   const appExe = path.join(installDir, 'Vibe Kanban.exe');
   if (fs.existsSync(appExe)) {
-    return launchWindowsApp(appExe);
+    return launchWindowsApp(appExe, args);
   }
 
   console.error(
@@ -265,22 +271,23 @@ async function installAndLaunchWindows(
   return 0;
 }
 
-function launchWindowsApp(appExe: string): number {
+function launchWindowsApp(appExe: string, args: string[]): number {
   console.error('Launching Vibe Kanban...');
-  spawn(appExe, [], { detached: true, stdio: 'ignore' }).unref();
+  spawn(appExe, args, { detached: true, stdio: 'ignore' }).unref();
   return 0;
 }
 
 export async function installAndLaunch(
   bundleInfo: DesktopBundleInfo,
-  osPlatform: NodeJS.Platform
+  osPlatform: NodeJS.Platform,
+  args: string[] = []
 ): Promise<number> {
   if (osPlatform === 'darwin') {
-    return installAndLaunchMacOS(bundleInfo);
+    return installAndLaunchMacOS(bundleInfo, args);
   } else if (osPlatform === 'linux') {
-    return installAndLaunchLinux(bundleInfo);
+    return installAndLaunchLinux(bundleInfo, args);
   } else if (osPlatform === 'win32') {
-    return installAndLaunchWindows(bundleInfo);
+    return installAndLaunchWindows(bundleInfo, args);
   }
   throw new Error(
     `Desktop app not supported on platform: ${osPlatform}`
