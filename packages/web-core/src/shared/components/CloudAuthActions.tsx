@@ -1,5 +1,11 @@
-import { SignInIcon, UserPlusIcon } from '@phosphor-icons/react';
+import {
+  SignInIcon,
+  UserCircleIcon,
+  UserPlusIcon,
+} from '@phosphor-icons/react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { invoke } from '@tauri-apps/api/core';
 import { SidebarBarButton } from '@vibe/ui/components/SidebarBarButton';
 import {
   DEFAULT_AURAPUNK_CLOUD_URL,
@@ -14,39 +20,112 @@ import {
 export function CloudAuthActions() {
   const { t } = useTranslation('common');
   const cloudUrl = useCloudUrl();
+  const [account, setAccount] = useState<CloudAccount | null>(null);
+  const [pending, setPending] = useState(false);
 
-  const openCloudAuth = () => {
+  useEffect(() => {
     try {
-      const url = new URL('/dashboard?source=desktop', cloudUrl);
-      window.open(url.toString(), '_blank', 'noopener,noreferrer');
+      const saved = window.localStorage.getItem(CLOUD_ACCOUNT_STORAGE_KEY);
+      if (saved) setAccount(JSON.parse(saved) as CloudAccount);
     } catch {
-      // A malformed self-hosted URL should not break the rest of the sidebar.
-      window.open(
-        `${DEFAULT_AURAPUNK_CLOUD_URL}/dashboard`,
-        '_blank',
-        'noopener,noreferrer'
-      );
+      // Ignore malformed device-local account state.
     }
-  };
+  }, []);
+
+  const openExternal = useCallback(async (url: string) => {
+    if ('__TAURI_INTERNALS__' in window) {
+      await invoke('open_external_url', { url });
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }, []);
+
+  const openCloudAuth = useCallback(async () => {
+    const state = crypto.randomUUID().replaceAll('-', '');
+    try {
+      const url = new URL('/desktop-auth', cloudUrl);
+      url.searchParams.set('state', state);
+      setPending(true);
+      await openExternal(url.toString());
+
+      const deadline = Date.now() + 2 * 60 * 1000;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => window.setTimeout(resolve, 1500));
+        const response = await fetch(
+          `${url.origin}/api/desktop-auth/status?state=${state}`,
+          { cache: 'no-store' }
+        );
+        if (!response.ok) continue;
+        const result = (await response.json()) as DesktopAuthStatus;
+        if (result.status !== 'complete') continue;
+
+        setAccount(result.account);
+        window.localStorage.setItem(
+          CLOUD_ACCOUNT_STORAGE_KEY,
+          JSON.stringify(result.account)
+        );
+        break;
+      }
+    } catch (error) {
+      console.warn('Could not start AuraPunk Cloud sign-in', error);
+      // A malformed self-hosted URL or an unavailable external opener should
+      // not break the local application.
+      try {
+        await openExternal(`${DEFAULT_AURAPUNK_CLOUD_URL}/dashboard`);
+      } catch {
+        // Keep the local app usable when no external browser is available.
+      }
+    } finally {
+      setPending(false);
+    }
+  }, [cloudUrl, openExternal]);
+
+  const openDashboard = useCallback(() => {
+    void openExternal(`${cloudUrl.replace(/\/$/, '')}/dashboard`);
+  }, [cloudUrl, openExternal]);
 
   return (
     <>
+      {account && (
+        <SidebarBarButton
+          label="Account"
+          icon={UserCircleIcon}
+          onClick={openDashboard}
+          title={account.email}
+          aria-label={`Signed in as ${account.email}`}
+          className="text-normal"
+        />
+      )}
       <SidebarBarButton
         label={t('sidebar.logIn')}
         icon={SignInIcon}
-        onClick={openCloudAuth}
+        onClick={() => void openCloudAuth()}
         title={t('sidebar.cloudAuthTitle')}
         aria-label={t('sidebar.logIn')}
         className="text-normal"
+        disabled={pending}
       />
       <SidebarBarButton
         label={t('sidebar.signUp')}
         icon={UserPlusIcon}
-        onClick={openCloudAuth}
+        onClick={() => void openCloudAuth()}
         title={t('sidebar.cloudAuthTitle')}
         aria-label={t('sidebar.signUp')}
         className="text-normal"
+        disabled={pending}
       />
     </>
   );
 }
+
+type CloudAccount = {
+  userId: string;
+  displayName: string;
+  email: string;
+};
+
+type DesktopAuthStatus =
+  | { status: 'pending' }
+  | { status: 'complete'; account: CloudAccount };
+
+const CLOUD_ACCOUNT_STORAGE_KEY = 'aurapunk-cloud-account';

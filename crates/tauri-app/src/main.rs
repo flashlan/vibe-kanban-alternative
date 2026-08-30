@@ -10,6 +10,11 @@ use services::services::{
 };
 #[cfg(target_os = "macos")]
 use tauri::Manager;
+#[cfg(target_os = "macos")]
+use tauri::menu::MenuItemKind;
+#[cfg(not(target_os = "macos"))]
+use tauri::menu::Submenu;
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::{Emitter, Listener};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
@@ -81,6 +86,17 @@ async fn show_system_notification(
 fn read_clipboard_text() -> Result<String, String> {
     let mut clipboard = arboard::Clipboard::new().map_err(|e| e.to_string())?;
     clipboard.get_text().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn open_external_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("Only HTTP(S) URLs can be opened externally".to_string());
+    }
+
+    app.opener()
+        .open_url(&url, None::<&str>)
+        .map_err(|error| error.to_string())
 }
 
 #[async_trait]
@@ -159,7 +175,8 @@ fn main() {
         )
         .invoke_handler(tauri::generate_handler![
             show_system_notification,
-            read_clipboard_text
+            read_clipboard_text,
+            open_external_url
         ]);
 
     // Unlock WKWebView's native refresh rate on macOS ProMotion / high-Hz displays.
@@ -190,8 +207,24 @@ fn main() {
             set_macos_dock_icon();
 
             // Initialize native application menu (App/File/Edit/View/Window/Help)
-            let menu = tauri::menu::Menu::default(app.handle())?;
+            // and expose the actions that are otherwise only available from
+            // the in-app toolbar/command palette.
+            let menu = build_application_menu(app.handle())?;
             let _ = app.set_menu(menu);
+            app.on_menu_event(|app, event| {
+                let action = match event.id().as_ref() {
+                    "native-settings" => Some("settings"),
+                    "native-project-settings" => Some("project-settings"),
+                    "native-new-issue" => Some("new-issue"),
+                    _ => None,
+                };
+
+                if let Some(action) = action {
+                    if let Err(error) = app.emit("native-menu-action", action) {
+                        tracing::warn!(?error, "Failed to dispatch native menu action");
+                    }
+                }
+            });
 
             if cfg!(debug_assertions) {
                 // Dev mode: frontend dev server (Vite) and backend are started
@@ -462,6 +495,50 @@ fn create_window<R: tauri::Runtime, M: tauri::Manager<R>>(
         StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED | StateFlags::FULLSCREEN,
     );
     Ok(window)
+}
+
+/// Add app actions to the native menu on every desktop platform.
+///
+/// macOS already has an application submenu created by Tauri's default menu;
+/// append to that submenu so we do not create a duplicate "Vibe Kanban" menu.
+/// Windows and Linux do not have that implicit application submenu, so they
+/// receive an explicit one at the beginning of the menu bar.
+fn build_application_menu<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<Menu<R>> {
+    let menu = Menu::default(app)?;
+    let settings = MenuItem::with_id(app, "native-settings", "Settings…", true, None::<&str>)?;
+    let project_settings = MenuItem::with_id(
+        app,
+        "native-project-settings",
+        "Project Settings",
+        true,
+        None::<&str>,
+    )?;
+    let new_issue = MenuItem::with_id(app, "native-new-issue", "New Issue", true, None::<&str>)?;
+    let separator = PredefinedMenuItem::separator(app)?;
+
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(MenuItemKind::Submenu(app_menu)) = menu.items()?.into_iter().next() {
+            app_menu.insert(&settings, 2)?;
+            app_menu.insert(&project_settings, 3)?;
+            app_menu.insert(&separator, 4)?;
+            app_menu.insert(&new_issue, 5)?;
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let app_menu = Submenu::with_id_and_items(
+            app,
+            "native-app-menu",
+            "Vibe Kanban",
+            true,
+            &[&settings, &project_settings, &separator, &new_issue],
+        )?;
+        menu.prepend(&app_menu)?;
+    }
+
+    Ok(menu)
 }
 
 /// Takes the pending update bytes (if any) and installs them.

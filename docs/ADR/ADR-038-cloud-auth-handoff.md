@@ -17,10 +17,14 @@ cloud session in a local webview.
 
 ## Decision
 
-Cloud authentication actions in the desktop app open the AuraPunk Cloud
-dashboard in the user's browser. The browser completes the hosted sign-in
-flow and remains the owner of the provider session. The app only knows the
-configured cloud URL and never receives credentials or browser cookies.
+Cloud authentication actions in the desktop app start a short-lived,
+single-use device handoff. The app generates an unpredictable state value and
+opens AuraPunk Cloud in the user's browser. The browser completes the hosted
+ChatGPT sign-in flow; the cloud site associates the state with the
+authenticated account and the app consumes the result through a CORS-enabled
+status endpoint. Only the confirmed account identity is returned to the app.
+The browser remains the owner of the provider session, and the app never
+receives credentials, browser cookies, or provider tokens.
 
 The URL is returned by `/api/app-mode` and can be overridden for self-hosted
 deployments with `AURAPUNK_CLOUD_URL`. The default is the official AuraPunk
@@ -32,6 +36,7 @@ Cloud URL. The actions are exposed only when the app is launched with
 - Local mode remains independent of cloud availability and authentication.
 - Login and sign-up actions use the same hosted account system as the site.
 - Self-hosted installations can point the app at their own account service.
-- The desktop app does not yet display the browser's authenticated account
-  state inside its local UI; a future device authorization flow may add that
-  without changing the credential boundary.
+- The desktop app displays the confirmed account identity locally after the
+  one-time handoff. The identity is device-local UI state, not a cloud session.
+- Future cloud API access still needs a separate scoped token exchange; the
+  identity handoff intentionally does not grant API authorization.

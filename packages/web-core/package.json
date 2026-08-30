@@ -48,6 +48,7 @@
     "@tanstack/react-router": "^1.161.1",
     "@tanstack/react-virtual": "^3.13.23",
     "@tanstack/zod-adapter": "^1.161.1",
+    "@tauri-apps/api": "^2.10.1",
     "@uiw/react-codemirror": "^4.25.1",
     "@vibe/ui": "workspace:*",
     "@virtuoso.dev/message-list": "^1.13.3",
@@ -109,6 +110,7 @@
     "@rjsf/validator-ajv8": "6.1.1",
     "@tailwindcss/container-queries": "^0.1.1",
     "@tanstack/router-plugin": "^1.161.1",
+    "@testing-library/react": "^16.3.2",
     "@types/lodash": "^4.17.20",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
@@ -127,13 +129,12 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
     "eslint-plugin-unused-imports": "^4.1.4",
+    "jsdom": "^27.4.0",
     "postcss": "^8.4.32",
     "prettier": "^3.6.1",
     "tailwindcss": "^3.4.0",
     "typescript": "^5.9.2",
     "vite": "^7.3.1",
-    "vitest": "^4.1.9",
-    "@testing-library/react": "^16.3.2",
-    "jsdom": "^27.4.0"
+    "vitest": "^4.1.9"
   }
 }
