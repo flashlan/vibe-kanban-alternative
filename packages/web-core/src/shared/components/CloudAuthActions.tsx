@@ -1,32 +1,48 @@
 import { SignInIcon, UserPlusIcon } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { SidebarBarButton } from '@vibe/ui/components/SidebarBarButton';
+import { useCloudUrl } from '@/shared/hooks/useAppMode';
 
 /**
- * Cloud authentication entry points. The cloud account service is not part
- * of this local-first build yet, so the controls stay visible but disabled
- * when `--cloud` is selected instead of implying that authentication works.
+ * Cloud authentication entry points. Authentication is completed by the
+ * AuraPunk Cloud website so the desktop app never handles a provider password
+ * or stores a browser session itself.
  */
 export function CloudAuthActions() {
   const { t } = useTranslation('common');
+  const cloudUrl = useCloudUrl();
+
+  const openCloudAuth = () => {
+    try {
+      const url = new URL('/dashboard?source=desktop', cloudUrl);
+      window.open(url.toString(), '_blank', 'noopener,noreferrer');
+    } catch {
+      // A malformed self-hosted URL should not break the rest of the sidebar.
+      window.open(
+        'https://aurapunk-cloud.datapoint.chatgpt.site/dashboard',
+        '_blank',
+        'noopener,noreferrer'
+      );
+    }
+  };
 
   return (
     <>
       <SidebarBarButton
         label={t('sidebar.logIn')}
         icon={SignInIcon}
-        disabled
-        title={t('sidebar.cloudAuthComingSoon')}
+        onClick={openCloudAuth}
+        title={t('sidebar.cloudAuthTitle')}
         aria-label={t('sidebar.logIn')}
-        className="cursor-not-allowed opacity-70 hover:bg-transparent hover:text-normal"
+        className="text-normal"
       />
       <SidebarBarButton
         label={t('sidebar.signUp')}
         icon={UserPlusIcon}
-        disabled
-        title={t('sidebar.cloudAuthComingSoon')}
+        onClick={openCloudAuth}
+        title={t('sidebar.cloudAuthTitle')}
         aria-label={t('sidebar.signUp')}
-        className="cursor-not-allowed opacity-70 hover:bg-transparent hover:text-normal"
+        className="text-normal"
       />
     </>
   );

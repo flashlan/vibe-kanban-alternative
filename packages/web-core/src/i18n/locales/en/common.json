@@ -544,7 +544,7 @@
     "settings": "Settings",
     "logIn": "Log in",
     "signUp": "Sign up",
-    "cloudAuthComingSoon": "Cloud authentication is coming soon",
+    "cloudAuthTitle": "Open AuraPunk Cloud to continue",
     "bottomBarLabel": "Sidebar actions",
     "orchestratorPrompt": "Orchestrator prompt",
     "orchestratorPromptSet": "Orchestrator prompt is set",

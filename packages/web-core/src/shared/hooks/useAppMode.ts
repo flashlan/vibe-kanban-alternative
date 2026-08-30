@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { handleApiResponse, makeRequest } from '@/shared/lib/api';
 
-interface AppModeResponse {
+export interface AppModeResponse {
   mode: 'local' | 'cloud';
   cloud: boolean;
+  cloud_url: string;
 }
 async function fetchAppMode(): Promise<AppModeResponse> {
   const response = await makeRequest('/api/app-mode');
@@ -23,4 +24,15 @@ export function useIsCloudMode(): boolean {
   });
 
   return data?.cloud ?? false;
+}
+
+export function useCloudUrl(): string {
+  const { data } = useQuery({
+    queryKey: ['app-mode'],
+    queryFn: fetchAppMode,
+    staleTime: Infinity,
+    retry: false,
+  });
+
+  return data?.cloud_url ?? 'https://aurapunk-cloud.datapoint.chatgpt.site';
 }
