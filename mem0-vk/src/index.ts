@@ -81,6 +81,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { Queue, Worker, type Job } from "bullmq";
 import IORedis from "ioredis";
+import { timingSafeEqual } from "node:crypto";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 
@@ -154,6 +155,70 @@ const config = {
   // `memoryStoreQueue`/`memoryStoreWorker` setup below.
   redisUrl: process.env.REDIS_URL || "redis://localhost:6379",
 };
+
+// Service-to-service authentication is opt-in for backwards-compatible local
+// development, but becomes mandatory as soon as a token is configured. Cloud
+// deployments additionally set MEM0_LICENSE_CHECK_URL; memory operations then
+// require an account identity and an active license response from the account
+// service before they are allowed to proceed.
+const mem0ApiToken = (process.env.MEM0_API_TOKEN || "").trim();
+const licenseCheckUrl = (process.env.MEM0_LICENSE_CHECK_URL || "").trim().replace(/\/$/, "");
+const licenseCheckToken = (process.env.MEM0_LICENSE_CHECK_TOKEN || "").trim();
+const licenseCache = new Map<string, number>();
+const LICENSE_CACHE_MS = 30_000;
+
+function safeTokenEqual(left: string, right: string): boolean {
+  const a = Buffer.from(left);
+  const b = Buffer.from(right);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function accountIdFromRequest(c: any): string {
+  return (c.req.header("X-AuraPunk-Account-Id") || "").trim();
+}
+
+function scopedMemoryUserId(c: any, userId: string): string {
+  const accountId = accountIdFromRequest(c);
+  return licenseCheckUrl && accountId ? `${accountId}:${userId}` : userId;
+}
+
+async function hasActiveLicense(accountId: string): Promise<boolean> {
+  if (!licenseCheckUrl) return true;
+  if (!accountId || !licenseCheckToken) return false;
+  const cachedUntil = licenseCache.get(accountId);
+  if (cachedUntil && cachedUntil > Date.now()) return true;
+
+  try {
+    const response = await fetch(licenseCheckUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${licenseCheckToken}`,
+      },
+      body: JSON.stringify({ account_id: accountId }),
+      signal: AbortSignal.timeout(3_000),
+    });
+    if (!response.ok) return false;
+    const body = await response.json().catch(() => ({} as any));
+    const active = body?.active === true || body?.licensed === true;
+    if (active) licenseCache.set(accountId, Date.now() + LICENSE_CACHE_MS);
+    return active;
+  } catch (error) {
+    console.error(`[auth] license check failed: ${(error as Error).message}`);
+    return false;
+  }
+}
+
+const MEMORY_OPERATION_PREFIXES = [
+  "/api/memories",
+  "/api/search",
+  "/api/graph/",
+  "/api/re-extract/",
+];
+
+function isMemoryOperation(pathname: string): boolean {
+  return MEMORY_OPERATION_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
 
 // ── Runtime configuration (persisted, overrides env) ────────────────────────
 // The Settings → Memory panel in vibe-kanban writes these overrides so the
@@ -1383,6 +1448,33 @@ mcpTool(
 
 const app = new Hono();
 
+// All non-health traffic uses the same Bearer contract for the split Docker
+// stack, local embedded deployments, and the hosted Mem0 service. The token
+// remains optional when no token is configured so existing development tests
+// and deliberately open local installs keep working. Hosted deployments must
+// set both MEM0_API_TOKEN and the license-check variables.
+app.use("*", async (c, next) => {
+  const pathname = c.req.path;
+  if (pathname !== "/health" && mem0ApiToken) {
+    const authorization = c.req.header("Authorization") || "";
+    if (!safeTokenEqual(authorization, `Bearer ${mem0ApiToken}`)) {
+      return c.json({ error: "Missing or invalid Mem0 bearer token" }, 401);
+    }
+  }
+
+  if (pathname !== "/health" && licenseCheckUrl && isMemoryOperation(pathname)) {
+    const accountId = accountIdFromRequest(c);
+    if (!accountId) {
+      return c.json({ error: "Account identity is required for server memory" }, 401);
+    }
+    if (!(await hasActiveLicense(accountId))) {
+      return c.json({ error: "An active AuraPunk license is required for server memory" }, 403);
+    }
+  }
+
+  return next();
+});
+
 app.get("/", (c) => c.json({
   name: "mem0-vk",
   version: "1.0.0",
@@ -1422,7 +1514,7 @@ app.all("/mcp", async (c) => {
 app.post("/api/memories", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const content: string = body?.content;
-  const user_id: string | undefined = body?.user_id;
+  const user_id: string = scopedMemoryUserId(c, body?.user_id || "");
   const commit_sha: string | undefined =
     typeof body?.commit_sha === "string" && body.commit_sha ? body.commit_sha : undefined;
   if (!content || typeof content !== "string") {
@@ -1453,7 +1545,7 @@ app.get("/api/memories/jobs/:jobId", async (c) => {
 app.post("/api/search", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const query: string = body?.query;
-  const user_id: string | undefined = body?.user_id;
+  const user_id: string = scopedMemoryUserId(c, body?.user_id || "");
   const limit: number | undefined = body?.limit;
   if (!query || typeof query !== "string") {
     return c.json({ error: "missing string field 'query'" }, 400);
@@ -1465,7 +1557,7 @@ app.post("/api/search", async (c) => {
 app.post("/api/graph/traverse", async (c) => {
   const body = await c.req.json().catch(() => ({}));
   const start: string = body?.start;
-  const user_id: string | undefined = body?.user_id;
+  const user_id: string = scopedMemoryUserId(c, body?.user_id || "");
   const hops: number | undefined = body?.hops;
   const direction: "out" | "in" | "both" | undefined = body?.direction;
   if (!start || typeof start !== "string") {
@@ -1477,7 +1569,7 @@ app.post("/api/graph/traverse", async (c) => {
 });
 
 app.post("/api/re-extract/:user_id", async (c) => {
-  const user_id: string = c.req.param("user_id") || "";
+  const user_id = scopedMemoryUserId(c, c.req.param("user_id") || "");
   const res = await reExtractGraph(user_id);
   return c.json({ ok: true, ...res });
 });
@@ -1541,7 +1633,7 @@ app.post("/api/config", async (c) => {
 });
 
 app.get("/api/memories/:user_id", async (c) => {
-  const user_id = c.req.param("user_id");
+  const user_id = scopedMemoryUserId(c, c.req.param("user_id"));
   const all = await memoryRecall(user_id);
   // prompt_block: ready-to-inject text — put it AFTER system+history in the prompt.
   return c.json({ user_id, count: all.length, prompt_block: formatMemories(all), memories: all });
@@ -1551,7 +1643,9 @@ app.patch("/api/memories/:id", async (c) => {
   const id = c.req.param("id");
   const body = await c.req.json().catch(() => ({}));
   const content: string = body?.content;
-  const user_id: string | undefined = body?.user_id;
+  const user_id: string | undefined = typeof body?.user_id === "string"
+    ? scopedMemoryUserId(c, body.user_id)
+    : undefined;
   if (!content || typeof content !== "string") {
     return c.json({ error: "missing string field 'content'" }, 400);
   }
@@ -1570,7 +1664,7 @@ app.delete("/api/memories/:id", async (c) => {
     const res = await memoryForget(raw);
     return c.json(res);
   }
-  const res = await memoryForget(undefined, raw);
+  const res = await memoryForget(undefined, scopedMemoryUserId(c, raw));
   return c.json(res);
 });
 

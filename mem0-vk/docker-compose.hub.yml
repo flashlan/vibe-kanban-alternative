@@ -5,6 +5,9 @@ services:
     ports:
       - "${MEM0_PORT:-8000}:8000"
     environment:
+      - MEM0_API_TOKEN=${MEM0_API_TOKEN:-}
+      - MEM0_LICENSE_CHECK_URL=${MEM0_LICENSE_CHECK_URL:-}
+      - MEM0_LICENSE_CHECK_TOKEN=${MEM0_LICENSE_CHECK_TOKEN:-}
       - MEM0_LLM_PROVIDER=${MEM0_LLM_PROVIDER:-groq}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - GROQ_MODEL=${GROQ_MODEL:-llama-3.3-70b-versatile}

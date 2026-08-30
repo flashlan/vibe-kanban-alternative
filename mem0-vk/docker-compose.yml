@@ -57,6 +57,14 @@ services:
       - MEM0_COLLECTION=${MEM0_COLLECTION:-mem0-vk}
       - MEM0_DEFAULT_USER=${MEM0_DEFAULT_USER:-default}
 
+      # ── API authentication / hosted license gate ─────────────────────────
+      # When set, every non-health API and MCP request must carry this bearer
+      # token. Hosted deployments additionally set the license-check URL and
+      # token; memory operations then require an active account license.
+      - MEM0_API_TOKEN=${MEM0_API_TOKEN:-}
+      - MEM0_LICENSE_CHECK_URL=${MEM0_LICENSE_CHECK_URL:-}
+      - MEM0_LICENSE_CHECK_TOKEN=${MEM0_LICENSE_CHECK_TOKEN:-}
+
       # ── Vector dimension (MUST match the winning embedding backend) ─────────
       # all-MiniLM-L6-v2 → 384 | text-embedding-3-small → 1536 | your llama-server model → its dim
       - EMBED_DIM=${EMBED_DIM:-384}

@@ -41,6 +41,12 @@ inside the LXC.
 | Website | `http://192.168.1.168:3000/` |
 | Vibe Kanban demo | `http://192.168.1.168:3000/demo/` |
 
+Mem0 API calls use `Authorization: Bearer <MEM0_API_TOKEN>` when a token is
+configured. For local/Docker installations, put the same token in the Mem0
+container and the Vibe Kanban service environment. Hosted Mem0 additionally
+requires `X-AuraPunk-Account-Id` and checks the account's active license before
+allowing memory operations; local and server memory remain separate stores.
+
 Connect with:
 
 ```bash

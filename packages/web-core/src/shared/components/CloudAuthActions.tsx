@@ -12,6 +12,7 @@ import {
   DEFAULT_AURAPUNK_CLOUD_URL,
   useCloudUrl,
 } from '@/shared/hooks/useAppMode';
+import { makeRequest } from '@/shared/lib/remoteApi';
 
 /**
  * Cloud authentication entry points. Authentication is completed by the
@@ -24,14 +25,30 @@ export function CloudAuthActions() {
   const [account, setAccount] = useState<CloudAccount | null>(null);
   const [pending, setPending] = useState(false);
 
+  const syncMem0Account = useCallback(async (accountId: string | null) => {
+    try {
+      await makeRequest('/api/usage/mem0-account', {
+        method: 'PUT',
+        body: JSON.stringify({ account_id: accountId }),
+      });
+    } catch {
+      // The desktop app remains usable when its optional local backend is not
+      // available; hosted Mem0 will simply reject requests without identity.
+    }
+  }, []);
+
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(CLOUD_ACCOUNT_STORAGE_KEY);
-      if (saved) setAccount(JSON.parse(saved) as CloudAccount);
+      if (saved) {
+        const parsed = JSON.parse(saved) as CloudAccount;
+        setAccount(parsed);
+        void syncMem0Account(parsed.userId);
+      }
     } catch {
       // Ignore malformed device-local account state.
     }
-  }, []);
+  }, [syncMem0Account]);
 
   const openExternal = useCallback(async (url: string) => {
     if ('__TAURI_INTERNALS__' in window) {
@@ -61,6 +78,7 @@ export function CloudAuthActions() {
         if (result.status !== 'complete') continue;
 
         setAccount(result.account);
+        void syncMem0Account(result.account.userId);
         window.localStorage.setItem(
           CLOUD_ACCOUNT_STORAGE_KEY,
           JSON.stringify(result.account)
@@ -79,7 +97,7 @@ export function CloudAuthActions() {
     } finally {
       setPending(false);
     }
-  }, [cloudUrl, openExternal]);
+  }, [cloudUrl, openExternal, syncMem0Account]);
 
   const openDashboard = useCallback(() => {
     void openExternal(`${cloudUrl.replace(/\/$/, '')}/dashboard`);
@@ -88,7 +106,8 @@ export function CloudAuthActions() {
   const signOut = useCallback(() => {
     window.localStorage.removeItem(CLOUD_ACCOUNT_STORAGE_KEY);
     setAccount(null);
-  }, []);
+    void syncMem0Account(null);
+  }, [syncMem0Account]);
 
   return (
     <>

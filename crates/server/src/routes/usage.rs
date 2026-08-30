@@ -13,6 +13,7 @@ use axum::{
     routing::{get, post},
 };
 use deployment::Deployment;
+use executors::provider_usage::ProviderQuotaSnapshot;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use services::services::mem0_relevance::Mem0RelevanceSummary;
@@ -64,6 +65,11 @@ struct UpdateMem0ConnectionRequest {
     source: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct UpdateMem0AccountRequest {
+    account_id: Option<String>,
+}
+
 fn mem0_connection() -> Mem0Connection {
     let url = mem0_url();
     Mem0Connection {
@@ -73,6 +79,24 @@ fn mem0_connection() -> Mem0Connection {
             .unwrap_or_else(|_| DEFAULT_LOCAL_MEM0_URL.to_string()),
         cloud_url: std::env::var("AURAPUNK_CLOUD_MEM0_URL")
             .unwrap_or_else(|_| DEFAULT_CLOUD_MEM0_URL.to_string()),
+    }
+}
+
+/// Apply the same Mem0 API authentication used by the MCP client. The token
+/// is shared by the app backend and either the local/Docker or hosted Mem0
+/// service; the optional account header lets a hosted service enforce the
+/// signed-in user's active license and namespace.
+fn authorize_mem0(request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    let request =
+        match std::env::var("MEM0_API_TOKEN").or_else(|_| std::env::var("AURAPUNK_MEM0_TOKEN")) {
+            Ok(token) if !token.trim().is_empty() => request.bearer_auth(token),
+            _ => request,
+        };
+    match std::env::var("MEM0_ACCOUNT_ID").or_else(|_| std::env::var("AURAPUNK_ACCOUNT_ID")) {
+        Ok(account_id) if !account_id.trim().is_empty() => {
+            request.header("X-AuraPunk-Account-Id", account_id)
+        }
+        _ => request,
     }
 }
 
@@ -120,6 +144,24 @@ pub struct IssueLifecycleSummary {
     pub avg_lifecycle_seconds: i64,
 }
 
+/// Durable token observations grouped for the Usage dashboard. These are
+/// observed normalized events, so the numbers are intentionally labelled as
+/// usage rather than billing or plan consumption.
+#[derive(Debug, Serialize, TS)]
+pub struct TokenUsageBreakdown {
+    pub issue_id: Option<String>,
+    pub issue_title: Option<String>,
+    pub agent: String,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub executions: i64,
+    pub total_tokens: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cache_read_tokens: i64,
+    pub cache_creation_tokens: i64,
+}
+
 #[derive(Debug, Serialize, TS)]
 pub struct UsageSummary {
     /// Activity over the last 30 days, one row per (day, agent).
@@ -146,6 +188,12 @@ pub struct UsageSummary {
     /// via `POST /api/usage/token-telemetry`. In-memory only — resets on
     /// server restart.
     pub token_telemetry: TokenTelemetrySummary,
+    /// Durable normalized token observations grouped by issue, agent and
+    /// model over the same 30-day window.
+    pub token_usage: Vec<TokenUsageBreakdown>,
+    /// Best-effort provider account quota snapshots. These are populated only
+    /// when the provider CLI/API exposes a machine-readable value.
+    pub provider_limits: Vec<ProviderQuotaSnapshot>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
@@ -241,6 +289,10 @@ pub fn router() -> Router<DeploymentImpl> {
             "/usage/mem0-connection",
             get(get_mem0_connection).put(update_mem0_connection),
         )
+        .route(
+            "/usage/mem0-account",
+            get(get_mem0_account).put(update_mem0_account),
+        )
         .route("/usage/mem0-status", get(mem0_status))
         .route("/usage/mem0-relevance", post(report_mem0_relevance))
         .route("/usage/token-telemetry", post(report_token_telemetry))
@@ -304,7 +356,10 @@ fn url_host(input: &str) -> Option<String> {
 /// mem0: reachable (`/api/config` 2xx) AND its own `/health` reports `ok`.
 /// Returns `(reachable, healthy)`.
 async fn check_mem0(client: &reqwest::Client, base: &str) -> (bool, bool) {
-    let reachable = match client.get(format!("{base}/api/config")).send().await {
+    let reachable = match authorize_mem0(client.get(format!("{base}/api/config")))
+        .send()
+        .await
+    {
         Ok(r) if r.status().is_success() => true,
         _ => return (false, false),
     };
@@ -353,8 +408,7 @@ async fn check_mem0_vector_search(client: &reqwest::Client, base: &str) -> bool 
         "query": "mem0 health check",
         "limit": 1,
     });
-    match client
-        .post(format!("{base}/api/search"))
+    match authorize_mem0(client.post(format!("{base}/api/search")))
         .json(&body)
         .send()
         .await
@@ -470,6 +524,45 @@ async fn update_mem0_connection(
     ResponseJson(ApiResponse::success(mem0_connection()))
 }
 
+fn current_mem0_account() -> Option<String> {
+    std::env::var("MEM0_ACCOUNT_ID")
+        .or_else(|_| std::env::var("AURAPUNK_ACCOUNT_ID"))
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+}
+
+async fn get_mem0_account() -> ResponseJson<ApiResponse<Option<String>>> {
+    ResponseJson(ApiResponse::success(current_mem0_account()))
+}
+
+async fn update_mem0_account(
+    Json(request): Json<UpdateMem0AccountRequest>,
+) -> ResponseJson<ApiResponse<Option<String>>> {
+    let account_id = request
+        .account_id
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty());
+
+    if let Some(account_id) = &account_id {
+        let valid = account_id.len() <= 128
+            && account_id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'));
+        if !valid {
+            return ResponseJson(ApiResponse::error(
+                "account_id must contain only letters, numbers, '_' or '-'",
+            ));
+        }
+        unsafe { std::env::set_var("MEM0_ACCOUNT_ID", account_id) };
+        unsafe { std::env::remove_var("AURAPUNK_ACCOUNT_ID") };
+    } else {
+        unsafe { std::env::remove_var("MEM0_ACCOUNT_ID") };
+        unsafe { std::env::remove_var("AURAPUNK_ACCOUNT_ID") };
+    }
+
+    ResponseJson(ApiResponse::success(account_id))
+}
+
 /// Body posted by the `vibe_kanban_mcp` process (a separate process from
 /// this server) after each `memory_search` call, once per call — see
 /// `crates/mcp/src/task_server/tools/mem0.rs`.
@@ -534,7 +627,7 @@ async fn get_mem0_config(
         Err(_) => return ResponseJson(ApiResponse::error("failed to build mem0 client")),
     };
     let url = format!("{}/api/config", mem0_url());
-    match client.get(&url).send().await {
+    match authorize_mem0(client.get(&url)).send().await {
         Ok(r) if r.status().is_success() => match r.json::<Mem0Config>().await {
             Ok(cfg) => ResponseJson(ApiResponse::success(cfg)),
             Err(_) => ResponseJson(ApiResponse::error("failed to parse mem0 config")),
@@ -565,7 +658,7 @@ async fn put_mem0_config(
         "graph_enabled": req.graph_enabled,
         "providers": req.providers,
     });
-    match client.post(&url).json(&body).send().await {
+    match authorize_mem0(client.post(&url)).json(&body).send().await {
         Ok(r) if r.status().is_success() => match r.json::<Mem0Config>().await {
             Ok(cfg) => ResponseJson(ApiResponse::success(cfg)),
             Err(_) => ResponseJson(ApiResponse::error("failed to parse mem0 config")),
@@ -590,7 +683,7 @@ async fn fetch_mem0_tokens() -> Mem0TokenUsage {
         Err(_) => return Mem0TokenUsage::default(),
     };
     let url = format!("{}/api/usage/tokens", mem0_url());
-    let resp = match client.get(&url).send().await {
+    let resp = match authorize_mem0(client.get(&url)).send().await {
         Ok(r) if r.status().is_success() => r,
         _ => return Mem0TokenUsage::default(),
     };
@@ -751,6 +844,63 @@ async fn usage_summary(
     let mem0_relevance = deployment.mem0_relevance_service().summary();
     let token_telemetry = deployment.token_telemetry_service().summary();
 
+    #[derive(FromRow)]
+    struct TokenUsageRow {
+        issue_id: Option<Uuid>,
+        issue_title: Option<String>,
+        agent: String,
+        provider: Option<String>,
+        model: Option<String>,
+        executions: i64,
+        total_tokens: i64,
+        input_tokens: i64,
+        output_tokens: i64,
+        cache_read_tokens: i64,
+        cache_creation_tokens: i64,
+    }
+    let token_usage = sqlx::query_as::<_, TokenUsageRow>(
+        r#"SELECT tur.issue_id,
+                  i.title AS issue_title,
+                  tur.agent,
+                  tur.provider,
+                  tur.model,
+                  COUNT(DISTINCT tur.execution_process_id) AS executions,
+                  COALESCE(SUM(tur.total_tokens), 0) AS total_tokens,
+                  COALESCE(SUM(tur.input_tokens), 0) AS input_tokens,
+                  COALESCE(SUM(tur.output_tokens), 0) AS output_tokens,
+                  COALESCE(SUM(tur.cache_read_tokens), 0) AS cache_read_tokens,
+                  COALESCE(SUM(tur.cache_creation_tokens), 0) AS cache_creation_tokens
+           FROM token_usage_records tur
+           LEFT JOIN issues i ON i.id = tur.issue_id
+           WHERE tur.observed_at >= datetime('now', '-30 days')
+           GROUP BY tur.issue_id, i.title, tur.agent, tur.provider, tur.model
+           ORDER BY total_tokens DESC"#,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .map(|row| TokenUsageBreakdown {
+        issue_id: row.issue_id.map(|id| id.to_string()),
+        issue_title: row.issue_title,
+        agent: row.agent,
+        provider: row.provider,
+        model: row.model,
+        executions: row.executions,
+        total_tokens: row.total_tokens,
+        input_tokens: row.input_tokens,
+        output_tokens: row.output_tokens,
+        cache_read_tokens: row.cache_read_tokens,
+        cache_creation_tokens: row.cache_creation_tokens,
+    })
+    .collect();
+
+    // Provider quota is account state reported by the executor process rather
+    // than usage inferred from our local token ledger. Keep the distinction
+    // explicit: a missing snapshot means the provider did not expose a safe
+    // live value, not that the account has no remaining quota.
+    let provider_limits = executors::provider_usage::snapshots();
+
     ResponseJson(ApiResponse::success(UsageSummary {
         activity,
         issues,
@@ -761,6 +911,8 @@ async fn usage_summary(
         mem0_tokens,
         mem0_relevance,
         token_telemetry,
+        token_usage,
+        provider_limits,
     }))
 }
 
@@ -783,7 +935,7 @@ async fn re_extract(
     };
     let user_id = q.user_id.unwrap_or_else(|| "default".to_string());
     let url = format!("{}/api/re-extract/{}", mem0_url(), user_id);
-    match client.post(&url).send().await {
+    match authorize_mem0(client.post(&url)).send().await {
         Ok(r) if r.status().is_success() => match r.json::<ReExtractResponse>().await {
             Ok(res) => ResponseJson(ApiResponse::success(res)),
             Err(_) => ResponseJson(ApiResponse::error(

@@ -35,6 +35,22 @@ Todos os dados persistentes ficam no volume `vk_mem0_data`. As portas internas d
 
 A tela **Settings → Memory** continua funcionando com esta imagem: ela lê e grava a configuração pela API `/api/config`, persistida em `/data/config.json`. Essas chaves selecionam o LLM que extrai fatos e relações (Groq, OpenRouter, OpenAI ou Llama). Os embeddings não precisam de chave porque o modelo local já está incluído na imagem.
 
+### API authentication and hosted license checks
+
+All app-to-Mem0 traffic uses the same REST/MCP contract. Set `MEM0_API_TOKEN`
+to require `Authorization: Bearer <token>` on every request except `GET
+/health`. Configure the same token in the Vibe Kanban backend (or MCP
+environment) and in this service. Leaving it empty keeps an intentionally open
+local development install backwards-compatible.
+
+For a hosted Mem0 service, also set `MEM0_LICENSE_CHECK_URL` and
+`MEM0_LICENSE_CHECK_TOKEN`. Memory operations then require the caller to send
+`X-AuraPunk-Account-Id`; Mem0 calls the license endpoint and accepts the
+request only when it returns `{"active":true}`. Hosted memory namespaces are
+automatically prefixed by the account ID, so accounts cannot share a repo slug
+by accident. The license endpoint must be private and must validate the active
+subscription in the account database.
+
 ### Atualização segura
 
 Para atualizar uma instalação all-in-one, reutilize o mesmo volume `/data`. Remover o container não remove o volume:

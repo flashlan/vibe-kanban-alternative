@@ -15,6 +15,24 @@ fn mem0_url() -> String {
     std::env::var("MEM0_URL").unwrap_or_else(|_| "http://localhost:8000".to_string())
 }
 
+/// Apply the universal Mem0 service-to-service contract. Local/Docker and
+/// hosted Mem0 use the same bearer token variable; hosted deployments also
+/// receive the signed-in AuraPunk account identity for license validation and
+/// per-account memory scoping.
+fn authorize_mem0(request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+    let request =
+        match std::env::var("MEM0_API_TOKEN").or_else(|_| std::env::var("AURAPUNK_MEM0_TOKEN")) {
+            Ok(token) if !token.trim().is_empty() => request.bearer_auth(token),
+            _ => request,
+        };
+    match std::env::var("MEM0_ACCOUNT_ID").or_else(|_| std::env::var("AURAPUNK_ACCOUNT_ID")) {
+        Ok(account_id) if !account_id.trim().is_empty() => {
+            request.header("X-AuraPunk-Account-Id", account_id)
+        }
+        _ => request,
+    }
+}
+
 /// Default cap on returned hits when the caller doesn't specify `limit`.
 /// Keeps a vague query from flooding the agent's context with loosely
 /// related memories — see ADR-028.
@@ -399,7 +417,7 @@ impl McpServer {
             "commit_sha": commit_sha,
         });
 
-        let resp = match client.post(&url).json(&body).send().await {
+        let resp = match authorize_mem0(client.post(&url)).json(&body).send().await {
             Ok(response) if response.status().is_success() => response,
             Ok(response) => {
                 tracing::warn!(
@@ -570,7 +588,7 @@ impl McpServer {
         // the cap regardless of server support.
         let body = serde_json::json!({ "query": query, "user_id": user_id, "limit": limit });
 
-        let resp = match client.post(&url).json(&body).send().await {
+        let resp = match authorize_mem0(client.post(&url)).json(&body).send().await {
             Ok(r) if r.status().is_success() => r,
             Ok(r) => {
                 tracing::warn!(
@@ -727,7 +745,7 @@ impl McpServer {
             "direction": direction,
         });
 
-        let resp = match client.post(&url).json(&body).send().await {
+        let resp = match authorize_mem0(client.post(&url)).json(&body).send().await {
             Ok(r) if r.status().is_success() => r,
             Ok(r) => {
                 tracing::warn!(
@@ -846,7 +864,11 @@ impl McpServer {
             "hops": 1,
             "direction": "out",
         });
-        let traverse_resp = match client.post(&traverse_url).json(&traverse_body).send().await {
+        let traverse_resp = match authorize_mem0(client.post(&traverse_url))
+            .json(&traverse_body)
+            .send()
+            .await
+        {
             Ok(r) if r.status().is_success() => r,
             Ok(r) => {
                 tracing::warn!(
