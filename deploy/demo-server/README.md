@@ -28,16 +28,16 @@ inside the LXC.
 
 | Item | Value |
 | --- | --- |
-| Container | `192.168.254.107` (`mem0-server`) |
+| Container | `192.168.1.168` (`mem0-server`) |
 | Linux user | `aurapunk` (never run the app as `root`) |
 | Repository | `/home/aurapunk/demo-server` |
 | Branch | `main` |
 | Vibe Kanban project | `AuraPunk Demo` |
 | Workspace command | `PORT=4000 npm start` |
 | Smoke-test service | `aurapunk-demo-server.service` on `127.0.0.1:4100` |
-| Public gateway | `http://192.168.254.107:3000` |
-| Website | `http://192.168.254.107:3000/` |
-| Vibe Kanban demo | `http://192.168.254.107:3000/demo/` |
+| Public gateway | `http://192.168.1.168:3000` |
+| Website | `http://192.168.1.168:3000/` |
+| Vibe Kanban demo | `http://192.168.1.168:3000/demo/` |
 
 Connect with:
 
@@ -82,7 +82,7 @@ and preserve ownership:
 ```bash
 scp -r deploy/demo-server/. aurapunk-demo:/home/aurapunk/demo-server/
 ssh aurapunk-demo 'cd /home/aurapunk/demo-server && npm test && curl -fsS http://127.0.0.1:4100/health'
-ssh -i ~/.ssh/vk-miranda-192-168-1-108 root@192.168.254.107 'chown -R aurapunk:aurapunk /home/aurapunk/demo-server && systemctl restart aurapunk-demo-server.service'
+ssh -i ~/.ssh/vk-miranda-192-168-1-108 root@192.168.1.168 'chown -R aurapunk:aurapunk /home/aurapunk/demo-server && systemctl restart aurapunk-demo-server.service'
 ```
 
 The frozen demo code baseline is the revision tagged `demo-baseline`. The
@@ -112,8 +112,8 @@ Install the script in the container from the development machine and create
 the current baseline:
 
 ```bash
-scp deploy/demo-config-lock.sh root@192.168.254.107:/tmp/demo-config-lock.sh
-ssh -i ~/.ssh/vk-miranda-192-168-1-108 root@192.168.254.107 'install -o root -g root -m 755 /tmp/demo-config-lock.sh /usr/local/sbin/demo-config-lock.sh && rm -f /tmp/demo-config-lock.sh'
+scp deploy/demo-config-lock.sh root@192.168.1.168:/tmp/demo-config-lock.sh
+ssh -i ~/.ssh/vk-miranda-192-168-1-108 root@192.168.1.168 'install -o root -g root -m 755 /tmp/demo-config-lock.sh /usr/local/sbin/demo-config-lock.sh && rm -f /tmp/demo-config-lock.sh'
 demo-config-lock.sh freeze baseline-2026-08-29
 ```
 

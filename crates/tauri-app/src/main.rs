@@ -27,7 +27,7 @@ use utils::assets::config_path;
 use uuid::Uuid;
 
 const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(60 * 60);
-const DEFAULT_CLOUD_MEM0_URL: &str = "http://192.168.254.107:8000";
+const DEFAULT_CLOUD_MEM0_URL: &str = "http://192.168.1.168:8000";
 
 #[cfg(target_os = "linux")]
 mod linux_notifications;
