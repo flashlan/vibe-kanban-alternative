@@ -25,7 +25,7 @@ use uuid::Uuid;
 use crate::DeploymentImpl;
 
 const DEFAULT_LOCAL_MEM0_URL: &str = "http://localhost:8000";
-const DEFAULT_CLOUD_MEM0_URL: &str = "http://192.168.1.168:8000";
+const DEFAULT_CLOUD_MEM0_URL: &str = "http://192.168.254.107:8000";
 
 /// Default mem0 server base URL; override with `MEM0_URL`.
 fn mem0_url() -> String {

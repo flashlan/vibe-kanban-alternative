@@ -16,7 +16,7 @@ Environment=BACKEND_PORT=3100
 Environment=PREVIEW_PROXY_PORT=3103
 Environment=VK_DISABLE_BROWSER_OPEN=1
 Environment=MEM0_URL=http://127.0.0.1:8000
-Environment=VK_ALLOWED_ORIGINS=http://192.168.1.168:3000,http://localhost:3000
+Environment=VK_ALLOWED_ORIGINS=http://192.168.254.107:3000,http://localhost:3000
 Environment=RUST_LOG=info
 ExecStart=/opt/vibe-kanban-demo/target/release/server
 Restart=on-failure

@@ -40,7 +40,7 @@ Cloud URL. The actions are exposed only when the app is launched with
   one-time handoff. The identity is device-local UI state, not a cloud session.
 - Cloud-mode pilot builds may point `MEM0_URL` at the shared local AuraPunk
   Mem0 service. `AURAPUNK_CLOUD_MEM0_URL` overrides the pilot default
-  (`http://192.168.1.168:8000`); local mode keeps its normal local Mem0
+  (`http://192.168.254.107:8000`); local mode keeps its normal local Mem0
   endpoint.
 - The pilot URL selection is transport configuration, not billing
   authorization. Before exposing the service beyond the trusted local
