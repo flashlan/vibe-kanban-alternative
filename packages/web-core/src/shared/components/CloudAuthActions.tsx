@@ -1,7 +1,10 @@
 import { SignInIcon, UserPlusIcon } from '@phosphor-icons/react';
 import { useTranslation } from 'react-i18next';
 import { SidebarBarButton } from '@vibe/ui/components/SidebarBarButton';
-import { useCloudUrl } from '@/shared/hooks/useAppMode';
+import {
+  DEFAULT_AURAPUNK_CLOUD_URL,
+  useCloudUrl,
+} from '@/shared/hooks/useAppMode';
 
 /**
  * Cloud authentication entry points. Authentication is completed by the
@@ -19,7 +22,7 @@ export function CloudAuthActions() {
     } catch {
       // A malformed self-hosted URL should not break the rest of the sidebar.
       window.open(
-        'https://aurapunk-cloud.datapoint.chatgpt.site/dashboard',
+        `${DEFAULT_AURAPUNK_CLOUD_URL}/dashboard`,
         '_blank',
         'noopener,noreferrer'
       );

@@ -1,6 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { handleApiResponse, makeRequest } from '@/shared/lib/api';
 
+export const DEFAULT_AURAPUNK_CLOUD_URL =
+  'https://aurapunk-cloud.datapoint.chatgpt.site';
+
 export interface AppModeResponse {
   mode: 'local' | 'cloud';
   cloud: boolean;
@@ -34,5 +37,5 @@ export function useCloudUrl(): string {
     retry: false,
   });
 
-  return data?.cloud_url ?? 'https://aurapunk-cloud.datapoint.chatgpt.site';
+  return data?.cloud_url ?? DEFAULT_AURAPUNK_CLOUD_URL;
 }

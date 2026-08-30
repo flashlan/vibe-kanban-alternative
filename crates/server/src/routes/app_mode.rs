@@ -25,7 +25,7 @@ async fn app_mode() -> Json<ApiResponse<AppModeResponse>> {
     let cloud = std::env::var("VIBE_KANBAN_MODE")
         .map(|value| value.trim().eq_ignore_ascii_case("cloud"))
         .unwrap_or(false);
-    let cloud_url = std::env::var("VIBE_KANBAN_CLOUD_URL")
+    let cloud_url = std::env::var("AURAPUNK_CLOUD_URL")
         .ok()
         .filter(|value| !value.trim().is_empty())
         .unwrap_or_else(|| "https://aurapunk-cloud.datapoint.chatgpt.site".to_string());

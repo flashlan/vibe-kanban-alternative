@@ -23,7 +23,7 @@ flow and remains the owner of the provider session. The app only knows the
 configured cloud URL and never receives credentials or browser cookies.
 
 The URL is returned by `/api/app-mode` and can be overridden for self-hosted
-deployments with `VIBE_KANBAN_CLOUD_URL`. The default is the official AuraPunk
+deployments with `AURAPUNK_CLOUD_URL`. The default is the official AuraPunk
 Cloud URL. The actions are exposed only when the app is launched with
 `VIBE_KANBAN_MODE=cloud` (including the `--cloud` desktop launcher mode).
 
