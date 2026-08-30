@@ -1,5 +1,6 @@
 import {
   SignInIcon,
+  SignOutIcon,
   UserCircleIcon,
   UserPlusIcon,
 } from '@phosphor-icons/react';
@@ -84,6 +85,11 @@ export function CloudAuthActions() {
     void openExternal(`${cloudUrl.replace(/\/$/, '')}/dashboard`);
   }, [cloudUrl, openExternal]);
 
+  const signOut = useCallback(() => {
+    window.localStorage.removeItem(CLOUD_ACCOUNT_STORAGE_KEY);
+    setAccount(null);
+  }, []);
+
   return (
     <>
       {account && (
@@ -96,24 +102,37 @@ export function CloudAuthActions() {
           className="text-normal"
         />
       )}
-      <SidebarBarButton
-        label={t('sidebar.logIn')}
-        icon={SignInIcon}
-        onClick={() => void openCloudAuth()}
-        title={t('sidebar.cloudAuthTitle')}
-        aria-label={t('sidebar.logIn')}
-        className="text-normal"
-        disabled={pending}
-      />
-      <SidebarBarButton
-        label={t('sidebar.signUp')}
-        icon={UserPlusIcon}
-        onClick={() => void openCloudAuth()}
-        title={t('sidebar.cloudAuthTitle')}
-        aria-label={t('sidebar.signUp')}
-        className="text-normal"
-        disabled={pending}
-      />
+      {account ? (
+        <SidebarBarButton
+          label="Logout"
+          icon={SignOutIcon}
+          onClick={signOut}
+          title="Sign out of this app"
+          aria-label="Logout"
+          className="text-normal"
+        />
+      ) : (
+        <>
+          <SidebarBarButton
+            label={t('sidebar.logIn')}
+            icon={SignInIcon}
+            onClick={() => void openCloudAuth()}
+            title={t('sidebar.cloudAuthTitle')}
+            aria-label={t('sidebar.logIn')}
+            className="text-normal"
+            disabled={pending}
+          />
+          <SidebarBarButton
+            label={t('sidebar.signUp')}
+            icon={UserPlusIcon}
+            onClick={() => void openCloudAuth()}
+            title={t('sidebar.cloudAuthTitle')}
+            aria-label={t('sidebar.signUp')}
+            className="text-normal"
+            disabled={pending}
+          />
+        </>
+      )}
     </>
   );
 }

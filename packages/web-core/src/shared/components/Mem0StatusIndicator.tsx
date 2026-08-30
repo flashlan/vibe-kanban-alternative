@@ -16,6 +16,14 @@ interface Mem0StatusResponse {
   level: Mem0Level;
   components: Mem0ComponentStatus;
   message: string;
+  connection?: Mem0Connection;
+}
+
+interface Mem0Connection {
+  source: 'local' | 'cloud';
+  url: string;
+  local_url: string;
+  cloud_url: string;
 }
 
 const LEVEL_COLOR: Record<Mem0Level, string> = {
@@ -26,10 +34,10 @@ const LEVEL_COLOR: Record<Mem0Level, string> = {
 };
 
 const LEVEL_LABEL: Record<Mem0Level, string> = {
-  green: 'Operacional',
-  yellow: 'Degradado (graph)',
-  orange: 'Degradado (backend)',
-  red: 'Indisponível',
+  green: 'Operational',
+  yellow: 'Degraded (graph)',
+  orange: 'Degraded (backend)',
+  red: 'Unavailable',
 };
 
 const POLL_INTERVAL_MS = 30_000;
@@ -42,7 +50,7 @@ function componentLine(label: string, ok: boolean): string {
  * Always-visible mem0 health dot for the app header. Polls
  * `GET /api/usage/mem0-status` every 30s and reflects the computed 4-level
  * health (green/yellow/orange/red) as a colored dot + tooltip. Clicking it
- * opens Settings → Memory so the user can inspect or fix the configuration.
+ * opens Settings → Memory so the user can inspect or switch the connection.
  *
  * Best-effort: a failed poll (server down, transient error) leaves the last
  * known status intact rather than flickering the indicator — memory_save /
@@ -70,28 +78,40 @@ export function Mem0StatusIndicator() {
     };
   }, [poll]);
 
+  useEffect(() => {
+    const handleConnectionChange = () => void poll();
+    window.addEventListener('mem0-connection-changed', handleConnectionChange);
+    return () =>
+      window.removeEventListener(
+        'mem0-connection-changed',
+        handleConnectionChange
+      );
+  }, [poll]);
+
   const level: Mem0Level = status?.level ?? 'green';
   const components = status?.components;
   const color = status ? LEVEL_COLOR[level] : '#9ca3af';
   const tooltip = status
     ? [
-        `${LEVEL_LABEL[level]} — ${status ? status.message : ''}`.trim(),
+        `${LEVEL_LABEL[level]} — ${status.message}`.trim(),
+        `Source: ${status.connection?.source === 'cloud' ? 'Cloud / shared server' : 'Local Mem0'}`,
+        status.connection?.url ? `Endpoint: ${status.connection.url}` : '',
         '',
-        componentLine('mem0', components?.mem0 ?? false),
-        componentLine('embeddings', components?.embeddings ?? false),
-        componentLine('qdrant', components?.qdrant ?? false),
+        componentLine('Mem0', components?.mem0 ?? false),
+        componentLine('Embeddings', components?.embeddings ?? false),
+        componentLine('Qdrant', components?.qdrant ?? false),
         '',
-        'Clique para abrir Settings → Memory',
+        'Click to open Settings → Memory',
       ].join('\n')
-    : 'Verificando status do mem0…';
+    : 'Checking Mem0 status…';
 
   return (
     <Tooltip content={tooltip} side="bottom" className="whitespace-pre-line">
       <button
         type="button"
         onClick={() => SettingsDialog.show({ initialSection: 'memory' })}
-        aria-label="Status do mem0"
-        title="Status do mem0"
+        aria-label="Mem0 status"
+        title="Mem0 status"
         className="flex size-7 items-center justify-center rounded-sm text-low hover:text-normal"
       >
         <span className="relative flex items-center justify-center">

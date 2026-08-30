@@ -18,6 +18,13 @@ export interface Mem0Config {
   providers: Record<string, Mem0ProviderCfg>;
 }
 
+interface Mem0Connection {
+  source: 'local' | 'cloud';
+  url: string;
+  local_url: string;
+  cloud_url: string;
+}
+
 const PROVIDER_ORDER = ['groq', 'openrouter', 'llama', 'openai'] as const;
 
 async function fetchMem0Config(): Promise<Mem0Config> {
@@ -41,6 +48,25 @@ async function updateMem0Config(body: {
   return handleApiResponse<Mem0Config>(response);
 }
 
+async function fetchMem0Connection(): Promise<Mem0Connection> {
+  const response = await makeRequest('/api/usage/mem0-connection', {
+    method: 'GET',
+    cache: 'no-store',
+  });
+  return handleApiResponse<Mem0Connection>(response);
+}
+
+async function updateMem0Connection(
+  source: Mem0Connection['source']
+): Promise<Mem0Connection> {
+  const response = await makeRequest('/api/usage/mem0-connection', {
+    method: 'PUT',
+    body: JSON.stringify({ source }),
+    cache: 'no-store',
+  });
+  return handleApiResponse<Mem0Connection>(response);
+}
+
 interface ProviderDraft {
   url: string;
   model: string;
@@ -50,12 +76,14 @@ interface ProviderDraft {
 export function MemorySettingsSection() {
   const { t } = useTranslation('settings');
   const [config, setConfig] = useState<Mem0Config | null>(null);
+  const [connection, setConnection] = useState<Mem0Connection | null>(null);
   const [provider, setProvider] = useState('groq');
   const [graphEnabled, setGraphEnabled] = useState(true);
   const [drafts, setDrafts] = useState<Record<string, ProviderDraft>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [connectionBusy, setConnectionBusy] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -78,6 +106,16 @@ export function MemorySettingsSection() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void fetchMem0Connection()
+      .then(setConnection)
+      .catch((e: unknown) => {
+        setError(
+          e instanceof Error ? e.message : 'Failed to load memory connection'
+        );
+      });
+  }, []);
 
   const setDraft = (p: string, field: keyof ProviderDraft, value: string) => {
     setDrafts((prev) => ({
@@ -123,6 +161,23 @@ export function MemorySettingsSection() {
     }
   };
 
+  const handleConnectionChange = async (source: Mem0Connection['source']) => {
+    if (!connection || connection.source === source) return;
+    setConnectionBusy(true);
+    setError(null);
+    try {
+      const next = await updateMem0Connection(source);
+      setConnection(next);
+      window.dispatchEvent(new Event('mem0-connection-changed'));
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : 'Failed to switch memory source'
+      );
+    } finally {
+      setConnectionBusy(false);
+    }
+  };
+
   const providerLabel = (p: string): string => {
     switch (p) {
       case 'groq':
@@ -153,6 +208,45 @@ export function MemorySettingsSection() {
 
       {config && (
         <>
+          {connection && (
+            <div className="rounded-sm border border-border bg-panel p-3">
+              <div className="text-sm font-medium text-high">Memory source</div>
+              <div className="mt-1 text-xs text-low">
+                Choose which Mem0 service new agent runs should use.
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {(
+                  [
+                    ['local', 'Local Mem0', connection.local_url],
+                    ['cloud', 'Cloud / shared server', connection.cloud_url],
+                  ] as const
+                ).map(([source, label, url]) => (
+                  <button
+                    key={source}
+                    type="button"
+                    aria-pressed={connection.source === source}
+                    disabled={connectionBusy}
+                    onClick={() => void handleConnectionChange(source)}
+                    className={`rounded-sm border px-3 py-2 text-left transition-colors ${
+                      connection.source === source
+                        ? 'border-brand bg-brand/10 text-brand'
+                        : 'border-border bg-secondary text-normal hover:bg-secondary/80'
+                    } disabled:opacity-50`}
+                  >
+                    <span className="block text-sm font-medium">{label}</span>
+                    <span className="mt-1 block truncate text-xs text-low">
+                      {url}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 text-xs text-low">
+                Current: <span className="text-normal">{connection.url}</span>.
+                The change applies to newly started agent runs.
+              </div>
+            </div>
+          )}
+
           <div className="rounded-sm border border-border bg-panel p-3">
             <div className="flex items-center justify-between">
               <div>

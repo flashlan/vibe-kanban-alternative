@@ -24,9 +24,56 @@ use uuid::Uuid;
 
 use crate::DeploymentImpl;
 
+const DEFAULT_LOCAL_MEM0_URL: &str = "http://localhost:8000";
+const DEFAULT_CLOUD_MEM0_URL: &str = "http://192.168.1.168:8000";
+
 /// Default mem0 server base URL; override with `MEM0_URL`.
 fn mem0_url() -> String {
-    std::env::var("MEM0_URL").unwrap_or_else(|_| "http://localhost:8000".to_string())
+    if let Ok(url) = std::env::var("MEM0_URL") {
+        return url;
+    }
+
+    let cloud_mode = std::env::var("VIBE_KANBAN_MODE")
+        .map(|value| value.trim().eq_ignore_ascii_case("cloud"))
+        .unwrap_or(false);
+    if cloud_mode {
+        std::env::var("AURAPUNK_CLOUD_MEM0_URL")
+            .unwrap_or_else(|_| DEFAULT_CLOUD_MEM0_URL.to_string())
+    } else {
+        DEFAULT_LOCAL_MEM0_URL.to_string()
+    }
+}
+
+fn mem0_source(url: &str) -> &'static str {
+    match url_host(url).as_deref() {
+        Some("localhost") | Some("127.0.0.1") | Some("::1") => "local",
+        _ => "cloud",
+    }
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+pub struct Mem0Connection {
+    pub source: String,
+    pub url: String,
+    pub local_url: String,
+    pub cloud_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateMem0ConnectionRequest {
+    source: String,
+}
+
+fn mem0_connection() -> Mem0Connection {
+    let url = mem0_url();
+    Mem0Connection {
+        source: mem0_source(&url).to_string(),
+        url,
+        local_url: std::env::var("MEM0_LOCAL_URL")
+            .unwrap_or_else(|_| DEFAULT_LOCAL_MEM0_URL.to_string()),
+        cloud_url: std::env::var("AURAPUNK_CLOUD_MEM0_URL")
+            .unwrap_or_else(|_| DEFAULT_CLOUD_MEM0_URL.to_string()),
+    }
 }
 
 /// One day of activity for a single agent.
@@ -190,6 +237,10 @@ pub fn router() -> Router<DeploymentImpl> {
             "/usage/mem0-config",
             get(get_mem0_config).post(put_mem0_config),
         )
+        .route(
+            "/usage/mem0-connection",
+            get(get_mem0_connection).put(update_mem0_connection),
+        )
         .route("/usage/mem0-status", get(mem0_status))
         .route("/usage/mem0-relevance", post(report_mem0_relevance))
         .route("/usage/token-telemetry", post(report_token_telemetry))
@@ -207,6 +258,8 @@ pub struct Mem0Status {
     pub components: Mem0ComponentStatus,
     /// Human-readable summary of the current state.
     pub message: String,
+    /// Which configured Mem0 endpoint is currently active.
+    pub connection: Mem0Connection,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -225,8 +278,10 @@ fn component_urls() -> (String, String, String) {
         Some(host) => format!("http://{host}:8001"),
         None => "http://localhost:8001".to_string(),
     });
-    let qdrant =
-        std::env::var("QDRANT_URL").unwrap_or_else(|_| "http://localhost:6333".to_string());
+    let qdrant = std::env::var("QDRANT_URL").unwrap_or_else(|_| match url_host(&mem0) {
+        Some(host) => format!("http://{host}:6333"),
+        None => "http://localhost:6333".to_string(),
+    });
     (mem0, embeddings, qdrant)
 }
 
@@ -389,7 +444,30 @@ async fn mem0_status() -> ResponseJson<ApiResponse<Mem0Status>> {
             qdrant,
         },
         message,
+        connection: mem0_connection(),
     }))
+}
+
+async fn get_mem0_connection() -> ResponseJson<ApiResponse<Mem0Connection>> {
+    ResponseJson(ApiResponse::success(mem0_connection()))
+}
+
+async fn update_mem0_connection(
+    Json(body): Json<UpdateMem0ConnectionRequest>,
+) -> ResponseJson<ApiResponse<Mem0Connection>> {
+    let url = match body.source.trim().to_ascii_lowercase().as_str() {
+        "local" => {
+            std::env::var("MEM0_LOCAL_URL").unwrap_or_else(|_| DEFAULT_LOCAL_MEM0_URL.to_string())
+        }
+        "cloud" => std::env::var("AURAPUNK_CLOUD_MEM0_URL")
+            .unwrap_or_else(|_| DEFAULT_CLOUD_MEM0_URL.to_string()),
+        _ => return ResponseJson(ApiResponse::error("source must be local or cloud")),
+    };
+
+    // This is a local operator setting. It is intentionally applied to the
+    // process so newly spawned MCP workers inherit the selected endpoint.
+    unsafe { std::env::set_var("MEM0_URL", url) };
+    ResponseJson(ApiResponse::success(mem0_connection()))
 }
 
 /// Body posted by the `vibe_kanban_mcp` process (a separate process from
