@@ -9,9 +9,24 @@ export interface AppModeResponse {
   cloud: boolean;
   cloud_url: string;
 }
+
 async function fetchAppMode(): Promise<AppModeResponse> {
   const response = await makeRequest('/api/app-mode');
   return handleApiResponse<AppModeResponse>(response);
+}
+
+function useAppMode() {
+  return useQuery({
+    queryKey: ['app-mode'],
+    queryFn: fetchAppMode,
+    staleTime: Infinity,
+    // The embedded Tauri backend can still be starting when the webview
+    // mounts. Keep retrying so a transient startup failure cannot make a
+    // cloud launch look like a local launch for the rest of the session.
+    retry: 10,
+    retryDelay: (attempt) => Math.min(250 * 2 ** attempt, 2000),
+    refetchOnWindowFocus: true,
+  });
 }
 
 /**
@@ -19,23 +34,13 @@ async function fetchAppMode(): Promise<AppModeResponse> {
  * This keeps `--cloud` useful for both downloaded binaries and local runs.
  */
 export function useIsCloudMode(): boolean {
-  const { data } = useQuery({
-    queryKey: ['app-mode'],
-    queryFn: fetchAppMode,
-    staleTime: Infinity,
-    retry: false,
-  });
+  const { data } = useAppMode();
 
-  return data?.cloud ?? false;
+  return data?.cloud ?? data?.mode === 'cloud';
 }
 
 export function useCloudUrl(): string {
-  const { data } = useQuery({
-    queryKey: ['app-mode'],
-    queryFn: fetchAppMode,
-    staleTime: Infinity,
-    retry: false,
-  });
+  const { data } = useAppMode();
 
   return data?.cloud_url ?? DEFAULT_AURAPUNK_CLOUD_URL;
 }
