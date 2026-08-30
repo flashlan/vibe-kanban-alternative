@@ -35,6 +35,8 @@ inside the LXC.
 | Vibe Kanban project | `AuraPunk Demo` |
 | Workspace command | `PORT=4000 npm start` |
 | Smoke-test service | `aurapunk-demo-server.service` on `127.0.0.1:4100` |
+| Llama extraction server | `192.168.254.107:8080` (Qwen2.5-Omni) |
+| Llama embedding server | `192.168.254.107:8081` (BGE-small, 384 dimensions) |
 | Public gateway | `http://192.168.1.168:3000` |
 | Website | `http://192.168.1.168:3000/` |
 | Vibe Kanban demo | `http://192.168.1.168:3000/demo/` |
