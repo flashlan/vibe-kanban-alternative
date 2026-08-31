@@ -10,11 +10,18 @@ use utils::response::ApiResponse;
 
 use crate::DeploymentImpl;
 
+/// Version of the public/private integration contract. This is intentionally
+/// independent from the application release version: a patch release may
+/// change implementation details without changing the cloud wire contract.
+pub const AURAPUNK_CLOUD_CONTRACT_VERSION: u16 = 1;
+
 #[derive(Debug, Serialize)]
 pub struct AppModeResponse {
     pub mode: &'static str,
     pub cloud: bool,
     pub cloud_url: String,
+    pub cloud_contract_version: u16,
+    pub cloud_contract_path: &'static str,
 }
 
 pub fn router() -> Router<DeploymentImpl> {
@@ -34,5 +41,7 @@ async fn app_mode() -> Json<ApiResponse<AppModeResponse>> {
         mode: if cloud { "cloud" } else { "local" },
         cloud,
         cloud_url,
+        cloud_contract_version: AURAPUNK_CLOUD_CONTRACT_VERSION,
+        cloud_contract_path: "/api/cloud-contract",
     }))
 }

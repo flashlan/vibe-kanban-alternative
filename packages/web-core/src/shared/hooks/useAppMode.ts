@@ -3,11 +3,14 @@ import { handleApiResponse, makeRequest } from '@/shared/lib/api';
 
 export const DEFAULT_AURAPUNK_CLOUD_URL =
   'https://aurapunk-cloud.datapoint.chatgpt.site';
+export const AURAPUNK_CLOUD_CONTRACT_VERSION = 1;
 
 export interface AppModeResponse {
   mode: 'local' | 'cloud';
   cloud: boolean;
   cloud_url: string;
+  cloud_contract_version: number;
+  cloud_contract_path: string;
 }
 
 async function fetchAppMode(): Promise<AppModeResponse> {
