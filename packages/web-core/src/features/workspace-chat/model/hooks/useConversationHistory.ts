@@ -61,6 +61,10 @@ type HistoricEntriesResult = {
   entries: PatchType[];
   complete: boolean;
 };
+
+type ConversationStreamController = ReturnType<
+  typeof streamJsonPatchEntries<PatchType>
+>;
 import {
   MIN_INITIAL_ENTRIES,
   REMAINING_BATCH_SIZE,
@@ -102,7 +106,25 @@ export const useConversationHistory = ({
   const previousStatusMapRef = useRef<Map<string, ExecutionProcessStatus>>(
     new Map()
   );
+  const activeStreamControllersRef = useRef<Set<ConversationStreamController>>(
+    new Set()
+  );
   const [isLoadingHistoryState, setIsLoadingHistory] = useState(false);
+
+  const closeConversationStreams = useCallback(() => {
+    for (const controller of activeStreamControllersRef.current) {
+      controller.close();
+    }
+    activeStreamControllersRef.current.clear();
+  }, []);
+
+  // A workspace switch must release only the conversation-history streams
+  // owned by this panel. It must not stop the execution process on the
+  // backend, nor the global activity stream that tracks other agents.
+  useEffect(
+    () => closeConversationStreams,
+    [scopeKey, closeConversationStreams]
+  );
 
   // Derive whether this is the first turn (no follow-up processes exist)
   const isFirstTurn = useMemo(() => {
@@ -164,18 +186,22 @@ export const useConversationHistory = ({
       return new Promise<HistoricEntriesResult>((resolve) => {
         let settled = false;
         let timeout: ReturnType<typeof setTimeout> | null = null;
-        let controller: ReturnType<typeof streamJsonPatchEntries<PatchType>>;
+        let controller: ConversationStreamController | undefined;
 
         const finish = (entries: PatchType[], complete: boolean) => {
           if (settled) return;
           settled = true;
           if (timeout !== null) clearTimeout(timeout);
-          controller?.close();
+          if (controller) {
+            activeStreamControllersRef.current.delete(controller);
+            controller.close();
+          }
           resolve({ entries, complete });
         };
 
         controller = streamJsonPatchEntries<PatchType>(url, {
           onFinished: (allEntries) => finish(allEntries, true),
+          onClosed: () => finish(controller?.getEntries() ?? [], false),
           onError: (err) => {
             console.warn(
               `Error loading entries for historic execution process ${executionProcess.id}`,
@@ -184,6 +210,7 @@ export const useConversationHistory = ({
             finish(controller?.getEntries() ?? [], false);
           },
         });
+        activeStreamControllersRef.current.add(controller);
 
         if (settled) {
           controller.close();
@@ -265,13 +292,24 @@ export const useConversationHistory = ({
   const loadRunningAndEmit = useCallback(
     (executionProcess: ExecutionProcess): Promise<void> => {
       return new Promise((resolve, reject) => {
+        let settled = false;
         let url = '';
         if (executionProcess.executor_action.typ.type === 'ScriptRequest') {
           url = `/api/execution-processes/${executionProcess.id}/raw-logs/ws`;
         } else {
           url = `/api/execution-processes/${executionProcess.id}/normalized-logs/ws`;
         }
-        const controller = streamJsonPatchEntries<PatchType>(url, {
+        let controller: ConversationStreamController;
+        const finish = (successful: boolean) => {
+          if (settled) return;
+          settled = true;
+          activeStreamControllersRef.current.delete(controller);
+          controller.close();
+          if (successful) resolve();
+          else reject();
+        };
+
+        controller = streamJsonPatchEntries<PatchType>(url, {
           onEntries(entries) {
             const patchesWithKey = entries.map((entry, index) =>
               patchWithKey(entry, executionProcess.id, index)
@@ -286,14 +324,16 @@ export const useConversationHistory = ({
           },
           onFinished: () => {
             emitEntries(displayedExecutionProcesses.current, 'running', false);
-            controller.close();
-            resolve();
+            finish(true);
           },
           onError: () => {
-            controller.close();
-            reject();
+            finish(false);
+          },
+          onClosed: () => {
+            finish(true);
           },
         });
+        activeStreamControllersRef.current.add(controller);
       });
     },
     [emitEntries]
@@ -596,6 +636,7 @@ export const useConversationHistory = ({
   ]);
 
   useEffect(() => {
+    let cancelled = false;
     if (!executionProcessesRaw) return;
 
     const processesToReload: ExecutionProcess[] = [];
@@ -621,7 +662,9 @@ export const useConversationHistory = ({
       let anyUpdated = false;
 
       for (const process of processesToReload) {
+        if (cancelled) return;
         const result = await loadEntriesForHistoricExecutionProcess(process);
+        if (cancelled) return;
         if (result.entries.length === 0) continue;
 
         const entriesWithKey = result.entries.map((e, idx) =>
@@ -646,6 +689,9 @@ export const useConversationHistory = ({
         emitEntries(displayedExecutionProcesses.current, 'running', false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [
     idStatusKey,
     executionProcessesForConversation,

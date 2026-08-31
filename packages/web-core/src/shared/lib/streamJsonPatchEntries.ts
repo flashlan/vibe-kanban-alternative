@@ -14,6 +14,8 @@ export interface StreamOptions<E = unknown> {
   onError?: (err: unknown) => void;
   /** called once when a "finished" event is received */
   onFinished?: (entries: E[]) => void;
+  /** called when the stream is closed before receiving "finished" */
+  onClosed?: () => void;
 }
 
 interface StreamController<E = unknown> {
@@ -170,6 +172,7 @@ export function streamJsonPatchEntries<E = unknown>(
       return () => subscribers.delete(cb);
     },
     close(): void {
+      if (closed) return;
       closed = true;
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
@@ -178,6 +181,7 @@ export function streamJsonPatchEntries<E = unknown>(
       ws?.close();
       subscribers.clear();
       connected = false;
+      if (!finished) opts.onClosed?.();
     },
   };
 }

@@ -45,6 +45,20 @@ describe('streamJsonPatchEntries', () => {
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
   });
 
+  it('notifies cancellation when the consumer closes an unfinished stream', async () => {
+    const socket = createFakeSocket();
+    vi.mocked(openLocalApiWebSocket).mockResolvedValue(socket);
+    const onClosed = vi.fn();
+
+    const stream = streamJsonPatchEntries('/logs', { onClosed });
+
+    await Promise.resolve();
+    stream.close();
+    stream.close();
+
+    expect(onClosed).toHaveBeenCalledTimes(1);
+  });
+
   it('applies direct entry patches without replacing the entries array', async () => {
     const socket = createFakeSocket();
     vi.mocked(openLocalApiWebSocket).mockResolvedValue(socket);
