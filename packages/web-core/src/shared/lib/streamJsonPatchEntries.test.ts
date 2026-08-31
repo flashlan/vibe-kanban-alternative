@@ -44,4 +44,42 @@ describe('streamJsonPatchEntries', () => {
 
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
   });
+
+  it('applies direct entry patches without replacing the entries array', async () => {
+    const socket = createFakeSocket();
+    vi.mocked(openLocalApiWebSocket).mockResolvedValue(socket);
+    const animationFrames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      animationFrames.push(callback);
+      return animationFrames.length;
+    });
+
+    const stream = streamJsonPatchEntries<string>('/logs');
+
+    await Promise.resolve();
+    socket.emit('message', {
+      data: JSON.stringify({
+        JsonPatch: [
+          { op: 'add', path: '/entries/0', value: 'first' },
+          { op: 'add', path: '/entries/1', value: 'second' },
+        ],
+      }),
+    } as MessageEvent);
+    animationFrames.shift()?.(0);
+
+    const entries = stream.getEntries();
+    expect(entries).toEqual(['first', 'second']);
+
+    socket.emit('message', {
+      data: JSON.stringify({
+        JsonPatch: [{ op: 'replace', path: '/entries/1', value: 'updated' }],
+      }),
+    } as MessageEvent);
+    animationFrames.shift()?.(0);
+
+    expect(stream.getEntries()).toBe(entries);
+    expect(stream.getEntries()).toEqual(['first', 'updated']);
+    stream.close();
+    vi.unstubAllGlobals();
+  });
 });

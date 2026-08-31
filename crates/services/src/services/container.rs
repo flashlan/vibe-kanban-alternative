@@ -17,6 +17,7 @@ use db::{
         execution_process_repo_state::{
             CreateExecutionProcessRepoState, ExecutionProcessRepoState,
         },
+        issue_workspace::IssueWorkspace,
         repo::Repo,
         session::{CreateSession, Session, SessionError},
         workspace::{Workspace, WorkspaceError, WorkspaceKind},
@@ -61,7 +62,7 @@ use uuid::Uuid;
 use crate::services::config::Config;
 use worktree_manager::WorktreeError;
 
-use crate::services::{execution_process, notification::NotificationService, speckit};
+use crate::services::{execution_process, notification::NotificationService, speckit, token_usage};
 pub type ContainerRef = String;
 
 #[derive(Debug, Error)]
@@ -1862,6 +1863,28 @@ pub trait ContainerService {
                     );
                 }
             }
+        }
+
+        if let Some((agent, model, provider)) = token_usage::execution_identity(executor_action)
+            && let Some(store) = self.get_msg_store_by_id(&execution_process.id).await
+        {
+            let issue_id =
+                IssueWorkspace::find_issue_and_project_by_workspace(&self.db().pool, workspace.id)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|(issue_id, _)| issue_id);
+            token_usage::spawn_token_usage_tracker(
+                store,
+                self.db().clone(),
+                execution_process.id,
+                session.id,
+                workspace.id,
+                issue_id,
+                agent,
+                model,
+                provider,
+            );
         }
 
         execution_process::spawn_stream_raw_logs_to_storage(

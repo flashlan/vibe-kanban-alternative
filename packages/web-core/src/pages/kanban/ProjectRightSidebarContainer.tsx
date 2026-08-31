@@ -16,8 +16,6 @@ import { ApprovalFeedbackProvider } from '@/features/workspace-chat/model/contex
 import { EntriesProvider } from '@/features/workspace-chat/model/contexts/EntriesContext';
 import { MessageEditProvider } from '@/features/workspace-chat/model/contexts/MessageEditContext';
 import { CreateModeProvider } from '@/features/create-mode/model/CreateModeProvider';
-import { useWorkspaceSessions } from '@/shared/hooks/useWorkspaceSessions';
-import { useWorkspaceRecord } from '@/shared/hooks/useWorkspaceRecord';
 import { SessionChatBoxContainer } from '@/features/workspace-chat/ui/SessionChatBoxContainer';
 import { CreateChatBoxContainer } from '@/shared/components/CreateChatBoxContainer';
 import { KanbanIssuePanelContainer } from './KanbanIssuePanelContainer';
@@ -144,22 +142,20 @@ function WorkspaceSessionPanel({
   const { projectId, getIssue } = useProjectContext();
   const routeState = useCurrentKanbanRouteState();
   const { workspaces: remoteWorkspaces } = useWorkspacesContext();
-  const { activeWorkspaces, archivedWorkspaces } = useWorkspaceContext();
-  const conversationListRef = useRef<ConversationListHandle>(null);
-  const [isAtBottom, setIsAtBottom] = useState(true);
-  const { data: workspace, isLoading: isWorkspaceLoading } = useWorkspaceRecord(
-    workspaceId,
-    { enabled: !!workspaceId }
-  );
   const {
+    workspace,
+    activeWorkspaces,
+    archivedWorkspaces,
     sessions,
     selectedSession,
     selectedSessionId,
     selectSession,
-    isLoading: isSessionsLoading,
+    isSessionsLoading,
     isNewSessionMode,
     startNewSession,
-  } = useWorkspaceSessions(workspaceId, { enabled: !!workspaceId });
+  } = useWorkspaceContext();
+  const conversationListRef = useRef<ConversationListHandle>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
 
   const workspaceSummary = useMemo(
     () =>
@@ -207,6 +203,11 @@ function WorkspaceSessionPanel({
     if (!workspace) return undefined;
     return createWorkspaceWithSession(workspace, selectedSession);
   }, [workspace, selectedSession]);
+
+  // A cached/selected session is enough to render the editor. The workspace
+  // record and scratch stream can continue loading without blocking input.
+  const isSessionResolving =
+    isSessionsLoading && !selectedSession && !isNewSessionMode;
 
   const handleScrollToPreviousMessage = useCallback(() => {
     conversationListRef.current?.scrollToPreviousUserMessage();
@@ -319,7 +320,7 @@ function WorkspaceSessionPanel({
 
               <div className="flex justify-center @container pl-px">
                 <SessionChatBoxContainer
-                  {...(isSessionsLoading || isWorkspaceLoading
+                  {...(isSessionResolving
                     ? {
                         mode: 'placeholder' as const,
                       }

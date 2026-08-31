@@ -466,13 +466,10 @@ export const Actions = {
     isVisible: (ctx) => ctx.layoutMode === 'kanban',
     execute: async (ctx) => {
       // Project-scoped settings (currently: primary repository — see
-      // ProjectSettingsDialog). Falls back to the global Settings dialog
-      // when no active project is known (defensive; shouldn't happen given
-      // isVisible requires kanban layout).
+      // ProjectSettingsDialog). This action never opens global Settings: the
+      // two dialogs have different scopes and must remain distinct.
       if (ctx.kanbanProjectId) {
         await ProjectSettingsDialog.show({ projectId: ctx.kanbanProjectId });
-      } else {
-        await SettingsDialog.show();
       }
     },
   } satisfies GlobalActionDefinition,
@@ -1285,8 +1282,8 @@ export const Actions = {
     shortcut: 'I C',
     requiresTarget: ActionTargetType.NONE,
     isVisible: (ctx) => ctx.layoutMode === 'kanban' && !ctx.isCreatingIssue,
-    execute: (ctx) => {
-      void ctx.createIssue({ statusId: ctx.defaultCreateStatusId });
+    execute: async (ctx) => {
+      await ctx.createIssue({ statusId: ctx.defaultCreateStatusId });
     },
   } satisfies GlobalActionDefinition,
 

@@ -486,6 +486,7 @@ export function KanbanIssuePanelContainer({
   }, [formState, mode, createModeDefaults]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Save status for description (shown in WYSIWYG toolbar)
   const [descriptionSaveStatus, setDescriptionSaveStatus] = useState<
@@ -889,6 +890,7 @@ export function KanbanIssuePanelContainer({
   const handleSubmit = useCallback(async () => {
     if (!displayData.title.trim() || isUploading) return;
 
+    setSubmitError(null);
     setIsSubmitting(true);
     try {
       if (mode === 'create') {
@@ -1018,6 +1020,11 @@ export function KanbanIssuePanelContainer({
       }
     } catch (error) {
       console.error('Failed to save issue:', error);
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : t('common:error', 'Failed to create issue. Please try again.')
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -1037,8 +1044,8 @@ export function KanbanIssuePanelContainer({
     getAttachmentIds,
     clearAttachments,
     isUploading,
-    onExpectIssueOpen,
     t,
+    onExpectIssueOpen,
   ]);
 
   const handleCmdEnterSubmit = useCallback(() => {
@@ -1168,6 +1175,7 @@ export function KanbanIssuePanelContainer({
       isUploading={isUploading}
       attachmentError={uploadError}
       onDismissAttachmentError={clearUploadError}
+      submitError={submitError}
       renderDescriptionEditor={(props) => (
         <WYSIWYGEditor {...props} localAttachments={localAttachments} />
       )}

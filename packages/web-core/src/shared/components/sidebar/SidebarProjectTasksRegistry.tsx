@@ -23,6 +23,7 @@ export function SidebarProjectTasksRegistry({
   onTasksByProject,
   onLoadingTasksProjectIds,
 }: SidebarProjectTasksRegistryProps) {
+  const [isReady, setIsReady] = useState(false);
   const [dataMap, setDataMap] = useState<Map<string, ProjectTasksData>>(
     () => new Map()
   );
@@ -46,6 +47,21 @@ export function SidebarProjectTasksRegistry({
       else next.delete(id);
       return next;
     });
+  }, []);
+
+  // Task counts are secondary sidebar decoration. Let the shell and the
+  // active Kanban paint first instead of starting one issues/status stream per
+  // project during the critical reload path.
+  useEffect(() => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const frameId = requestAnimationFrame(() => {
+      timeoutId = setTimeout(() => setIsReady(true), 250);
+    });
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
+    };
   }, []);
 
   // Drop entries for projects that no longer exist (deleted/removed) so the
@@ -86,15 +102,16 @@ export function SidebarProjectTasksRegistry({
 
   return (
     <>
-      {projectIds.map((projectId) => (
-        <ProjectTasksLoader
-          key={projectId}
-          projectId={projectId}
-          enabled={true}
-          onData={reportData}
-          onLoading={reportLoading}
-        />
-      ))}
+      {isReady &&
+        projectIds.map((projectId) => (
+          <ProjectTasksLoader
+            key={projectId}
+            projectId={projectId}
+            enabled={true}
+            onData={reportData}
+            onLoading={reportLoading}
+          />
+        ))}
     </>
   );
 }

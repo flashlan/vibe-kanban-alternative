@@ -250,7 +250,19 @@ jobs:
           echo "Publishing $PKG to npm dist-tag: $NPM_TAG"
 
       - run: npm ci
-      - run: npm run build
+      - name: Build npx launcher
+        run: npm run build
+      - name: Verify npx launcher version
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const version = require('./package.json').version;
+          const bundle = fs.readFileSync('bin/cli.js', 'utf8');
+          if (!bundle.includes(`version: \"${version}\"`)) {
+            throw new Error(`bin/cli.js does not contain npx-cli version ${version}`);
+          }
+          console.log(`npx launcher bundle verified at ${version}`);
+          NODE
       # Authenticates via OIDC (Trusted Publishing configured on npmjs.com) or
       # fallback NPM_TOKEN if secret is configured.
       - name: Publish to npm

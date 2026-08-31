@@ -12,7 +12,6 @@ import {
   type ExecutorProfileId,
   type SendMessageShortcut,
   SoundFile,
-  ThemeMode,
   UiLanguage,
 } from 'shared/types';
 import { getModifierKey } from '@/shared/lib/platform';
@@ -25,7 +24,6 @@ import {
 import { useTheme } from '@/shared/hooks/useTheme';
 import { useUserSystem } from '@/shared/hooks/useUserSystem';
 import { TagManager } from '@/shared/components/TagManager';
-import { useIsMobile } from '@/shared/hooks/useIsMobile';
 import { useUiPreferencesStore } from '@/shared/stores/useUiPreferencesStore';
 import { cn, playSound } from '@/shared/lib/utils';
 import { parseAllowedOriginsCsv } from '@/shared/lib/origin';
@@ -53,7 +51,6 @@ export function GeneralSettingsSection() {
   const { t } = useTranslation(['settings', 'common']);
   const { setDirty: setContextDirty } = useSettingsDirty();
 
-  const isMobile = useIsMobile();
   const autoMoveCardsEnabled = useUiPreferencesStore(
     (s) => s.autoMoveCardsEnabled
   );

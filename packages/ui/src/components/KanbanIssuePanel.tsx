@@ -153,6 +153,7 @@ export interface KanbanIssuePanelProps {
   isUploading?: boolean;
   attachmentError?: string | null;
   onDismissAttachmentError?: () => void;
+  submitError?: string | null;
 
   // Edit-mode section renderers
   // Read-only "stage N of M" pipeline progress, rendered above the
@@ -199,6 +200,7 @@ export function KanbanIssuePanel({
   isUploading,
   attachmentError,
   onDismissAttachmentError,
+  submitError,
   renderPipelineProgress,
   renderWorkspacesSection,
   renderRelationshipsSection,
@@ -554,25 +556,32 @@ export function KanbanIssuePanel({
 
         {/* Create Issue Button (Create mode only) */}
         {isCreateMode && (
-          <div className="px-base pb-base flex items-center gap-half">
-            <PrimaryButton
-              value={t('kanban.createIssue')}
-              onClick={onSubmit}
-              disabled={isSubmitting || isUploading || !formData.title.trim()}
-              actionIcon={isSubmitting ? 'spinner' : undefined}
-              variant="default"
-            />
-            {onDeleteDraft && (
-              <IconButton
-                icon={TrashIcon}
-                onClick={onDeleteDraft}
-                disabled={isSubmitting}
-                aria-label="Delete draft"
-                title="Delete draft"
-                className="hover:text-error hover:bg-error/10"
-              />
+          <>
+            {submitError && (
+              <div className="px-base pb-half">
+                <ErrorAlert message={submitError} />
+              </div>
             )}
-          </div>
+            <div className="px-base pb-base flex items-center gap-half">
+              <PrimaryButton
+                value={t('kanban.createIssue')}
+                onClick={onSubmit}
+                disabled={isSubmitting || isUploading || !formData.title.trim()}
+                actionIcon={isSubmitting ? 'spinner' : undefined}
+                variant="default"
+              />
+              {onDeleteDraft && (
+                <IconButton
+                  icon={TrashIcon}
+                  onClick={onDeleteDraft}
+                  disabled={isSubmitting}
+                  aria-label="Delete draft"
+                  title="Delete draft"
+                  className="hover:text-error hover:bg-error/10"
+                />
+              )}
+            </div>
+          </>
         )}
 
         {/* Pipeline Progress (Edit mode only; renders nothing if the card has no parsed pipeline) */}

@@ -203,7 +203,6 @@ export function KanbanContainer() {
     issueRelationships,
     getTagObjectsForIssue,
     getTagsForIssue,
-    getPullRequestsForIssue,
     getWorkspacesForIssue,
     getRelationshipsForIssue,
     issuesById,
@@ -211,6 +210,8 @@ export function KanbanContainer() {
     removeIssueTag,
     insertTag,
     pullRequests,
+    pullRequestIssues,
+    workspaces,
     isLoading: projectLoading,
   } = useProjectContext();
 
@@ -733,6 +734,67 @@ export function KanbanContainer() {
     return map;
   }, [pullRequests]);
 
+  // Index card decorations once per shape update. Calling the context
+  // helpers inside every card used to scan the full tags/relationships/PRs
+  // arrays repeatedly during the board's first render.
+  const tagsById = useMemo(
+    () => new Map(tags.map((tag) => [tag.id, tag])),
+    [tags]
+  );
+
+  const issueTagsByIssueId = useMemo(() => {
+    const grouped = new Map<string, (typeof issueTags)[number][]>();
+    for (const issueTag of issueTags) {
+      const existing = grouped.get(issueTag.issue_id);
+      if (existing) existing.push(issueTag);
+      else grouped.set(issueTag.issue_id, [issueTag]);
+    }
+    return grouped;
+  }, [issueTags]);
+
+  const tagObjectsByIssueId = useMemo(() => {
+    const grouped = new Map<string, (typeof tags)[number][]>();
+    for (const issueTag of issueTags) {
+      const tag = tagsById.get(issueTag.tag_id);
+      if (!tag) continue;
+      const existing = grouped.get(issueTag.issue_id);
+      if (existing) existing.push(tag);
+      else grouped.set(issueTag.issue_id, [tag]);
+    }
+    return grouped;
+  }, [issueTags, tagsById]);
+
+  const relationshipsByIssueId = useMemo(() => {
+    const grouped = new Map<string, (typeof issueRelationships)[number][]>();
+    for (const relationship of issueRelationships) {
+      const issueIds = [relationship.issue_id];
+      if (relationship.related_issue_id !== relationship.issue_id) {
+        issueIds.push(relationship.related_issue_id);
+      }
+      for (const issueId of issueIds) {
+        const existing = grouped.get(issueId);
+        if (existing) existing.push(relationship);
+        else grouped.set(issueId, [relationship]);
+      }
+    }
+    return grouped;
+  }, [issueRelationships]);
+
+  const pullRequestsByIssueId = useMemo(() => {
+    const pullRequestsById = new Map(
+      pullRequests.map((pullRequest) => [pullRequest.id, pullRequest])
+    );
+    const grouped = new Map<string, (typeof pullRequests)[number][]>();
+    for (const link of pullRequestIssues) {
+      const pullRequest = pullRequestsById.get(link.pull_request_id);
+      if (!pullRequest) continue;
+      const existing = grouped.get(link.issue_id);
+      if (existing) existing.push(pullRequest);
+      else grouped.set(link.issue_id, [pullRequest]);
+    }
+    return grouped;
+  }, [pullRequests, pullRequestIssues]);
+
   const workspacesByIssueId = useMemo(() => {
     if (!showWorkspaces) {
       return new Map<string, WorkspaceWithStats[]>();
@@ -740,52 +802,45 @@ export function KanbanContainer() {
 
     const map = new Map<string, WorkspaceWithStats[]>();
 
-    for (const issue of issues) {
-      const nonArchivedWorkspaces = getWorkspacesForIssue(issue.id)
-        .filter(
-          (workspace) =>
-            !workspace.archived &&
-            !!workspace.local_workspace_id &&
-            localWorkspacesById.has(workspace.local_workspace_id)
-        )
-        .map((workspace) => {
-          const localWorkspace = localWorkspacesById.get(
-            workspace.local_workspace_id!
-          );
-
-          return {
-            id: workspace.id,
-            localWorkspaceId: workspace.local_workspace_id,
-            name: workspace.name,
-            archived: workspace.archived,
-            filesChanged: workspace.files_changed ?? 0,
-            linesAdded: workspace.lines_added ?? 0,
-            linesRemoved: workspace.lines_removed ?? 0,
-            prs: prsByWorkspaceId.get(workspace.id) ?? [],
-            owner: null,
-            updatedAt: workspace.updated_at,
-            isRunning: localWorkspace?.isRunning,
-            hasPendingApproval: localWorkspace?.hasPendingApproval,
-            hasRunningDevServer: localWorkspace?.hasRunningDevServer,
-            hasUnseenActivity: localWorkspace?.hasUnseenActivity,
-            latestProcessCompletedAt: localWorkspace?.latestProcessCompletedAt,
-            latestProcessStatus: localWorkspace?.latestProcessStatus,
-          };
-        });
-
-      if (nonArchivedWorkspaces.length > 0) {
-        map.set(issue.id, nonArchivedWorkspaces);
+    for (const workspace of workspaces) {
+      if (
+        workspace.archived ||
+        !workspace.issue_id ||
+        !workspace.local_workspace_id
+      ) {
+        continue;
       }
+
+      const localWorkspace = localWorkspacesById.get(
+        workspace.local_workspace_id
+      );
+      if (!localWorkspace) continue;
+
+      const workspaceWithStats: WorkspaceWithStats = {
+        id: workspace.id,
+        localWorkspaceId: workspace.local_workspace_id,
+        name: workspace.name,
+        archived: workspace.archived,
+        filesChanged: workspace.files_changed ?? 0,
+        linesAdded: workspace.lines_added ?? 0,
+        linesRemoved: workspace.lines_removed ?? 0,
+        prs: prsByWorkspaceId.get(workspace.id) ?? [],
+        owner: null,
+        updatedAt: workspace.updated_at,
+        isRunning: localWorkspace.isRunning,
+        hasPendingApproval: localWorkspace.hasPendingApproval,
+        hasRunningDevServer: localWorkspace.hasRunningDevServer,
+        hasUnseenActivity: localWorkspace.hasUnseenActivity,
+        latestProcessCompletedAt: localWorkspace.latestProcessCompletedAt,
+        latestProcessStatus: localWorkspace.latestProcessStatus,
+      };
+      const existing = map.get(workspace.issue_id);
+      if (existing) existing.push(workspaceWithStats);
+      else map.set(workspace.issue_id, [workspaceWithStats]);
     }
 
     return map;
-  }, [
-    showWorkspaces,
-    issues,
-    getWorkspacesForIssue,
-    localWorkspacesById,
-    prsByWorkspaceId,
-  ]);
+  }, [showWorkspaces, workspaces, localWorkspacesById, prsByWorkspaceId]);
 
   // Calculate sort_order based on column index and issue position
   // Formula: 1000 * [COLUMN_INDEX] + [ISSUE_INDEX] (both 1-based)
@@ -1390,6 +1445,7 @@ export function KanbanContainer() {
                       id={status.id}
                       activeProjectId={projectId}
                       issueIds={issueIds}
+                      className="pt-base"
                       positionalReorderEnabled={isManualSort}
                     >
                       {issueIds.map((issueId) => {
@@ -1400,8 +1456,8 @@ export function KanbanContainer() {
                         const workspaceIdsShownOnCard = new Set(
                           issueWorkspaces.map((workspace) => workspace.id)
                         );
-                        const issueCardPullRequests = getPullRequestsForIssue(
-                          issue.id
+                        const issueCardPullRequests = (
+                          pullRequestsByIssueId.get(issue.id) ?? []
                         ).filter((pr) => {
                           if (!pr.workspace_id) {
                             return true;
@@ -1440,11 +1496,11 @@ export function KanbanContainer() {
                               title={issue.title}
                               description={issue.description}
                               priority={issue.priority}
-                              tags={getTagObjectsForIssue(issue.id)}
+                              tags={tagObjectsByIssueId.get(issue.id) ?? []}
                               pullRequests={issueCardPullRequests}
                               relationships={resolveRelationshipsForIssue(
                                 issue.id,
-                                getRelationshipsForIssue(issue.id),
+                                relationshipsByIssueId.get(issue.id) ?? [],
                                 issuesById
                               )}
                               isSubIssue={!!issue.parent_issue_id}
@@ -1470,9 +1526,9 @@ export function KanbanContainer() {
                               onInfoClick={() => openCardInfo(issue.id)}
                               tagEditProps={{
                                 allTags: tags,
-                                selectedTagIds: getTagsForIssue(issue.id).map(
-                                  (it) => it.tag_id
-                                ),
+                                selectedTagIds: (
+                                  issueTagsByIssueId.get(issue.id) ?? []
+                                ).map((it) => it.tag_id),
                                 onTagToggle: (tagId) =>
                                   handleCardTagToggle(issue.id, tagId),
                                 onCreateTag: handleCreateTag,

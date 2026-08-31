@@ -240,7 +240,7 @@ export function SettingsCheckbox({
 }
 
 // SettingsSelect - A dropdown select component
-export function SettingsSelect<T extends string>({
+export function SettingsSelect<T extends string | number>({
   value,
   options,
   actions,

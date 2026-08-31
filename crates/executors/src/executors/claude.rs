@@ -53,6 +53,7 @@ use crate::{
     },
     model_selector::PermissionPolicy,
     profile::ExecutorConfig,
+    provider_usage::{ProviderQuotaWindow, record_window},
     stdout_dup::create_stdout_pipe_writer,
 };
 
@@ -2379,8 +2380,14 @@ impl ClaudeLogProcessor {
             }
             ClaudeJson::ControlRequest { .. }
             | ClaudeJson::ControlResponse { .. }
-            | ClaudeJson::ControlCancelRequest { .. }
-            | ClaudeJson::RateLimitEvent { .. } => {}
+            | ClaudeJson::ControlCancelRequest { .. } => {}
+            ClaudeJson::RateLimitEvent {
+                rate_limit_info, ..
+            } => {
+                if let Some(rate_limit_info) = rate_limit_info {
+                    record_claude_rate_limit(rate_limit_info);
+                }
+            }
         }
         patches
     }
@@ -2507,6 +2514,54 @@ impl ClaudeLogProcessor {
         let idx = entry_index_provider.next();
         ConversationPatch::add_normalized_entry(idx, entry)
     }
+}
+
+fn record_claude_rate_limit(info: &serde_json::Value) {
+    let Some(rate_limit_type) = info
+        .get("rateLimitType")
+        .and_then(serde_json::Value::as_str)
+    else {
+        return;
+    };
+
+    let used_percent = info
+        .get("utilization")
+        .and_then(serde_json::Value::as_f64)
+        .or_else(|| {
+            info.get("utilization")
+                .and_then(|value| value.get("usedPercent"))
+                .and_then(serde_json::Value::as_f64)
+        })
+        .map(|value| if value <= 1.0 { value * 100.0 } else { value });
+    let resets_at = info.get("resetsAt").and_then(serde_json::Value::as_i64);
+    let status = info
+        .get("status")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
+    let plan = info
+        .get("planType")
+        .and_then(serde_json::Value::as_str)
+        .map(str::to_string);
+
+    record_window(
+        "claude",
+        plan,
+        ProviderQuotaWindow {
+            name: rate_limit_type.to_string(),
+            used_percent,
+            limit_value: None,
+            used_value: None,
+            unit: Some("percent".to_string()),
+            duration_minutes: match rate_limit_type {
+                "five_hour" => Some(5 * 60),
+                "seven_day" | "seven_day_opus" | "seven_day_sonnet" => Some(7 * 24 * 60),
+                _ => None,
+            },
+            resets_at,
+            status: status.clone(),
+        },
+        status,
+    );
 }
 
 fn add_system_message(
@@ -3256,6 +3311,34 @@ mod tests {
         let annotated_partial = annotate_claude_auth_failure(partial);
         assert!(annotated_partial.contains(AUTH_FAILURE_GUIDANCE));
         assert!(!annotated_partial.ends_with('\n'));
+    }
+
+    #[test]
+    fn claude_rate_limit_event_records_percent_and_reset() {
+        let info = serde_json::json!({
+            "rateLimitType": "five_hour",
+            "utilization": 0.42,
+            "resetsAt": 1_800_000_000_i64,
+            "status": "allowed",
+            "planType": "pro"
+        });
+
+        record_claude_rate_limit(&info);
+
+        let snapshot = crate::provider_usage::snapshots()
+            .into_iter()
+            .find(|snapshot| snapshot.provider == "claude")
+            .expect("Claude quota snapshot should be recorded");
+        let window = snapshot
+            .windows
+            .iter()
+            .find(|window| window.name == "five_hour")
+            .expect("five-hour window should be recorded");
+
+        assert_eq!(snapshot.plan.as_deref(), Some("pro"));
+        assert_eq!(window.used_percent, Some(42.0));
+        assert_eq!(window.duration_minutes, Some(300));
+        assert_eq!(window.resets_at, Some(1_800_000_000));
     }
 
     #[test]

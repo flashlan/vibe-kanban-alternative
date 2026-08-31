@@ -36,8 +36,11 @@ interface StreamController<E = unknown> {
  *
  * Maintains an in-memory { entries: [] } snapshot and returns a controller.
  *
- * Messages are batched per animation frame and applied using immer for
- * structural sharing, avoiding a full deep clone on every message.
+ * Messages are batched per animation frame. The log protocol is append-heavy:
+ * most patches add or replace one complete entry at `/entries/N`. Those
+ * patches use a direct fast path to avoid copying the complete conversation
+ * array on every frame. Less common structural patches keep the Immer
+ * fallback for correctness.
  */
 export function streamJsonPatchEntries<E = unknown>(
   url: string,
@@ -75,9 +78,11 @@ export function streamJsonPatchEntries<E = unknown>(
     const ops = dedupeOps(pendingOps);
     pendingOps = [];
 
-    snapshot = produce(snapshot, (draft) => {
-      applyUpsertPatch(draft, ops);
-    });
+    if (!applyDirectEntryPatches(snapshot.entries, ops)) {
+      snapshot = produce(snapshot, (draft) => {
+        applyUpsertPatch(draft, ops);
+      });
+    }
     notify();
   };
 
@@ -175,6 +180,51 @@ export function streamJsonPatchEntries<E = unknown>(
       connected = false;
     },
   };
+}
+
+/**
+ * Fast path for the normal conversation-log protocol. The server emits
+ * complete entries at `/entries/<index>`; mutating this private stream
+ * snapshot avoids an O(n) array copy for every streaming frame. Consumers
+ * are explicitly notified after each flush, so they do not depend on array
+ * identity changing.
+ */
+function applyDirectEntryPatches<E>(entries: E[], ops: Operation[]): boolean {
+  const directEntryPath = /^\/entries\/(0|[1-9]\d*)$/;
+
+  for (const op of ops) {
+    const match = directEntryPath.exec(op.path);
+    if (!match) return false;
+
+    const index = Number(match[1]);
+    if (!Number.isSafeInteger(index)) return false;
+
+    if (op.op === 'remove') {
+      if (index >= entries.length) return false;
+      entries.splice(index, 1);
+      continue;
+    }
+
+    if (!('value' in op)) return false;
+
+    if (op.op === 'add') {
+      if (index > entries.length) return false;
+      entries.splice(index, 0, op.value as E);
+      continue;
+    }
+
+    if (op.op === 'replace') {
+      // Preserve applyUpsertPatch's replace-as-add behavior for a missing
+      // array item.
+      if (index > entries.length) return false;
+      entries[index] = op.value as E;
+      continue;
+    }
+
+    return false;
+  }
+
+  return true;
 }
 
 /**

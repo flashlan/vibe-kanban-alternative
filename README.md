@@ -260,6 +260,12 @@ A per-machine activity dashboard in **Settings → Usage** shows how your agent 
 - **Activity heatmap** — a GitHub-style, day-by-day view of agent executions.
 - **Executions per day by agent** — stacked bar rows for each configured agent.
 - **Extraction token usage** — tokens spent on mem0 graph extractions.
+- **Provider limits** — live Codex and Claude quota windows when their CLIs
+  expose structured account data, including usage, remaining percentage, and
+  reset time. Providers without a safe machine-readable response are shown as
+  unavailable rather than estimated from local token counts.
+- **Token usage by issue** — durable normalized observations grouped by issue,
+  agent, provider, and model for local benchmarking.
 - **Project and issue progress** — open/done counts and completion bars per project.
 
 ![Usage and observability dashboard with an activity heatmap and per-agent execution bars](packages/public/vibe-kanban-usage-dashboard.png)

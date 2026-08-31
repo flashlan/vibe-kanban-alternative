@@ -90,6 +90,41 @@ export interface TokenTelemetrySummary {
   cache_hit_pct: number | null;
 }
 
+export interface TokenUsageBreakdown {
+  issue_id: string | null;
+  issue_title: string | null;
+  agent: string;
+  provider: string | null;
+  model: string | null;
+  executions: number;
+  total_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+}
+
+export interface ProviderQuotaWindow {
+  name: string;
+  used_percent: number | null;
+  limit_value: number | null;
+  used_value: number | null;
+  unit: string | null;
+  duration_minutes: number | null;
+  resets_at: number | null;
+  status: string | null;
+}
+
+export interface ProviderQuotaSnapshot {
+  provider: string;
+  plan: string | null;
+  windows: ProviderQuotaWindow[];
+  credits_balance: string | null;
+  credits_unlimited: boolean;
+  status: string | null;
+  observed_at: number;
+}
+
 export interface UsageSummary {
   activity: DailyAgentActivity[];
   issues: DailyIssueActivity[];
@@ -100,6 +135,8 @@ export interface UsageSummary {
   mem0_tokens: Mem0TokenUsage;
   mem0_relevance: Mem0RelevanceSummary;
   token_telemetry: TokenTelemetrySummary;
+  token_usage: TokenUsageBreakdown[];
+  provider_limits: ProviderQuotaSnapshot[];
 }
 
 /** Aggregate issue lifecycle counts across all projects. */
@@ -208,6 +245,24 @@ function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 10_000) return `${(n / 1_000).toFixed(1)}K`;
   return n.toLocaleString();
+}
+
+function formatQuotaName(name: string): string {
+  return name
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatQuotaReset(timestamp: number | null): string {
+  if (timestamp == null) return '—';
+  const date = new Date(timestamp * 1000);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleString();
+}
+
+function formatQuotaLimit(window: ProviderQuotaWindow): string | null {
+  if (window.limit_value == null) return null;
+  if (window.unit === 'usd') return `$${window.limit_value}`;
+  return `${window.limit_value} ${window.unit ?? ''}`.trim();
 }
 
 export function UsageSettingsSection() {
@@ -671,6 +726,176 @@ export function UsageSettingsSection() {
                 })()}
               </div>
             </>
+          )}
+        </div>
+      </section>
+
+      {/* Provider account quota — only machine-readable provider data. */}
+      <section>
+        <h3 className="mb-2 text-sm font-medium text-high">
+          {t('settings.usage.providerLimits', 'Provider limits')}
+        </h3>
+        <div className="rounded-sm border border-border bg-panel p-3">
+          <p className="mb-3 text-xs text-low">
+            {t(
+              'settings.usage.providerLimitsNote',
+              'Live account windows are shown when the provider exposes them. Local token counts do not represent provider quota consumption.'
+            )}
+          </p>
+          {(summary?.provider_limits ?? []).length === 0 ? (
+            <div className="text-sm text-low">
+              {t(
+                'settings.usage.noProviderLimits',
+                'No provider quota snapshot is available yet. Run an agent to request the provider status.'
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {(summary?.provider_limits ?? []).map((provider) => (
+                <div key={provider.provider}>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="font-medium text-normal">
+                        {provider.provider}
+                      </span>
+                      {provider.plan && (
+                        <span className="ml-2 text-xs text-low">
+                          {provider.plan}
+                        </span>
+                      )}
+                    </div>
+                    {provider.credits_unlimited && (
+                      <span className="text-xs text-low">
+                        Unlimited credits
+                      </span>
+                    )}
+                    {!provider.credits_unlimited &&
+                      provider.credits_balance && (
+                        <span className="text-xs text-low">
+                          Credits: {provider.credits_balance}
+                        </span>
+                      )}
+                  </div>
+                  {provider.windows.length === 0 ? (
+                    <div className="text-xs text-low">
+                      Usage windows unavailable from this provider.
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2">
+                      {provider.windows.map((window) => {
+                        const used = window.used_percent;
+                        const remaining =
+                          used != null
+                            ? Math.max(0, Math.min(100, 100 - used))
+                            : null;
+                        const limit = formatQuotaLimit(window);
+                        return (
+                          <div key={window.name}>
+                            <div className="mb-1 flex items-center justify-between gap-2 text-xs">
+                              <span className="text-normal">
+                                {formatQuotaName(window.name)}
+                              </span>
+                              <span className="text-right text-low">
+                                {used != null
+                                  ? `${Math.round(used)}% used · ${Math.round(remaining ?? 0)}% remaining`
+                                  : (limit ?? 'Usage unavailable')}
+                              </span>
+                            </div>
+                            <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                              {used != null && (
+                                <div
+                                  className="h-full rounded-full bg-brand"
+                                  style={{
+                                    width: `${Math.min(100, Math.max(0, used))}%`,
+                                  }}
+                                />
+                              )}
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-x-3 text-[10px] text-low">
+                              {limit && <span>{limit} limit</span>}
+                              {window.duration_minutes && (
+                                <span>
+                                  {window.duration_minutes} min window
+                                </span>
+                              )}
+                              <span>
+                                Resets: {formatQuotaReset(window.resets_at)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="mt-3 border-t border-border pt-2 text-[10px] text-low">
+            Codex and Claude can report live windows. AGY and OpenCode do not
+            currently expose a safe live machine-readable quota in the local
+            executor, so their remaining usage is not guessed here.
+          </p>
+        </div>
+      </section>
+
+      {/* Durable token ledger — grouped by issue, CLI and model. */}
+      <section>
+        <h3 className="mb-2 text-sm font-medium text-high">
+          {t('settings.usage.tokenUsageByIssue', 'Token usage by issue')}
+        </h3>
+        <div className="rounded-sm border border-border bg-panel p-3">
+          <p className="mb-3 text-xs text-low">
+            {t(
+              'settings.usage.tokenUsageNote',
+              'Observed normalized usage over the last 30 days. This is not provider billing or remaining plan quota.'
+            )}
+          </p>
+          {(summary?.token_usage ?? []).length === 0 ? (
+            <div className="text-sm text-low">
+              {t(
+                'settings.usage.noTokenUsage',
+                'No durable token usage has been recorded yet.'
+              )}
+            </div>
+          ) : (
+            <div className="max-h-72 overflow-y-auto">
+              <div className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1.1fr)_minmax(0,1.4fr)_auto] gap-x-3 border-b border-border pb-2 text-[10px] uppercase text-low">
+                <span>{t('settings.usage.issue', 'Issue')}</span>
+                <span>{t('settings.usage.agent', 'Agent')}</span>
+                <span>{t('settings.usage.model', 'Model')}</span>
+                <span className="text-right">
+                  {t('settings.usage.tokens', 'Tokens')}
+                </span>
+              </div>
+              <div className="divide-y divide-border">
+                {(summary?.token_usage ?? []).map((row, index) => (
+                  <div
+                    key={`${row.issue_id ?? 'unlinked'}-${row.agent}-${row.model ?? 'default'}-${index}`}
+                    className="grid grid-cols-[minmax(0,1.6fr)_minmax(0,1.1fr)_minmax(0,1.4fr)_auto] gap-x-3 py-2 text-xs"
+                  >
+                    <span
+                      className="truncate text-normal"
+                      title={row.issue_id ?? undefined}
+                    >
+                      {row.issue_title ??
+                        t(
+                          'settings.usage.unlinkedExecution',
+                          'Unlinked execution'
+                        )}
+                    </span>
+                    <span className="truncate text-normal">{row.agent}</span>
+                    <span className="truncate text-low">
+                      {row.model ??
+                        t('settings.usage.defaultModel', 'Default model')}
+                    </span>
+                    <span className="text-right text-normal">
+                      {formatTokens(row.total_tokens)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       </section>

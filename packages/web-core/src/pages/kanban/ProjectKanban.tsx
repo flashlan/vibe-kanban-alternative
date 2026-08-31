@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { type IssuePriority, type Project } from 'shared/remote-types';
 import { Group, Layout, Panel, Separator } from 'react-resizable-panels';
@@ -229,7 +236,9 @@ function ProjectMutationsRegistration({ children }: { children: ReactNode }) {
     ]
   );
 
-  useEffect(() => {
+  // Register before the browser can process input so the native New Issue
+  // menu cannot win a race against the Kanban provider mounting.
+  useLayoutEffect(() => {
     registerProjectMutations({
       removeIssue: (id) => {
         removeIssue(id);

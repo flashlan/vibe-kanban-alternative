@@ -38,7 +38,13 @@ impl ServerHandler for McpServer {
         }
 
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
-            .with_server_info(Implementation::new("vibe-kanban-mcp", "1.0.0"))
+            // Keep the MCP handshake version aligned with the workspace release.
+            // A fixed protocol-facing version made stale cached binaries look
+            // current to clients and hid launcher/update problems.
+            .with_server_info(Implementation::new(
+                "vibe-kanban-mcp",
+                env!("CARGO_PKG_VERSION"),
+            ))
             .with_protocol_version(ProtocolVersion::V_2025_03_26)
             .with_instructions(instruction)
     }

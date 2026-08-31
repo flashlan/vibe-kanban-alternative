@@ -135,6 +135,7 @@ use self::{
     jsonrpc::{ExitSignalSender, JsonRpcPeer},
     normalize_logs::{Error, normalize_logs},
 };
+use crate::provider_usage::{ProviderQuotaSnapshot, ProviderQuotaWindow, record_snapshot};
 use crate::{
     approvals::ExecutorApprovalService,
     command::{CmdOverrides, CommandBuildError, CommandBuilder, CommandParts, apply_overrides},
@@ -858,6 +859,9 @@ impl Codex {
 
             let result = async {
                 client.initialize().await?;
+                if let Ok(rate_limits) = client.get_account_rate_limits().await {
+                    record_codex_rate_limits(&rate_limits);
+                }
                 task(client, exit_signal_tx.clone()).await
             }
             .await;
@@ -945,6 +949,51 @@ impl Codex {
 
         compatibility_for_version(version)
     }
+}
+
+fn record_codex_rate_limits(response: &codex_app_server_protocol::GetAccountRateLimitsResponse) {
+    let limits = &response.rate_limits;
+    let window =
+        |name: &str, value: &codex_app_server_protocol::RateLimitWindow| ProviderQuotaWindow {
+            name: name.to_string(),
+            used_percent: Some(value.used_percent as f64),
+            limit_value: None,
+            used_value: None,
+            unit: Some("percent".to_string()),
+            duration_minutes: value.window_duration_mins,
+            resets_at: value.resets_at,
+            status: limits
+                .rate_limit_reached_type
+                .as_ref()
+                .map(|status| format!("{status:?}")),
+        };
+    let mut windows = Vec::new();
+    if let Some(primary) = &limits.primary {
+        windows.push(window("primary", primary));
+    }
+    if let Some(secondary) = &limits.secondary {
+        windows.push(window("secondary", secondary));
+    }
+    let credits_balance = limits
+        .credits
+        .as_ref()
+        .and_then(|credits| credits.balance.clone());
+    let credits_unlimited = limits
+        .credits
+        .as_ref()
+        .is_some_and(|credits| credits.unlimited);
+    record_snapshot(ProviderQuotaSnapshot {
+        provider: "codex".to_string(),
+        plan: limits.plan_type.as_ref().map(|plan| format!("{plan:?}")),
+        windows,
+        credits_balance,
+        credits_unlimited,
+        status: limits
+            .rate_limit_reached_type
+            .as_ref()
+            .map(|status| format!("{status:?}")),
+        observed_at: 0,
+    });
 }
 
 #[cfg(test)]

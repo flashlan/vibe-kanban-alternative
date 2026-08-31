@@ -305,11 +305,23 @@ impl IntoResponse for ApiError {
                     ),
                 )
             }
-            ApiError::GitService(e) => ErrorInfo::with_status(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "GitServiceError",
-                format!("Git operation failed: {}", e),
-            ),
+            ApiError::GitService(e) => {
+                let message = e.to_string();
+                if message.contains("Operation not permitted")
+                    && (message.contains(".git") || message.contains("repository"))
+                {
+                    ErrorInfo::bad_request(
+                        "RepositoryAccessError",
+                        "Vibe Kanban cannot access this repository folder. On macOS, grant Vibe Kanban access to Desktop in System Settings → Privacy & Security → Files and Folders (or Full Disk Access), then restart the app.",
+                    )
+                } else {
+                    ErrorInfo::with_status(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "GitServiceError",
+                        format!("Git operation failed: {}", e),
+                    )
+                }
+            }
             ApiError::GitHost(_) => ErrorInfo::internal("GitHostError"),
 
             ApiError::File(FileError::TooLarge(size, max)) => ErrorInfo::with_status(

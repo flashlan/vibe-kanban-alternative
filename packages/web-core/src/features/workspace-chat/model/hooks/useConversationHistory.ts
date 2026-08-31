@@ -93,6 +93,7 @@ export const useConversationHistory = ({
   );
   const displayedExecutionProcesses = useRef<ExecutionProcessStateStore>({});
   const loadedInitialEntries = useRef(false);
+  const initialHistoryLoadInFlightRef = useRef(false);
   const emittedEmptyInitialRef = useRef(false);
   const streamingProcessIdsRef = useRef<Set<string>>(new Set());
   const onTimelineUpdatedRef = useRef<
@@ -489,6 +490,7 @@ export const useConversationHistory = ({
   useEffect(() => {
     displayedExecutionProcesses.current = {};
     loadedInitialEntries.current = false;
+    initialHistoryLoadInFlightRef.current = false;
     emittedEmptyInitialRef.current = false;
     streamingProcessIdsRef.current.clear();
     previousStatusMapRef.current.clear();
@@ -498,59 +500,64 @@ export const useConversationHistory = ({
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (loadedInitialEntries.current) return;
+      if (loadedInitialEntries.current || initialHistoryLoadInFlightRef.current)
+        return;
 
       // A cached process manifest is enough to paint cached history while the
       // live process WebSocket is still delivering its first snapshot.
       if (isLoading && cachedExecutionProcesses === undefined) return;
 
-      if (executionProcesses.current.length === 0) {
-        if (emittedEmptyInitialRef.current) return;
-        emittedEmptyInitialRef.current = true;
-        emitEntries(displayedExecutionProcesses.current, 'initial', false);
-        return;
-      }
+      initialHistoryLoadInFlightRef.current = true;
+      try {
+        if (executionProcesses.current.length === 0) {
+          if (emittedEmptyInitialRef.current) return;
+          emittedEmptyInitialRef.current = true;
+          emitEntries(displayedExecutionProcesses.current, 'initial', false);
+          return;
+        }
 
-      emittedEmptyInitialRef.current = false;
+        emittedEmptyInitialRef.current = false;
 
-      const allInitialEntries = await loadHistoricEntries(
-        MIN_INITIAL_ENTRIES,
-        INITIAL_HISTORY_LOAD_BUDGET_MS
-      );
-      if (cancelled) return;
-      loadedInitialEntries.current = true;
-      mergeIntoDisplayed((state) => {
-        Object.assign(state, allInitialEntries);
-      });
-      emitEntries(displayedExecutionProcesses.current, 'initial', false);
-
-      setIsLoadingHistory(true);
-      // Let React paint the initial cached batch before walking older history.
-      // Without this yield, cache hits resolve as microtasks and a large
-      // conversation can starve the browser's next paint.
-      await yieldToBrowser();
-      while (!cancelled) {
-        const hasMore =
-          await loadRemainingEntriesInBatches(REMAINING_BATCH_SIZE);
-        if (!hasMore) break;
+        const allInitialEntries = await loadHistoricEntries(
+          MIN_INITIAL_ENTRIES,
+          INITIAL_HISTORY_LOAD_BUDGET_MS
+        );
         if (cancelled) return;
-        emitEntries(displayedExecutionProcesses.current, 'historic', false);
+        loadedInitialEntries.current = true;
+        mergeIntoDisplayed((state) => {
+          Object.assign(state, allInitialEntries);
+        });
+        emitEntries(displayedExecutionProcesses.current, 'initial', false);
+
+        setIsLoadingHistory(true);
+        // Let React paint the initial cached batch before walking older history.
+        // Without this yield, cache hits resolve as microtasks and a large
+        // conversation can starve the browser's next paint.
         await yieldToBrowser();
+        while (!cancelled) {
+          const hasMore =
+            await loadRemainingEntriesInBatches(REMAINING_BATCH_SIZE);
+          if (!hasMore) break;
+          if (cancelled) return;
+          emitEntries(displayedExecutionProcesses.current, 'historic', false);
+          await yieldToBrowser();
+        }
+        if (!cancelled) setIsLoadingHistory(false);
+      } finally {
+        initialHistoryLoadInFlightRef.current = false;
       }
-      if (!cancelled) setIsLoadingHistory(false);
     })();
     return () => {
       cancelled = true;
     };
   }, [
     scopeKey,
-    idListKey,
     isLoading,
     cachedExecutionProcesses,
     loadHistoricEntries,
     loadRemainingEntriesInBatches,
     emitEntries,
-  ]); // include idListKey so new processes trigger reload
+  ]);
 
   useEffect(() => {
     const activeProcesses = getActiveAgentProcesses();

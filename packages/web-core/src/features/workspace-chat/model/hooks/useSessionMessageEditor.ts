@@ -55,7 +55,7 @@ export function useSessionMessageEditor({
       ? scratch.payload.data
       : undefined;
 
-  const [localMessage, setLocalMessage] = useState('');
+  const [localMessage, setLocalMessageState] = useState('');
   const [hasInitialValue, setHasInitialValue] = useState(false);
 
   const saveToScratch = useCallback(
@@ -83,12 +83,21 @@ export function useSessionMessageEditor({
 
   // Track whether initial load has happened to avoid re-syncing during typing
   const hasLoadedRef = useRef(false);
+  const hasUserEditedRef = useRef(false);
+
+  // Scratch loads in the background. Never let a late snapshot replace text
+  // the user has already typed or inserted via an attachment.
+  const setLocalMessage = useCallback((value: string) => {
+    hasUserEditedRef.current = true;
+    setLocalMessageState(value);
+  }, []);
 
   // Reset load state and clear message when scratchId changes (e.g., switching to approval mode)
   useEffect(() => {
     hasLoadedRef.current = false;
+    hasUserEditedRef.current = false;
     setHasInitialValue(false);
-    setLocalMessage('');
+    setLocalMessageState('');
   }, [scratchId]);
 
   // Sync local message from scratch only on initial load
@@ -96,7 +105,9 @@ export function useSessionMessageEditor({
     if (isScratchLoading) return;
     if (hasLoadedRef.current) return;
     hasLoadedRef.current = true;
-    setLocalMessage(scratchData?.message ?? '');
+    if (!hasUserEditedRef.current) {
+      setLocalMessageState(scratchData?.message ?? '');
+    }
     setHasInitialValue(true);
   }, [isScratchLoading, scratchData?.message]);
 
@@ -104,7 +115,8 @@ export function useSessionMessageEditor({
   // Pass executor profile at call-time to avoid stale closure
   const handleMessageChange = useCallback(
     (value: string, executorConfig: ExecutorConfig) => {
-      setLocalMessage(value);
+      setLocalMessageState(value);
+      hasUserEditedRef.current = true;
       debouncedSave(value, executorConfig);
     },
     [debouncedSave]

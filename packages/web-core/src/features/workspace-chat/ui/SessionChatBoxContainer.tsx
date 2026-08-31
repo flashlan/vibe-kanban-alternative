@@ -411,8 +411,6 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
     localMessage,
     setLocalMessage,
     scratchData,
-    isScratchLoading,
-    hasInitialValue,
     saveToScratch,
     clearDraft,
     cancelDebouncedSave,
@@ -433,12 +431,12 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
   // click, sidebar selection, new-session), so the user can type immediately
   // instead of having to click the box first.
   useEffect(() => {
-    if (!workspaceId || isScratchLoading) return;
+    if (!workspaceId) return;
     const raf = requestAnimationFrame(() => {
       editorRef.current?.focus();
     });
     return () => cancelAnimationFrame(raf);
-  }, [workspaceId, sessionId, isScratchLoading, isNewSessionMode]);
+  }, [workspaceId, sessionId, isNewSessionMode]);
 
   // Attachment handling - insert markdown when attachments are uploaded
   const handleInsertMarkdown = useCallback(
@@ -541,7 +539,10 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
       cancelDebouncedSave();
       setLocalMessage('');
       clearUploadedAttachments();
-      if (isNewSessionMode) await clearDraft();
+      // The editor draft is persisted per session so a refresh can recover
+      // unsent text. Once the send succeeded, remove it for existing and new
+      // sessions alike; otherwise a refresh restores an already-sent prompt.
+      await clearDraft();
       if (!isSlashCommand) {
         reviewContext?.clearComments();
       }
@@ -559,7 +560,6 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
     cancelDebouncedSave,
     setLocalMessage,
     clearUploadedAttachments,
-    isNewSessionMode,
     clearDraft,
     reviewContext,
   ]);
@@ -977,19 +977,11 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
       : 'idle'
     : status;
 
-  // During loading, render with empty editor to preserve container UI
   // In approval mode, don't show queued message - it's for follow-up, not approval response
   const editorValue = useMemo(() => {
-    if (isScratchLoading || !hasInitialValue) return '';
     if (pendingApproval) return localMessage;
     return queuedMessage ?? localMessage;
-  }, [
-    isScratchLoading,
-    hasInitialValue,
-    pendingApproval,
-    queuedMessage,
-    localMessage,
-  ]);
+  }, [pendingApproval, queuedMessage, localMessage]);
 
   const renderEditor = useCallback(
     ({

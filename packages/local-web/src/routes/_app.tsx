@@ -15,6 +15,7 @@ import { LogsPanelProvider } from '@/shared/providers/LogsPanelProvider';
 import { ActionsProvider } from '@/shared/providers/ActionsProvider';
 import { useWorkspaceContext } from '@/shared/hooks/useWorkspaceContext';
 import { SharedAppLayout } from '@/shared/components/ui-new/containers/SharedAppLayout';
+import { useTauriNativeMenu } from '@web/app/hooks/useTauriNativeMenu';
 
 function KeyboardShortcutsHandler() {
   useKeyShowHelp(
@@ -25,6 +26,11 @@ function KeyboardShortcutsHandler() {
   );
   useWorkspaceShortcuts();
   useIssueShortcuts();
+  return null;
+}
+
+function NativeMenuHandler() {
+  useTauriNativeMenu();
   return null;
 }
 
@@ -52,7 +58,10 @@ function AppRouteProviders({ children }: { children: ReactNode }) {
               {/* NiceModal renders dialogs as siblings of children at the
                   Provider level, so it must be inside all providers that
                   dialogs depend on (Workspace, Actions, etc.). */}
-              <NiceModalProvider>{children}</NiceModalProvider>
+              <NiceModalProvider>
+                <NativeMenuHandler />
+                {children}
+              </NiceModalProvider>
             </ActionsProvider>
           </LogsPanelProvider>
         </ExecutionProcessesProviderWrapper>

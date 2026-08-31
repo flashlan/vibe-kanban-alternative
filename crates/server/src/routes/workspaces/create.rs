@@ -20,7 +20,7 @@ use executors::{executors::BaseCodingAgent, profile::ExecutorConfig};
 use services::services::container::ContainerService;
 use utils::response::ApiResponse;
 use uuid::Uuid;
-use workspace_manager::WorkspaceError;
+use workspace_manager::{ManagedWorkspace, WorkspaceError, WorkspaceManager};
 
 use crate::{DeploymentImpl, error::ApiError};
 
@@ -96,6 +96,39 @@ fn normalize_prompt(prompt: &str) -> Option<String> {
     }
 }
 
+/// Roll back the database record and any filesystem state created while
+/// starting a workspace. This is especially important for GUI builds on
+/// macOS: TCC can deny access to repositories under Desktop/Documents after
+/// the workspace row has already been inserted.
+async fn cleanup_failed_workspace(managed_workspace: &ManagedWorkspace) {
+    match managed_workspace.prepare_deletion_context().await {
+        Ok(context) => {
+            if let Err(error) = managed_workspace.delete_record().await {
+                tracing::warn!(
+                    workspace_id = %managed_workspace.workspace.id,
+                    ?error,
+                    "Failed to delete workspace record after creation failure"
+                );
+            }
+            WorkspaceManager::spawn_workspace_deletion_cleanup(context, true);
+        }
+        Err(error) => {
+            tracing::warn!(
+                workspace_id = %managed_workspace.workspace.id,
+                ?error,
+                "Failed to prepare cleanup after workspace creation failure"
+            );
+            if let Err(delete_error) = managed_workspace.delete_record().await {
+                tracing::warn!(
+                    workspace_id = %managed_workspace.workspace.id,
+                    ?delete_error,
+                    "Failed to delete workspace record after cleanup preparation failed"
+                );
+            }
+        }
+    }
+}
+
 pub async fn create_and_start_workspace(
     State(deployment): State<DeploymentImpl>,
     Json(payload): Json<CreateAndStartWorkspaceRequest>,
@@ -122,10 +155,18 @@ pub async fn create_and_start_workspace(
         ));
     }
 
-    let mut managed_workspace = deployment
+    let workspace_record = create_workspace_record(&deployment, name, kind).await?;
+    let mut managed_workspace = match deployment
         .workspace_manager()
-        .load_managed_workspace(create_workspace_record(&deployment, name, kind).await?)
-        .await?;
+        .load_managed_workspace(workspace_record.clone())
+        .await
+    {
+        Ok(workspace) => workspace,
+        Err(error) => {
+            let _ = Workspace::delete(&deployment.db().pool, workspace_record.id).await;
+            return Err(ApiError::Database(error));
+        }
+    };
 
     let pool = &deployment.db().pool;
 
@@ -191,10 +232,13 @@ pub async fn create_and_start_workspace(
     };
 
     for repo in &repos {
-        managed_workspace
+        if let Err(error) = managed_workspace
             .add_repository(repo, deployment.git())
             .await
-            .map_err(ApiError::from)?;
+        {
+            cleanup_failed_workspace(&managed_workspace).await;
+            return Err(ApiError::from(error));
+        }
     }
 
     for repo in &sibling_repos {
@@ -210,7 +254,10 @@ pub async fn create_and_start_workspace(
                     branch
                 );
             }
-            Err(e) => return Err(ApiError::from(e)),
+            Err(e) => {
+                cleanup_failed_workspace(&managed_workspace).await;
+                return Err(ApiError::from(e));
+            }
         }
     }
 
@@ -221,9 +268,13 @@ pub async fn create_and_start_workspace(
         }
     }
     if !all_attachment_ids.is_empty() {
-        managed_workspace
+        if let Err(error) = managed_workspace
             .associate_attachments(&all_attachment_ids)
-            .await?;
+            .await
+        {
+            cleanup_failed_workspace(&managed_workspace).await;
+            return Err(ApiError::from(error));
+        }
     }
 
     let workspace = managed_workspace.workspace.clone();
@@ -278,10 +329,27 @@ pub async fn create_and_start_workspace(
         }
     }
 
-    let execution_process = deployment
+    let deletion_context = managed_workspace.prepare_deletion_context().await.ok();
+    let execution_process = match deployment
         .container()
         .start_workspace(&workspace, executor_config.clone(), final_prompt)
-        .await?;
+        .await
+    {
+        Ok(process) => process,
+        Err(error) => {
+            if let Err(delete_error) = managed_workspace.delete_record().await {
+                tracing::warn!(
+                    workspace_id = %workspace.id,
+                    ?delete_error,
+                    "Failed to delete workspace record after start failure"
+                );
+            }
+            if let Some(context) = deletion_context {
+                WorkspaceManager::spawn_workspace_deletion_cleanup(context, true);
+            }
+            return Err(ApiError::from(error));
+        }
+    };
 
     Ok(ResponseJson(ApiResponse::success(
         CreateAndStartWorkspaceResponse {

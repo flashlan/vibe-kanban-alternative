@@ -55,6 +55,7 @@ use services::services::{
     notification::NotificationService,
     pipeline_stage::spawn_pipeline_stage_tracker,
     queued_message::QueuedMessageService,
+    token_usage::{execution_identity, spawn_token_usage_tracker},
 };
 use tokio::{
     io::{AsyncBufReadExt, AsyncSeekExt, BufReader},
@@ -2189,6 +2190,29 @@ impl LocalContainerService {
             if let Some(executor) = ExecutorConfigs::get_cached().get_coding_agent(&profile_id) {
                 let _ = executor.normalize_logs(store.clone(), &effective_dir);
             }
+
+            if let Some((agent, model, provider)) = execution_identity(&action) {
+                let issue_id = IssueWorkspace::find_issue_and_project_by_workspace(
+                    &self.db.pool,
+                    ctx.workspace.id,
+                )
+                .await
+                .ok()
+                .flatten()
+                .map(|(issue_id, _)| issue_id);
+                spawn_token_usage_tracker(
+                    store.clone(),
+                    self.db.clone(),
+                    exec_id,
+                    ctx.session.id,
+                    ctx.workspace.id,
+                    issue_id,
+                    agent,
+                    model,
+                    provider,
+                );
+            }
+
             execution_process::spawn_stream_raw_logs_to_storage(
                 self.msg_stores.clone(),
                 self.db.clone(),
