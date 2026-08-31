@@ -5,6 +5,7 @@ import {
   useEffect,
   useRef,
   type MouseEvent,
+  Profiler,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useProjectContext } from '@/shared/hooks/useProjectContext';
@@ -126,6 +127,38 @@ const areKanbanFiltersEqual = (
     left.sortDirection === right.sortDirection
   );
 };
+
+const KANBAN_PROFILE_STORAGE_KEY = 'vk:profile:kanban';
+
+/**
+ * Development-only render probe. Enable it from DevTools with:
+ *   localStorage.setItem('vk:profile:kanban', '1'); location.reload();
+ *
+ * It deliberately logs only when enabled so normal users pay no logging cost.
+ * The probe measures React commits, not agent execution or backend streams.
+ */
+function reportKanbanRender(
+  id: string,
+  phase: 'mount' | 'update' | 'nested-update',
+  actualDuration: number,
+  baseDuration: number
+) {
+  if (
+    !import.meta.env.DEV ||
+    typeof window === 'undefined' ||
+    window.localStorage.getItem(KANBAN_PROFILE_STORAGE_KEY) !== '1'
+  ) {
+    return;
+  }
+
+  console.debug('[kanban-render]', {
+    id,
+    phase,
+    actualMs: Math.round(actualDuration * 100) / 100,
+    baseMs: Math.round(baseDuration * 100) / 100,
+    at: new Date().toISOString(),
+  });
+}
 
 function LoadingState() {
   const { t } = useTranslation('common');
@@ -1403,275 +1436,289 @@ export function KanbanContainer() {
           </div>
         ) : (
           <div className="flex-1 overflow-x-auto px-double">
-            <KanbanProvider>
-              {visibleStatuses.map((status) => {
-                const issueIds = items[status.id] ?? [];
+            <Profiler id="kanban-board" onRender={reportKanbanRender}>
+              <KanbanProvider>
+                {visibleStatuses.map((status) => {
+                  const issueIds = items[status.id] ?? [];
 
-                return (
-                  <KanbanBoard key={status.id}>
-                    <KanbanHeader>
-                      <div className="border-t sticky border-b top-0 z-20 flex shrink-0 items-center justify-between gap-2 p-base bg-secondary">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="h-2 w-2 rounded-full shrink-0"
-                            style={{ backgroundColor: `hsl(${status.color})` }}
-                          />
-                          <p className="m-0 text-sm">{status.name}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className="inline-flex items-center justify-center rounded-full bg-background border text-xs font-medium min-w-5 h-5 px-1.5 leading-none text-muted-foreground"
-                            aria-label={`${issueIds.length} cards`}
-                          >
-                            {issueIds.length}
-                          </span>
-                          {!parentIssueId && (
-                            <button
-                              type="button"
-                              onClick={() => handleAddTask(status.id)}
-                              className="p-half rounded-sm text-low hover:text-normal hover:bg-secondary transition-colors"
-                              aria-label="Add task"
-                            >
-                              <PlusIcon
-                                className="size-icon-xs"
-                                weight="bold"
-                              />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </KanbanHeader>
-                    <KanbanCards
-                      id={status.id}
-                      activeProjectId={projectId}
-                      issueIds={issueIds}
-                      className="pt-base"
-                      positionalReorderEnabled={isManualSort}
+                  return (
+                    <Profiler
+                      key={status.id}
+                      id={`kanban-column-${status.id}`}
+                      onRender={reportKanbanRender}
                     >
-                      {issueIds.map((issueId) => {
-                        const issue = issueMap[issueId];
-                        if (!issue) return null;
-                        const issueWorkspaces =
-                          workspacesByIssueId.get(issue.id) ?? [];
-                        const workspaceIdsShownOnCard = new Set(
-                          issueWorkspaces.map((workspace) => workspace.id)
-                        );
-                        const issueCardPullRequests = (
-                          pullRequestsByIssueId.get(issue.id) ?? []
-                        ).filter((pr) => {
-                          if (!pr.workspace_id) {
-                            return true;
-                          }
-
-                          // If this PR is already visible under a workspace card,
-                          // do not render it again at the issue level.
-                          return !workspaceIdsShownOnCard.has(pr.workspace_id);
-                        });
-
-                        const subIssueChildren =
-                          childrenByParentId.get(issue.id) ?? [];
-                        const isSubIssuesExpanded = expandedSubIssueParents.has(
-                          issue.id
-                        );
-
-                        return (
-                          <KanbanCard
-                            key={issue.id}
-                            source={{
-                              kind: 'issue-move',
-                              issueId: issue.id,
-                              projectId,
-                              statusId: issue.status_id,
-                            }}
-                            name={issue.title}
-                            className="group"
-                            onClick={(e) => handleCardClick(issue.id, e)}
-                            isOpen={selectedKanbanIssueId === issue.id}
-                            isMobile={isMobile}
-                            isSelected={selectedIssueIds.has(issue.id)}
-                            dragDisabled={isMultiSelectActive}
-                          >
-                            <KanbanCardContent
-                              displayId={issue.simple_id}
-                              title={issue.title}
-                              description={issue.description}
-                              priority={issue.priority}
-                              tags={tagObjectsByIssueId.get(issue.id) ?? []}
-                              pullRequests={issueCardPullRequests}
-                              relationships={resolveRelationshipsForIssue(
-                                issue.id,
-                                relationshipsByIssueId.get(issue.id) ?? [],
-                                issuesById
-                              )}
-                              isSubIssue={!!issue.parent_issue_id}
-                              subIssueCount={subIssueChildren.length}
-                              isSubIssuesExpanded={isSubIssuesExpanded}
-                              onToggleSubIssues={() =>
-                                toggleSubIssuesExpanded(issue.id)
-                              }
-                              onOpenSubBoard={() =>
-                                appNavigation.goToProjectIssueSubBoard(
-                                  projectId,
-                                  issue.id
-                                )
-                              }
-                              isMobile={isMobile}
-                              onPriorityClick={(e) => {
-                                e.stopPropagation();
-                                handleCardPriorityClick(issue.id);
-                              }}
-                              onMoreActionsClick={() =>
-                                handleCardMoreActionsClick(issue.id)
-                              }
-                              onInfoClick={() => openCardInfo(issue.id)}
-                              tagEditProps={{
-                                allTags: tags,
-                                selectedTagIds: (
-                                  issueTagsByIssueId.get(issue.id) ?? []
-                                ).map((it) => it.tag_id),
-                                onTagToggle: (tagId) =>
-                                  handleCardTagToggle(issue.id, tagId),
-                                onCreateTag: handleCreateTag,
-                                renderTagEditor: ({
-                                  allTags,
-                                  selectedTagIds,
-                                  onTagToggle,
-                                  onCreateTag,
-                                  trigger,
-                                }) => (
-                                  <SearchableTagDropdownContainer
-                                    tags={allTags}
-                                    selectedTagIds={selectedTagIds}
-                                    onTagToggle={onTagToggle}
-                                    onCreateTag={onCreateTag}
-                                    disabled={false}
-                                    contentClassName=""
-                                    trigger={trigger}
+                      <KanbanBoard>
+                        <KanbanHeader>
+                          <div className="border-t sticky border-b top-0 z-20 flex shrink-0 items-center justify-between gap-2 p-base bg-secondary">
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="h-2 w-2 rounded-full shrink-0"
+                                style={{
+                                  backgroundColor: `hsl(${status.color})`,
+                                }}
+                              />
+                              <p className="m-0 text-sm">{status.name}</p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="inline-flex items-center justify-center rounded-full bg-background border text-xs font-medium min-w-5 h-5 px-1.5 leading-none text-muted-foreground"
+                                aria-label={`${issueIds.length} cards`}
+                              >
+                                {issueIds.length}
+                              </span>
+                              {!parentIssueId && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleAddTask(status.id)}
+                                  className="p-half rounded-sm text-low hover:text-normal hover:bg-secondary transition-colors"
+                                  aria-label="Add task"
+                                >
+                                  <PlusIcon
+                                    className="size-icon-xs"
+                                    weight="bold"
                                   />
-                                ),
-                              }}
-                            />
-                            {/* Inline sub-issues (expanded). Rendered under the
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </KanbanHeader>
+                        <KanbanCards
+                          id={status.id}
+                          activeProjectId={projectId}
+                          issueIds={issueIds}
+                          className="pt-base"
+                          positionalReorderEnabled={isManualSort}
+                        >
+                          {issueIds.map((issueId) => {
+                            const issue = issueMap[issueId];
+                            if (!issue) return null;
+                            const issueWorkspaces =
+                              workspacesByIssueId.get(issue.id) ?? [];
+                            const workspaceIdsShownOnCard = new Set(
+                              issueWorkspaces.map((workspace) => workspace.id)
+                            );
+                            const issueCardPullRequests = (
+                              pullRequestsByIssueId.get(issue.id) ?? []
+                            ).filter((pr) => {
+                              if (!pr.workspace_id) {
+                                return true;
+                              }
+
+                              // If this PR is already visible under a workspace card,
+                              // do not render it again at the issue level.
+                              return !workspaceIdsShownOnCard.has(
+                                pr.workspace_id
+                              );
+                            });
+
+                            const subIssueChildren =
+                              childrenByParentId.get(issue.id) ?? [];
+                            const isSubIssuesExpanded =
+                              expandedSubIssueParents.has(issue.id);
+
+                            return (
+                              <KanbanCard
+                                key={issue.id}
+                                source={{
+                                  kind: 'issue-move',
+                                  issueId: issue.id,
+                                  projectId,
+                                  statusId: issue.status_id,
+                                }}
+                                name={issue.title}
+                                className="group"
+                                onClick={(e) => handleCardClick(issue.id, e)}
+                                isOpen={selectedKanbanIssueId === issue.id}
+                                isMobile={isMobile}
+                                isSelected={selectedIssueIds.has(issue.id)}
+                                dragDisabled={isMultiSelectActive}
+                              >
+                                <KanbanCardContent
+                                  displayId={issue.simple_id}
+                                  title={issue.title}
+                                  description={issue.description}
+                                  priority={issue.priority}
+                                  tags={tagObjectsByIssueId.get(issue.id) ?? []}
+                                  pullRequests={issueCardPullRequests}
+                                  relationships={resolveRelationshipsForIssue(
+                                    issue.id,
+                                    relationshipsByIssueId.get(issue.id) ?? [],
+                                    issuesById
+                                  )}
+                                  isSubIssue={!!issue.parent_issue_id}
+                                  subIssueCount={subIssueChildren.length}
+                                  isSubIssuesExpanded={isSubIssuesExpanded}
+                                  onToggleSubIssues={() =>
+                                    toggleSubIssuesExpanded(issue.id)
+                                  }
+                                  onOpenSubBoard={() =>
+                                    appNavigation.goToProjectIssueSubBoard(
+                                      projectId,
+                                      issue.id
+                                    )
+                                  }
+                                  isMobile={isMobile}
+                                  onPriorityClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCardPriorityClick(issue.id);
+                                  }}
+                                  onMoreActionsClick={() =>
+                                    handleCardMoreActionsClick(issue.id)
+                                  }
+                                  onInfoClick={() => openCardInfo(issue.id)}
+                                  tagEditProps={{
+                                    allTags: tags,
+                                    selectedTagIds: (
+                                      issueTagsByIssueId.get(issue.id) ?? []
+                                    ).map((it) => it.tag_id),
+                                    onTagToggle: (tagId) =>
+                                      handleCardTagToggle(issue.id, tagId),
+                                    onCreateTag: handleCreateTag,
+                                    renderTagEditor: ({
+                                      allTags,
+                                      selectedTagIds,
+                                      onTagToggle,
+                                      onCreateTag,
+                                      trigger,
+                                    }) => (
+                                      <SearchableTagDropdownContainer
+                                        tags={allTags}
+                                        selectedTagIds={selectedTagIds}
+                                        onTagToggle={onTagToggle}
+                                        onCreateTag={onCreateTag}
+                                        disabled={false}
+                                        contentClassName=""
+                                        trigger={trigger}
+                                      />
+                                    ),
+                                  }}
+                                />
+                                {/* Inline sub-issues (expanded). Rendered under the
                                 parent card, each row opens that sub-issue.
                                 Sub-issue workspaces render exactly like the parent
                                 card's compact workspace bars — clicking a workspace
                                 opens the workspace chat, not the card details. */}
-                            {isSubIssuesExpanded &&
-                              subIssueChildren.length > 0 && (
-                                <div className="mt-half flex flex-col gap-half border-l-2 border-border pl-half">
-                                  {subIssueChildren.map((child) => {
-                                    const childStatus = statusById.get(
-                                      child.status_id
-                                    );
-                                    const childWorkspaces =
-                                      workspacesByIssueId.get(child.id) ?? [];
-                                    return (
-                                      <div
-                                        key={child.id}
-                                        className="flex flex-col gap-half rounded-sm px-half py-half hover:bg-secondary transition-colors"
-                                      >
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            openIssue(child.id);
-                                          }}
-                                          onMouseDown={(e) =>
-                                            e.stopPropagation()
-                                          }
-                                          className="flex w-full items-center gap-half text-left text-sm text-normal"
-                                        >
-                                          <span
-                                            aria-hidden="true"
-                                            className="size-2 shrink-0 rounded-full"
-                                            style={{
-                                              backgroundColor: `hsl(${childStatus?.color ?? '0 0% 60%'})`,
-                                            }}
-                                          />
-                                          <span className="shrink-0 font-ibm-plex-mono text-sm text-low">
-                                            {child.simple_id}
-                                          </span>
-                                          <span className="truncate">
-                                            {child.title}
-                                          </span>
-                                        </button>
-                                        {childWorkspaces.length > 0 && (
-                                          <div className="flex flex-col gap-half pl-3">
-                                            {childWorkspaces.map(
-                                              (workspace) => (
-                                                <IssueWorkspaceCard
-                                                  key={workspace.id}
-                                                  workspace={workspace}
-                                                  onClick={
-                                                    workspace.localWorkspaceId
-                                                      ? () => {
-                                                          // Stop parent KanbanCard navigation.
-                                                          openIssueWorkspace(
-                                                            child.id,
-                                                            workspace.localWorkspaceId!
-                                                          );
-                                                        }
-                                                      : undefined
-                                                  }
-                                                  showOwner={false}
-                                                  showStatusBadge={false}
-                                                  showNoPrText={false}
-                                                  compact
-                                                />
-                                              )
+                                {isSubIssuesExpanded &&
+                                  subIssueChildren.length > 0 && (
+                                    <div className="mt-half flex flex-col gap-half border-l-2 border-border pl-half">
+                                      {subIssueChildren.map((child) => {
+                                        const childStatus = statusById.get(
+                                          child.status_id
+                                        );
+                                        const childWorkspaces =
+                                          workspacesByIssueId.get(child.id) ??
+                                          [];
+                                        return (
+                                          <div
+                                            key={child.id}
+                                            className="flex flex-col gap-half rounded-sm px-half py-half hover:bg-secondary transition-colors"
+                                          >
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                openIssue(child.id);
+                                              }}
+                                              onMouseDown={(e) =>
+                                                e.stopPropagation()
+                                              }
+                                              className="flex w-full items-center gap-half text-left text-sm text-normal"
+                                            >
+                                              <span
+                                                aria-hidden="true"
+                                                className="size-2 shrink-0 rounded-full"
+                                                style={{
+                                                  backgroundColor: `hsl(${childStatus?.color ?? '0 0% 60%'})`,
+                                                }}
+                                              />
+                                              <span className="shrink-0 font-ibm-plex-mono text-sm text-low">
+                                                {child.simple_id}
+                                              </span>
+                                              <span className="truncate">
+                                                {child.title}
+                                              </span>
+                                            </button>
+                                            {childWorkspaces.length > 0 && (
+                                              <div className="flex flex-col gap-half pl-3">
+                                                {childWorkspaces.map(
+                                                  (workspace) => (
+                                                    <IssueWorkspaceCard
+                                                      key={workspace.id}
+                                                      workspace={workspace}
+                                                      onClick={
+                                                        workspace.localWorkspaceId
+                                                          ? () => {
+                                                              // Stop parent KanbanCard navigation.
+                                                              openIssueWorkspace(
+                                                                child.id,
+                                                                workspace.localWorkspaceId!
+                                                              );
+                                                            }
+                                                          : undefined
+                                                      }
+                                                      showOwner={false}
+                                                      showStatusBadge={false}
+                                                      showNoPrText={false}
+                                                      compact
+                                                    />
+                                                  )
+                                                )}
+                                              </div>
                                             )}
                                           </div>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            {issueWorkspaces.length > 0 && (
-                              <div className="mt-base flex flex-col gap-half">
-                                {issueWorkspaces.map((workspace) => (
-                                  <IssueWorkspaceCard
-                                    key={workspace.id}
-                                    workspace={workspace}
-                                    onClick={
-                                      workspace.localWorkspaceId
-                                        ? () =>
-                                            openIssueWorkspace(
-                                              issue.id,
-                                              workspace.localWorkspaceId!
-                                            )
-                                        : undefined
-                                    }
-                                    showOwner={false}
-                                    showStatusBadge={false}
-                                    showNoPrText={false}
-                                    compact
-                                  />
-                                ))}
-                              </div>
-                            )}
-                            {dispatchWorkspaces.length > 0 && (
-                              <div className="mt-half">
-                                <KanbanWorkspaceDispatch
-                                  workspaces={dispatchWorkspaces}
-                                  currentWorkspaceIds={workspaceIdsShownOnCard}
-                                  onDispatch={(workspaceId) =>
-                                    handleDispatchIssueToWorkspace(
-                                      issue.id,
-                                      workspaceId
-                                    )
-                                  }
-                                />
-                              </div>
-                            )}
-                          </KanbanCard>
-                        );
-                      })}
-                    </KanbanCards>
-                  </KanbanBoard>
-                );
-              })}
-            </KanbanProvider>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                {issueWorkspaces.length > 0 && (
+                                  <div className="mt-base flex flex-col gap-half">
+                                    {issueWorkspaces.map((workspace) => (
+                                      <IssueWorkspaceCard
+                                        key={workspace.id}
+                                        workspace={workspace}
+                                        onClick={
+                                          workspace.localWorkspaceId
+                                            ? () =>
+                                                openIssueWorkspace(
+                                                  issue.id,
+                                                  workspace.localWorkspaceId!
+                                                )
+                                            : undefined
+                                        }
+                                        showOwner={false}
+                                        showStatusBadge={false}
+                                        showNoPrText={false}
+                                        compact
+                                      />
+                                    ))}
+                                  </div>
+                                )}
+                                {dispatchWorkspaces.length > 0 && (
+                                  <div className="mt-half">
+                                    <KanbanWorkspaceDispatch
+                                      workspaces={dispatchWorkspaces}
+                                      currentWorkspaceIds={
+                                        workspaceIdsShownOnCard
+                                      }
+                                      onDispatch={(workspaceId) =>
+                                        handleDispatchIssueToWorkspace(
+                                          issue.id,
+                                          workspaceId
+                                        )
+                                      }
+                                    />
+                                  </div>
+                                )}
+                              </KanbanCard>
+                            );
+                          })}
+                        </KanbanCards>
+                      </KanbanBoard>
+                    </Profiler>
+                  );
+                })}
+              </KanbanProvider>
+            </Profiler>
           </div>
         )
       ) : (
