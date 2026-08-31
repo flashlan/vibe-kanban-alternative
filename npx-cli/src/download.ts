@@ -183,7 +183,7 @@ export async function ensureBinary(
     }
     throw new Error(
       `Local binary not found: ${localZipPath}\n` +
-        `Run ./local-build.sh first to build the binaries.`
+        `Run ../scripts/local-build.sh first to build the binaries.`
     );
   }
 
@@ -237,7 +237,7 @@ export async function ensureDesktopBundle(
     }
     throw new Error(
       `Local desktop bundle not found: ${localDir}\n` +
-        `Run './local-build.sh --desktop' first to build the Tauri app.`
+        `Run '../scripts/local-build.sh --desktop' first to build the Tauri app.`
     );
   }
 

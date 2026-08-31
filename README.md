@@ -379,10 +379,22 @@ cd mem0-vk && cp .env.example .env && docker compose up -d --build && cd ..
 **4. Start the development cockpit**
 
 ```bash
-./restart.sh
+~/Desktop/Kiky/scripts/restart.sh
 ```
 
 Frontend runs on `:3001`, backend on `:3002`.
+
+The local build helpers are kept together in `~/Desktop/Kiky/scripts/`:
+
+```bash
+~/Desktop/Kiky/scripts/local-build.sh                  # release packages
+~/Desktop/Kiky/scripts/generate-ide-mac.sh              # macOS .app + .dmg
+~/Desktop/Kiky/scripts/restart.sh [--window|--cloud]   # restart local cockpit
+```
+
+The Android/llama control menu also exposes these actions and includes a
+separate `Install APK on emulator` command that reuses the existing APK
+without rebuilding it.
 
 ## License
 
