@@ -37,18 +37,71 @@ export function CloudAuthActions() {
     }
   }, []);
 
+  const syncCloudContext = useCallback(
+    async (nextAccount: CloudAccount) => {
+      if (!nextAccount.accessToken) return;
+
+      try {
+        const localResponse = await fetch('/api/mobile/context', {
+          headers: { Accept: 'application/json' },
+          cache: 'no-store',
+        });
+        if (!localResponse.ok) return;
+        const localBody = (await localResponse.json()) as {
+          success?: boolean;
+          data?: { records?: CloudSyncRecord[] };
+        };
+        const records = localBody.data?.records ?? [];
+        for (let index = 0; index < records.length; index += 100) {
+          const batch = records.slice(index, index + 100);
+          await fetch(`${cloudUrl.replace(/\/$/, '')}/api/sync`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${nextAccount.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              source: 'desktop',
+              operations: batch.map((record) => ({
+                entityType: record.entity_type,
+                entityId: record.entity_id,
+                operation: record.operation,
+                payload: record.payload,
+              })),
+            }),
+          });
+        }
+      } catch {
+        // Cloud sync is deliberately best-effort. The local database remains
+        // authoritative while the network or Cloud service is unavailable.
+      }
+    },
+    [cloudUrl]
+  );
+
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(CLOUD_ACCOUNT_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved) as CloudAccount;
-        setAccount(parsed);
-        void syncMem0Account(parsed.userId);
+        if (parsed.accessToken) {
+          setAccount(parsed);
+          void syncMem0Account(parsed.userId);
+          void syncCloudContext(parsed);
+        }
       }
     } catch {
       // Ignore malformed device-local account state.
     }
-  }, [syncMem0Account]);
+  }, [syncCloudContext, syncMem0Account]);
+
+  useEffect(() => {
+    if (!account?.accessToken) return;
+    const timer = window.setInterval(() => {
+      void syncCloudContext(account);
+    }, 30_000);
+    return () => window.clearInterval(timer);
+  }, [account, syncCloudContext]);
 
   const openExternal = useCallback(async (url: string) => {
     if ('__TAURI_INTERNALS__' in window) {
@@ -79,6 +132,7 @@ export function CloudAuthActions() {
 
         setAccount(result.account);
         void syncMem0Account(result.account.userId);
+        void syncCloudContext(result.account);
         window.localStorage.setItem(
           CLOUD_ACCOUNT_STORAGE_KEY,
           JSON.stringify(result.account)
@@ -160,10 +214,21 @@ type CloudAccount = {
   userId: string;
   displayName: string;
   email: string;
+  accessToken: string;
+  deviceId: string;
+  scopes: string[];
+  expiresAt: number;
 };
 
 type DesktopAuthStatus =
   | { status: 'pending' }
   | { status: 'complete'; account: CloudAccount };
+
+type CloudSyncRecord = {
+  entity_type: 'workspace' | 'chat' | 'issue' | 'job';
+  entity_id: string;
+  operation: 'upsert' | 'delete';
+  payload: unknown;
+};
 
 const CLOUD_ACCOUNT_STORAGE_KEY = 'aurapunk-cloud-account';
