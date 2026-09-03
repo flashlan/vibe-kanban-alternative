@@ -225,7 +225,14 @@ type DesktopAuthStatus =
   | { status: 'complete'; account: CloudAccount };
 
 type CloudSyncRecord = {
-  entity_type: 'workspace' | 'chat' | 'issue' | 'job';
+  entity_type:
+    | 'project'
+    | 'status'
+    | 'workspace'
+    | 'issue_workspace'
+    | 'chat'
+    | 'issue'
+    | 'job';
   entity_id: string;
   operation: 'upsert' | 'delete';
   payload: unknown;

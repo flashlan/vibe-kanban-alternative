@@ -6,7 +6,8 @@
 
 use axum::{Router, extract::State, response::Json as ResponseJson, routing::get};
 use db::models::{
-    issue::Issue, project::Project, project_status::ProjectStatus, workspace::Workspace,
+    issue::Issue, issue_workspace::IssueWorkspace, project::Project, project_status::ProjectStatus,
+    workspace::Workspace,
 };
 use deployment::Deployment;
 use serde::Serialize;
@@ -76,6 +77,22 @@ pub async fn get_context(
                     .map_err(|error| ApiError::BadRequest(error.to_string()))?,
             });
         }
+    }
+
+    // Keep the relationship that lets a mobile card open the conversation of
+    // the workspace launched for that issue. The workspace and issue records
+    // alone do not carry this association.
+    for link in IssueWorkspace::list_linked_all(pool).await? {
+        records.push(MobileSyncRecord {
+            entity_type: "issue_workspace",
+            entity_id: format!("{}:{}", link.issue_id, link.workspace_id),
+            operation: "upsert",
+            payload: serde_json::json!({
+                "issue_id": link.issue_id,
+                "workspace_id": link.workspace_id,
+                "project_id": link.project_id,
+            }),
+        });
     }
 
     let chat_rows = sqlx::query(
