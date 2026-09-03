@@ -7,6 +7,14 @@ tag that matches `npx-cli/package.json` (see `.github/workflows/release-alternat
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.45] - 2026-09-03
+
+### Fixed
+
+- Accepted Codex CLI `0.152.0` and future versions through the existing
+  `NamedPermissions` compatibility path while continuing to reject versions
+  below `0.124.0`.
+
 ## [0.2.44] - 2026-08-26
 
 ### Added
