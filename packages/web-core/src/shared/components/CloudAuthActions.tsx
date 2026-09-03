@@ -108,7 +108,28 @@ export function CloudAuthActions() {
           nextCursor = Math.max(nextCursor, event.revision ?? nextCursor);
           if (event.operation !== 'upsert') continue;
           if (event.entityType === 'chat_command') {
-            const payload = event.payload as MobileChatCommand;
+            const payload = event.payload as
+              | MobileChatCommand
+              | MobileWorkspaceRequest;
+            if (payload.kind === 'workspace_request') {
+              if (!payload.issue_id) continue;
+              const localResponse = await makeLocalApiRequest(
+                '/api/mobile/workspace',
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload),
+                  signal,
+                }
+              );
+              if (!localResponse.ok) {
+                await new Promise((resolve) =>
+                  window.setTimeout(resolve, 2500)
+                );
+                return;
+              }
+              continue;
+            }
             if (!payload.workspace_id || !payload.prompt?.trim()) continue;
             const localResponse = await makeLocalApiRequest(
               '/api/mobile/chat',
@@ -403,12 +424,14 @@ type CloudSyncEvent = {
 };
 
 type MobileChatCommand = {
+  kind?: never;
   workspace_id: string;
   prompt: string;
   executor?: string;
 };
 
 type MobileWorkspaceRequest = {
+  kind: 'workspace_request';
   issue_id: string;
   executor?: string;
 };
