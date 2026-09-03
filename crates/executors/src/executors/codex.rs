@@ -32,7 +32,6 @@ pub(crate) fn resolve_model(model: Option<&str>) -> (Option<&str>, bool) {
 }
 
 const MIN_SUPPORTED_CODEX_VERSION: CodexVersion = CodexVersion::new(0, 124, 0);
-const MAX_SUPPORTED_CODEX_VERSION_EXCLUSIVE: CodexVersion = CodexVersion::new(0, 150, 0);
 const NAMED_PERMISSIONS_VERSION: CodexVersion = CodexVersion::new(0, 149, 0);
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -83,9 +82,9 @@ pub(super) enum AppServerCompatibility {
 fn compatibility_for_version(
     version: CodexVersion,
 ) -> Result<AppServerCompatibility, ExecutorError> {
-    if !(MIN_SUPPORTED_CODEX_VERSION..MAX_SUPPORTED_CODEX_VERSION_EXCLUSIVE).contains(&version) {
+    if version < MIN_SUPPORTED_CODEX_VERSION {
         return Err(ExecutorError::Io(std::io::Error::other(format!(
-            "Codex {version} is not compatible with this app. Supported versions are >= {MIN_SUPPORTED_CODEX_VERSION} and < {MAX_SUPPORTED_CODEX_VERSION_EXCLUSIVE}. Update Vibe Kanban Alternative or install a compatible Codex version."
+            "Codex {version} is not compatible with this app. Supported versions are >= {MIN_SUPPORTED_CODEX_VERSION}. Update Vibe Kanban Alternative or install a compatible Codex version."
         ))));
     }
 
@@ -999,8 +998,8 @@ fn record_codex_rate_limits(response: &codex_app_server_protocol::GetAccountRate
 #[cfg(test)]
 mod tests {
     use super::{
-        AppServerCompatibility, CodexVersion, MAX_SUPPORTED_CODEX_VERSION_EXCLUSIVE,
-        MIN_SUPPORTED_CODEX_VERSION, compatibility_for_version, resolve_model,
+        AppServerCompatibility, CodexVersion, MIN_SUPPORTED_CODEX_VERSION,
+        compatibility_for_version, resolve_model,
     };
 
     #[test]
@@ -1054,19 +1053,25 @@ mod tests {
             compatibility_for_version(CodexVersion::new(0, 149, 1)).unwrap(),
             AppServerCompatibility::NamedPermissions
         );
+        assert_eq!(
+            compatibility_for_version(CodexVersion::new(0, 152, 0)).unwrap(),
+            AppServerCompatibility::NamedPermissions
+        );
+        assert_eq!(
+            compatibility_for_version(CodexVersion::new(0, 999, 0)).unwrap(),
+            AppServerCompatibility::NamedPermissions
+        );
     }
 
     #[test]
-    fn rejects_versions_outside_the_tested_range_with_actionable_error() {
-        for version in [
-            CodexVersion::new(0, 123, 9),
-            MAX_SUPPORTED_CODEX_VERSION_EXCLUSIVE,
-        ] {
-            let error = compatibility_for_version(version).unwrap_err().to_string();
-            assert!(error.contains("not compatible"));
-            assert!(error.contains("Supported versions"));
-            assert!(error.contains("install a compatible Codex version"));
-        }
+    fn rejects_versions_below_minimum_with_actionable_error() {
+        let error = compatibility_for_version(CodexVersion::new(0, 123, 9))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("not compatible"));
+        assert!(error.contains("Supported versions"));
+        assert!(error.contains(">= 0.124.0"));
+        assert!(error.contains("install a compatible Codex version"));
     }
 
     #[tokio::test]
