@@ -12,7 +12,10 @@ import {
   DEFAULT_AURAPUNK_CLOUD_URL,
   useCloudUrl,
 } from '@/shared/hooks/useAppMode';
-import { openLocalApiWebSocket } from '@/shared/lib/localApiTransport';
+import {
+  makeLocalApiRequest,
+  openLocalApiWebSocket,
+} from '@/shared/lib/localApiTransport';
 import { makeRequest } from '@/shared/lib/remoteApi';
 
 /**
@@ -43,7 +46,7 @@ export function CloudAuthActions() {
       if (!nextAccount.accessToken) return;
 
       try {
-        const localResponse = await fetch('/api/mobile/context', {
+        const localResponse = await makeLocalApiRequest('/api/mobile/context', {
           headers: { Accept: 'application/json' },
           cache: 'no-store',
         });
@@ -107,12 +110,15 @@ export function CloudAuthActions() {
           if (event.entityType === 'chat_command') {
             const payload = event.payload as MobileChatCommand;
             if (!payload.workspace_id || !payload.prompt?.trim()) continue;
-            const localResponse = await fetch('/api/mobile/chat', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-              signal,
-            });
+            const localResponse = await makeLocalApiRequest(
+              '/api/mobile/chat',
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal,
+              }
+            );
             if (!localResponse.ok) {
               await new Promise((resolve) => window.setTimeout(resolve, 2500));
               return;
@@ -120,12 +126,15 @@ export function CloudAuthActions() {
           } else if (event.entityType === 'workspace_request') {
             const payload = event.payload as MobileWorkspaceRequest;
             if (!payload.issue_id) continue;
-            const localResponse = await fetch('/api/mobile/workspace', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-              signal,
-            });
+            const localResponse = await makeLocalApiRequest(
+              '/api/mobile/workspace',
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal,
+              }
+            );
             if (!localResponse.ok) {
               await new Promise((resolve) => window.setTimeout(resolve, 2500));
               return;
@@ -133,12 +142,15 @@ export function CloudAuthActions() {
           } else if (event.entityType === 'issue') {
             const payload = event.payload as { status_id?: string };
             if (!payload.status_id || !event.entityId) continue;
-            const localResponse = await fetch(`/api/issues/${event.entityId}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status_id: payload.status_id }),
-              signal,
-            });
+            const localResponse = await makeLocalApiRequest(
+              `/api/issues/${event.entityId}`,
+              {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status_id: payload.status_id }),
+                signal,
+              }
+            );
             if (!localResponse.ok) {
               await new Promise((resolve) => window.setTimeout(resolve, 2500));
               return;
