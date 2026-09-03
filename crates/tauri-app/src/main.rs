@@ -1,14 +1,13 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{sync::Arc, time::Duration};
+use std::{fs, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use services::services::{
     config::load_config_from_file,
     notification::{NotificationService, PushNotifier, set_global_push_notifier},
 };
-#[cfg(target_os = "macos")]
 use tauri::Manager;
 #[cfg(target_os = "macos")]
 use tauri::menu::MenuItemKind;
@@ -100,6 +99,46 @@ fn open_external_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
         .map_err(|error| error.to_string())
 }
 
+const CLOUD_ACCOUNT_FILE: &str = "cloud-account.json";
+
+#[tauri::command]
+fn read_cloud_account(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let path = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?
+        .join(CLOUD_ACCOUNT_FILE);
+    match fs::read_to_string(path) {
+        Ok(account) => Ok(Some(account)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+#[tauri::command]
+fn write_cloud_account(app: tauri::AppHandle, account: String) -> Result<(), String> {
+    let directory = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?;
+    fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+    fs::write(directory.join(CLOUD_ACCOUNT_FILE), account).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn clear_cloud_account(app: tauri::AppHandle) -> Result<(), String> {
+    let path = app
+        .path()
+        .app_config_dir()
+        .map_err(|error| error.to_string())?
+        .join(CLOUD_ACCOUNT_FILE);
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
 #[async_trait]
 impl PushNotifier for TauriNotifier {
     async fn send(&self, title: &str, message: &str, workspace_id: Option<Uuid>) {
@@ -187,7 +226,10 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             show_system_notification,
             read_clipboard_text,
-            open_external_url
+            open_external_url,
+            read_cloud_account,
+            write_cloud_account,
+            clear_cloud_account
         ]);
 
     // Unlock WKWebView's native refresh rate on macOS ProMotion / high-Hz displays.

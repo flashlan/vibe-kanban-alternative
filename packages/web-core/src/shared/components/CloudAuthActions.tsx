@@ -29,6 +29,25 @@ export function CloudAuthActions() {
   const [account, setAccount] = useState<CloudAccount | null>(null);
   const [pending, setPending] = useState(false);
 
+  const persistAccount = useCallback(async (nextAccount: CloudAccount) => {
+    window.localStorage.setItem(
+      CLOUD_ACCOUNT_STORAGE_KEY,
+      JSON.stringify(nextAccount)
+    );
+    if ('__TAURI_INTERNALS__' in window) {
+      await invoke('write_cloud_account', {
+        account: JSON.stringify(nextAccount),
+      });
+    }
+  }, []);
+
+  const clearPersistedAccount = useCallback(async () => {
+    window.localStorage.removeItem(CLOUD_ACCOUNT_STORAGE_KEY);
+    if ('__TAURI_INTERNALS__' in window) {
+      await invoke('clear_cloud_account');
+    }
+  }, []);
+
   const syncMem0Account = useCallback(async (accountId: string | null) => {
     try {
       await makeRequest('/api/usage/mem0-account', {
@@ -87,6 +106,40 @@ export function CloudAuthActions() {
     async (nextAccount: CloudAccount, signal?: AbortSignal) => {
       if (!nextAccount.accessToken) return;
 
+      const publishWorkspaceResult = async (
+        requestId: string,
+        payload: MobileWorkspaceRequestResult
+      ) => {
+        const response = await fetch(
+          `${cloudUrl.replace(/\/$/, '')}/api/sync`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${nextAccount.accessToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              source: 'desktop',
+              operations: [
+                {
+                  entityType: 'chat_command',
+                  entityId: `${requestId}:result`,
+                  operation: 'upsert',
+                  payload,
+                },
+              ],
+            }),
+          }
+        );
+        if (!response.ok) {
+          console.warn(
+            'Could not publish workspace request result',
+            requestId,
+            await response.text()
+          );
+        }
+      };
+
       const cursorKey = `${CLOUD_COMMAND_CURSOR_PREFIX}:${nextAccount.userId}`;
       const cursor = Number(window.localStorage.getItem(cursorKey) ?? '0');
       try {
@@ -122,11 +175,37 @@ export function CloudAuthActions() {
                   signal,
                 }
               );
+              const responseBody = await localResponse.text();
               if (!localResponse.ok) {
-                await new Promise((resolve) =>
-                  window.setTimeout(resolve, 2500)
+                console.warn(
+                  'Cloud workspace request was rejected by Desktop',
+                  event.entityId,
+                  responseBody
                 );
-                return;
+                await publishWorkspaceResult(event.entityId ?? '', {
+                  kind: 'workspace_request_result',
+                  issue_id: payload.issue_id,
+                  status: 'error',
+                  message:
+                    responseBody.slice(0, 500) ||
+                    'Desktop rejected the request',
+                });
+              } else {
+                let workspaceId: string | undefined;
+                try {
+                  const result = JSON.parse(responseBody) as {
+                    data?: { workspace_id?: string };
+                  };
+                  workspaceId = result.data?.workspace_id;
+                } catch {
+                  // The workspace context sync remains authoritative.
+                }
+                await publishWorkspaceResult(event.entityId ?? '', {
+                  kind: 'workspace_request_result',
+                  issue_id: payload.issue_id,
+                  status: 'completed',
+                  workspace_id: workspaceId,
+                });
               }
               continue;
             }
@@ -141,8 +220,11 @@ export function CloudAuthActions() {
               }
             );
             if (!localResponse.ok) {
-              await new Promise((resolve) => window.setTimeout(resolve, 2500));
-              return;
+              console.warn(
+                'Cloud chat command was rejected by Desktop',
+                event.entityId,
+                await localResponse.text()
+              );
             }
           } else if (event.entityType === 'workspace_request') {
             const payload = event.payload as MobileWorkspaceRequest;
@@ -157,8 +239,11 @@ export function CloudAuthActions() {
               }
             );
             if (!localResponse.ok) {
-              await new Promise((resolve) => window.setTimeout(resolve, 2500));
-              return;
+              console.warn(
+                'Cloud workspace request was rejected by Desktop',
+                event.entityId,
+                await localResponse.text()
+              );
             }
           } else if (event.entityType === 'issue') {
             const payload = event.payload as { status_id?: string };
@@ -173,8 +258,11 @@ export function CloudAuthActions() {
               }
             );
             if (!localResponse.ok) {
-              await new Promise((resolve) => window.setTimeout(resolve, 2500));
-              return;
+              console.warn(
+                'Cloud issue update was rejected by Desktop',
+                event.entityId,
+                await localResponse.text()
+              );
             }
           }
         }
@@ -197,20 +285,29 @@ export function CloudAuthActions() {
   );
 
   useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(CLOUD_ACCOUNT_STORAGE_KEY);
-      if (saved) {
+    let cancelled = false;
+    void (async () => {
+      try {
+        let saved = window.localStorage.getItem(CLOUD_ACCOUNT_STORAGE_KEY);
+        if ('__TAURI_INTERNALS__' in window) {
+          saved = (await invoke<string | null>('read_cloud_account')) ?? saved;
+        }
+        if (!saved) return;
         const parsed = JSON.parse(saved) as CloudAccount;
-        if (parsed.accessToken) {
+        if (!cancelled && parsed.accessToken) {
           setAccount(parsed);
+          void persistAccount(parsed);
           void syncMem0Account(parsed.userId);
           void syncCloudContext(parsed);
         }
+      } catch {
+        // Ignore malformed or unavailable device-local account state.
       }
-    } catch {
-      // Ignore malformed device-local account state.
-    }
-  }, [syncCloudCommands, syncCloudContext, syncMem0Account]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [persistAccount, syncCloudContext, syncMem0Account]);
 
   useEffect(() => {
     if (!account?.accessToken) return;
@@ -308,10 +405,7 @@ export function CloudAuthActions() {
         setAccount(result.account);
         void syncMem0Account(result.account.userId);
         void syncCloudContext(result.account);
-        window.localStorage.setItem(
-          CLOUD_ACCOUNT_STORAGE_KEY,
-          JSON.stringify(result.account)
-        );
+        void persistAccount(result.account);
         break;
       }
     } catch (error) {
@@ -326,17 +420,17 @@ export function CloudAuthActions() {
     } finally {
       setPending(false);
     }
-  }, [cloudUrl, openExternal, syncMem0Account]);
+  }, [cloudUrl, openExternal, persistAccount, syncMem0Account]);
 
   const openDashboard = useCallback(() => {
     void openExternal(`${cloudUrl.replace(/\/$/, '')}/dashboard`);
   }, [cloudUrl, openExternal]);
 
   const signOut = useCallback(() => {
-    window.localStorage.removeItem(CLOUD_ACCOUNT_STORAGE_KEY);
+    void clearPersistedAccount();
     setAccount(null);
     void syncMem0Account(null);
-  }, [syncMem0Account]);
+  }, [clearPersistedAccount, syncMem0Account]);
 
   return (
     <>
@@ -434,6 +528,14 @@ type MobileWorkspaceRequest = {
   kind: 'workspace_request';
   issue_id: string;
   executor?: string;
+};
+
+type MobileWorkspaceRequestResult = {
+  kind: 'workspace_request_result';
+  issue_id: string;
+  status: 'completed' | 'error';
+  message?: string;
+  workspace_id?: string;
 };
 
 const CLOUD_ACCOUNT_STORAGE_KEY = 'aurapunk-cloud-account';
