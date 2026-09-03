@@ -1,16 +1,25 @@
-//! Local context export consumed by the AuraPunk Cloud sync client.
-//!
-//! This endpoint is intentionally read-only. The desktop frontend adds the
-//! account-scoped device token when it pushes this snapshot to Cloud; the
-//! local server never trusts a browser-supplied account id for authorization.
+//! Context export and local dispatch endpoints consumed by the Mobile/Cloud
+//! sync path. The local server never trusts a browser-supplied account id for
+//! authorization and remains the only component allowed to start an executor.
 
-use axum::{Router, extract::State, response::Json as ResponseJson, routing::get};
+use api_types::UpdateIssueRequest;
+use axum::{
+    Json, Router,
+    extract::State,
+    response::{IntoResponse, Json as ResponseJson, Response},
+    routing::{get, post},
+};
 use db::models::{
-    issue::Issue, issue_workspace::IssueWorkspace, project::Project, project_status::ProjectStatus,
+    issue::Issue,
+    issue_workspace::IssueWorkspace,
+    project::Project,
+    project_status::ProjectStatus,
+    session::{CreateSession, Session},
     workspace::Workspace,
 };
 use deployment::Deployment;
-use serde::Serialize;
+use executors::{executors::BaseCodingAgent, profile::ExecutorConfig};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::Row;
 use utils::response::ApiResponse;
@@ -29,6 +38,13 @@ pub struct MobileSyncRecord {
 #[derive(Debug, Serialize)]
 pub struct MobileContextResponse {
     pub records: Vec<MobileSyncRecord>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MobileChatCommand {
+    pub workspace_id: Uuid,
+    pub prompt: String,
+    pub executor: Option<String>,
 }
 
 /// Export the current local context in the same record shape accepted by the
@@ -131,6 +147,154 @@ pub async fn get_context(
     })))
 }
 
+/// Dispatch a message received from Mobile through the local Desktop session.
+/// The local server remains the only component allowed to start an executor.
+pub async fn post_chat_command(
+    State(deployment): State<DeploymentImpl>,
+    Json(command): Json<MobileChatCommand>,
+) -> Result<Response, ApiError> {
+    let prompt = command.prompt.trim();
+    if prompt.is_empty() || prompt.len() > 100_000 {
+        return Err(ApiError::BadRequest(
+            "Mobile chat prompt must contain 1 to 100000 characters".to_string(),
+        ));
+    }
+
+    let pool = &deployment.db().pool;
+    let workspace = Workspace::find_by_id(pool, command.workspace_id)
+        .await?
+        .ok_or(ApiError::Workspace(
+            db::models::workspace::WorkspaceError::WorkspaceNotFound,
+        ))?;
+
+    // Status commands use the same guarded mutation path as the Desktop
+    // Kanban. This keeps `/close`, `/review`, and `/in-progress` consistent
+    // with Integration Guard and the normal Mem0 completion flow.
+    if let Some(status_kind) = status_command(prompt) {
+        if let Some((issue_id, project_id)) =
+            IssueWorkspace::find_issue_and_project_by_workspace(pool, workspace.id).await?
+        {
+            let statuses =
+                db::models::project_status::ProjectStatus::list_by_project(pool, project_id)
+                    .await?;
+            let target = statuses.iter().find(|status| match status_kind {
+                "close" => {
+                    status.is_terminal
+                        || status.name.to_ascii_lowercase().contains("done")
+                        || status.name.to_ascii_lowercase().contains("closed")
+                        || status.name.to_ascii_lowercase().contains("conclu")
+                        || status.name.to_ascii_lowercase().contains("fech")
+                }
+                "review" => {
+                    status.name.to_ascii_lowercase().contains("review")
+                        || status.name.to_ascii_lowercase().contains("revis")
+                }
+                "progress" => {
+                    status.name.to_ascii_lowercase().contains("progress")
+                        || status.name.to_ascii_lowercase().contains("progres")
+                        || status.name.to_ascii_lowercase().contains("andamento")
+                }
+                _ => false,
+            });
+            let target = target.ok_or_else(|| {
+                ApiError::BadRequest(format!(
+                    "No status matching /{status_kind} exists in this project"
+                ))
+            })?;
+            crate::routes::local_kanban::merge_and_update_issue(
+                pool,
+                issue_id,
+                UpdateIssueRequest {
+                    allow_unmerged_done: None,
+                    status_id: Some(target.id),
+                    title: None,
+                    description: None,
+                    priority: None,
+                    start_date: None,
+                    target_date: None,
+                    completed_at: None,
+                    sort_order: None,
+                    parent_issue_id: None,
+                    parent_issue_sort_order: None,
+                    extension_metadata: None,
+                },
+            )
+            .await?
+            .ok_or_else(|| ApiError::BadRequest("Issue not found".to_string()))?;
+            return Ok(
+                ResponseJson(ApiResponse::<Value, Value>::success(serde_json::json!({
+                    "status": target.name,
+                    "issue_id": issue_id,
+                })))
+                .into_response(),
+            );
+        }
+        return Err(ApiError::BadRequest(
+            "This workspace has no linked card".to_string(),
+        ));
+    }
+
+    let session =
+        if let Some(session) = Session::find_latest_by_workspace_id(pool, workspace.id).await? {
+            session
+        } else {
+            let executor = command
+                .executor
+                .as_deref()
+                .unwrap_or("CODEX")
+                .parse::<BaseCodingAgent>()
+                .map_err(|_| ApiError::BadRequest("Unknown mobile chat executor".to_string()))?;
+            Session::create(
+                pool,
+                &CreateSession {
+                    executor: Some(executor.to_string()),
+                    name: Some("Mobile chat".to_string()),
+                },
+                Uuid::new_v4(),
+                workspace.id,
+            )
+            .await?
+        };
+
+    let executor = session
+        .executor
+        .as_deref()
+        .unwrap_or("CODEX")
+        .parse::<BaseCodingAgent>()
+        .map_err(|_| {
+            ApiError::BadRequest("Workspace session has an unknown executor".to_string())
+        })?;
+    Ok(crate::routes::sessions::run_follow_up(
+        &deployment,
+        session,
+        workspace,
+        prompt.to_string(),
+        ExecutorConfig::new(executor),
+        None,
+        None,
+        None,
+    )
+    .await?
+    .into_response())
+}
+
+fn status_command(prompt: &str) -> Option<&'static str> {
+    match prompt
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "/close" | "/closed" | "/done" | "/complete" | "/fechar" | "/concluir" => Some("close"),
+        "/review" | "/revisao" | "/revisão" => Some("review"),
+        "/progress" | "/in-progress" | "/in_progress" | "/andamento" => Some("progress"),
+        _ => None,
+    }
+}
+
 pub fn router() -> Router<DeploymentImpl> {
-    Router::new().route("/mobile/context", get(get_context))
+    Router::new()
+        .route("/mobile/context", get(get_context))
+        .route("/mobile/chat", post(post_chat_command))
 }

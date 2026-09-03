@@ -12,6 +12,7 @@ import {
   DEFAULT_AURAPUNK_CLOUD_URL,
   useCloudUrl,
 } from '@/shared/hooks/useAppMode';
+import { openLocalApiWebSocket } from '@/shared/lib/localApiTransport';
 import { makeRequest } from '@/shared/lib/remoteApi';
 
 /**
@@ -79,6 +80,76 @@ export function CloudAuthActions() {
     [cloudUrl]
   );
 
+  const syncCloudCommands = useCallback(
+    async (nextAccount: CloudAccount, signal?: AbortSignal) => {
+      if (!nextAccount.accessToken) return;
+
+      const cursorKey = `${CLOUD_COMMAND_CURSOR_PREFIX}:${nextAccount.userId}`;
+      const cursor = Number(window.localStorage.getItem(cursorKey) ?? '0');
+      try {
+        const response = await fetch(
+          `${cloudUrl.replace(/\/$/, '')}/api/sync?after_revision=${Math.max(0, cursor)}&limit=200&wait_ms=25000`,
+          {
+            headers: { Authorization: `Bearer ${nextAccount.accessToken}` },
+            cache: 'no-store',
+            signal,
+          }
+        );
+        if (!response.ok) {
+          await new Promise((resolve) => window.setTimeout(resolve, 2500));
+          return;
+        }
+        const body = (await response.json()) as { events?: CloudSyncEvent[] };
+        let nextCursor = cursor;
+        for (const event of body.events ?? []) {
+          nextCursor = Math.max(nextCursor, event.revision ?? nextCursor);
+          if (event.operation !== 'upsert') continue;
+          if (event.entityType === 'chat_command') {
+            const payload = event.payload as MobileChatCommand;
+            if (!payload.workspace_id || !payload.prompt?.trim()) continue;
+            const localResponse = await fetch('/api/mobile/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+              signal,
+            });
+            if (!localResponse.ok) {
+              await new Promise((resolve) => window.setTimeout(resolve, 2500));
+              return;
+            }
+          } else if (event.entityType === 'issue') {
+            const payload = event.payload as { status_id?: string };
+            if (!payload.status_id || !event.entityId) continue;
+            const localResponse = await fetch(`/api/issues/${event.entityId}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status_id: payload.status_id }),
+              signal,
+            });
+            if (!localResponse.ok) {
+              await new Promise((resolve) => window.setTimeout(resolve, 2500));
+              return;
+            }
+          }
+        }
+        window.localStorage.setItem(cursorKey, String(nextCursor));
+      } catch {
+        if (signal?.aborted) return;
+        await new Promise((resolve) => window.setTimeout(resolve, 1000));
+      }
+    },
+    [cloudUrl]
+  );
+
+  const watchCloudCommands = useCallback(
+    async (nextAccount: CloudAccount, signal: AbortSignal) => {
+      while (!signal.aborted) {
+        await syncCloudCommands(nextAccount, signal);
+      }
+    },
+    [syncCloudCommands]
+  );
+
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(CLOUD_ACCOUNT_STORAGE_KEY);
@@ -93,15 +164,73 @@ export function CloudAuthActions() {
     } catch {
       // Ignore malformed device-local account state.
     }
-  }, [syncCloudContext, syncMem0Account]);
+  }, [syncCloudCommands, syncCloudContext, syncMem0Account]);
 
   useEffect(() => {
     if (!account?.accessToken) return;
-    const timer = window.setInterval(() => {
-      void syncCloudContext(account);
-    }, 30_000);
-    return () => window.clearInterval(timer);
-  }, [account, syncCloudContext]);
+    const controller = new AbortController();
+    void watchCloudCommands(account, controller.signal);
+    let socket: WebSocket | null = null;
+    let reconnectTimer: number | null = null;
+    let cancelled = false;
+    let contextSync: Promise<void> | null = null;
+    let contextSyncQueued = false;
+
+    const pushContext = () => {
+      if (cancelled) return;
+      if (contextSync) {
+        contextSyncQueued = true;
+        return;
+      }
+
+      contextSync = syncCloudContext(account).finally(() => {
+        contextSync = null;
+        if (contextSyncQueued) {
+          contextSyncQueued = false;
+          pushContext();
+        }
+      });
+    };
+
+    const connectToLocalEvents = async () => {
+      if (cancelled) return;
+      try {
+        socket = await openLocalApiWebSocket('/api/workspaces/streams/ws');
+        if (cancelled) {
+          socket.close();
+          return;
+        }
+        socket.onmessage = pushContext;
+        socket.onerror = () => socket?.close();
+        socket.onclose = () => {
+          socket = null;
+          if (!cancelled) {
+            reconnectTimer = window.setTimeout(() => {
+              void connectToLocalEvents();
+            }, 3000);
+          }
+        };
+      } catch {
+        if (!cancelled) {
+          reconnectTimer = window.setTimeout(() => {
+            void connectToLocalEvents();
+          }, 3000);
+        }
+      }
+    };
+
+    // Initial snapshot, then only local event notifications. The 3s delay is
+    // reconnect backoff, not a UI polling interval.
+    pushContext();
+    void connectToLocalEvents();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      if (reconnectTimer !== null) window.clearTimeout(reconnectTimer);
+      socket?.close();
+    };
+  }, [account, syncCloudContext, watchCloudCommands]);
 
   const openExternal = useCallback(async (url: string) => {
     if ('__TAURI_INTERNALS__' in window) {
@@ -231,6 +360,7 @@ type CloudSyncRecord = {
     | 'workspace'
     | 'issue_workspace'
     | 'chat'
+    | 'chat_command'
     | 'issue'
     | 'job';
   entity_id: string;
@@ -238,4 +368,19 @@ type CloudSyncRecord = {
   payload: unknown;
 };
 
+type CloudSyncEvent = {
+  entityType?: string;
+  entityId?: string;
+  operation?: string;
+  payload?: unknown;
+  revision?: number;
+};
+
+type MobileChatCommand = {
+  workspace_id: string;
+  prompt: string;
+  executor?: string;
+};
+
 const CLOUD_ACCOUNT_STORAGE_KEY = 'aurapunk-cloud-account';
+const CLOUD_COMMAND_CURSOR_PREFIX = 'aurapunk-cloud-command-cursor';

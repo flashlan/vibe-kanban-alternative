@@ -708,7 +708,9 @@ export function MemorySettingsSection() {
                       className="mt-2 w-full rounded-sm border border-border bg-panel px-2 py-1.5 text-xs text-high focus:outline-none focus:ring-1 focus:ring-brand"
                     >
                       <option value="mem0_vk">mem0_vk (self-hosted)</option>
-                      <option value="mem0_platform">Mem0 Platform (cloud)</option>
+                      <option value="mem0_platform">
+                        Mem0 Platform (cloud)
+                      </option>
                     </select>
                     <input
                       type="url"
@@ -749,7 +751,9 @@ export function MemorySettingsSection() {
                 <input
                   type="checkbox"
                   checked={migrationConfirm}
-                  onChange={(event) => setMigrationConfirm(event.target.checked)}
+                  onChange={(event) =>
+                    setMigrationConfirm(event.target.checked)
+                  }
                   className="accent-brand"
                 />
                 I reviewed the preview and want to enqueue the copy
@@ -757,9 +761,7 @@ export function MemorySettingsSection() {
               <button
                 type="button"
                 disabled={
-                  migrationBusy ||
-                  !migrationUserId.trim() ||
-                  !migrationConfirm
+                  migrationBusy || !migrationUserId.trim() || !migrationConfirm
                 }
                 onClick={() => void handleMigration('execute')}
                 className="rounded-sm bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand/90 disabled:opacity-50"
