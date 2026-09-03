@@ -5,7 +5,9 @@
 //! local server never trusts a browser-supplied account id for authorization.
 
 use axum::{Router, extract::State, response::Json as ResponseJson, routing::get};
-use db::models::{issue::Issue, project::Project, workspace::Workspace};
+use db::models::{
+    issue::Issue, project::Project, project_status::ProjectStatus, workspace::Workspace,
+};
 use deployment::Deployment;
 use serde::Serialize;
 use serde_json::Value;
@@ -47,6 +49,24 @@ pub async fn get_context(
     }
 
     for project in Project::find_all(pool).await? {
+        records.push(MobileSyncRecord {
+            entity_type: "project",
+            entity_id: project.id.to_string(),
+            operation: "upsert",
+            payload: serde_json::to_value(&project)
+                .map_err(|error| ApiError::BadRequest(error.to_string()))?,
+        });
+
+        for status in ProjectStatus::list_by_project(pool, project.id).await? {
+            records.push(MobileSyncRecord {
+                entity_type: "status",
+                entity_id: status.id.to_string(),
+                operation: "upsert",
+                payload: serde_json::to_value(status)
+                    .map_err(|error| ApiError::BadRequest(error.to_string()))?,
+            });
+        }
+
         for issue in Issue::list_by_project(pool, project.id).await? {
             records.push(MobileSyncRecord {
                 entity_type: "issue",
