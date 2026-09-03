@@ -54,6 +54,7 @@ pub async fn get_context(
 ) -> Result<ResponseJson<ApiResponse<MobileContextResponse>>, ApiError> {
     let pool = &deployment.db().pool;
     let mut records = Vec::new();
+    let issue_workspace_links = IssueWorkspace::list_linked_all(pool).await?;
 
     for workspace in Workspace::find_all_with_status(pool, None, None).await? {
         records.push(MobileSyncRecord {
@@ -85,12 +86,25 @@ pub async fn get_context(
         }
 
         for issue in Issue::list_by_project(pool, project.id).await? {
+            let mut payload = serde_json::to_value(&issue)
+                .map_err(|error| ApiError::BadRequest(error.to_string()))?;
+            if let Some(link) = issue_workspace_links
+                .iter()
+                .find(|link| link.issue_id == issue.id)
+            {
+                if let Some(object) = payload.as_object_mut() {
+                    object.insert(
+                        "workspace_id".to_string(),
+                        serde_json::to_value(link.workspace_id)
+                            .map_err(|error| ApiError::BadRequest(error.to_string()))?,
+                    );
+                }
+            }
             records.push(MobileSyncRecord {
                 entity_type: "issue",
                 entity_id: issue.id.to_string(),
                 operation: "upsert",
-                payload: serde_json::to_value(issue)
-                    .map_err(|error| ApiError::BadRequest(error.to_string()))?,
+                payload,
             });
         }
     }
@@ -98,7 +112,7 @@ pub async fn get_context(
     // Keep the relationship that lets a mobile card open the conversation of
     // the workspace launched for that issue. The workspace and issue records
     // alone do not carry this association.
-    for link in IssueWorkspace::list_linked_all(pool).await? {
+    for link in issue_workspace_links {
         records.push(MobileSyncRecord {
             entity_type: "issue_workspace",
             entity_id: format!("{}:{}", link.issue_id, link.workspace_id),
