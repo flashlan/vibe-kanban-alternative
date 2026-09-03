@@ -13,7 +13,10 @@ use db::models::{
     issue::Issue,
     issue_workspace::IssueWorkspace,
     project::Project,
+    project_repo::ProjectRepo,
     project_status::ProjectStatus,
+    repo::Repo,
+    requests::{CreateAndStartWorkspaceRequest, LinkedIssueInfo, WorkspaceRepoInput},
     session::{CreateSession, Session},
     workspace::Workspace,
 };
@@ -44,6 +47,12 @@ pub struct MobileContextResponse {
 pub struct MobileChatCommand {
     pub workspace_id: Uuid,
     pub prompt: String,
+    pub executor: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MobileWorkspaceRequest {
+    pub issue_id: Uuid,
     pub executor: Option<String>,
 }
 
@@ -292,6 +301,81 @@ pub async fn post_chat_command(
     .into_response())
 }
 
+/// Create and start the workspace for a card requested by Mobile. The browser
+/// or Mobile app never receives permission to create worktrees directly: the
+/// local Desktop remains the owner of repositories, sessions and executors.
+pub async fn post_workspace_request(
+    State(deployment): State<DeploymentImpl>,
+    Json(request): Json<MobileWorkspaceRequest>,
+) -> Result<Response, ApiError> {
+    let pool = &deployment.db().pool;
+    let issue = Issue::find_by_id(pool, request.issue_id)
+        .await?
+        .ok_or_else(|| ApiError::BadRequest("issue not found".to_string()))?;
+
+    if let Some(workspace_id) = IssueWorkspace::find_latest_by_issue(pool, issue.id).await?
+        && let Some(workspace) = Workspace::find_by_id(pool, workspace_id).await?
+        && !workspace.archived
+    {
+        return Ok(
+            ResponseJson(ApiResponse::<Value>::success(serde_json::json!({
+                "workspace_id": workspace.id,
+                "created": false,
+            })))
+            .into_response(),
+        );
+    }
+
+    let repo_ids = ProjectRepo::list_repo_ids(pool, issue.project_id).await?;
+    let repos = Repo::find_by_ids(pool, &repo_ids).await?;
+    if repos.is_empty() {
+        return Err(ApiError::BadRequest(
+            "the issue project has no repository configured".to_string(),
+        ));
+    }
+
+    let executor = request
+        .executor
+        .as_deref()
+        .unwrap_or("CODEX")
+        .parse::<BaseCodingAgent>()
+        .map_err(|_| ApiError::BadRequest("unknown mobile workspace executor".to_string()))?;
+    let repos = repos
+        .into_iter()
+        .map(|repo| WorkspaceRepoInput {
+            repo_id: repo.id,
+            target_branch: repo
+                .default_target_branch
+                .unwrap_or_else(|| "main".to_string()),
+        })
+        .collect();
+    let prompt = match issue.description.as_deref() {
+        Some(description) if !description.trim().is_empty() => {
+            format!("{}\n\n{}", issue.title, description)
+        }
+        _ => issue.title.clone(),
+    };
+
+    let response = crate::routes::workspaces::create::create_and_start_workspace(
+        State(deployment),
+        Json(CreateAndStartWorkspaceRequest {
+            name: Some(issue.simple_id.clone()),
+            repos,
+            linked_issue: Some(LinkedIssueInfo {
+                remote_project_id: issue.project_id,
+                issue_id: issue.id,
+            }),
+            executor_config: ExecutorConfig::new(executor),
+            prompt,
+            attachment_ids: None,
+            kind: None,
+        }),
+    )
+    .await?;
+
+    Ok(response.into_response())
+}
+
 fn status_command(prompt: &str) -> Option<&'static str> {
     match prompt
         .split_whitespace()
@@ -311,4 +395,5 @@ pub fn router() -> Router<DeploymentImpl> {
     Router::new()
         .route("/mobile/context", get(get_context))
         .route("/mobile/chat", post(post_chat_command))
+        .route("/mobile/workspace", post(post_workspace_request))
 }

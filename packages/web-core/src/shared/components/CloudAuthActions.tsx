@@ -117,6 +117,19 @@ export function CloudAuthActions() {
               await new Promise((resolve) => window.setTimeout(resolve, 2500));
               return;
             }
+          } else if (event.entityType === 'workspace_request') {
+            const payload = event.payload as MobileWorkspaceRequest;
+            if (!payload.issue_id) continue;
+            const localResponse = await fetch('/api/mobile/workspace', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+              signal,
+            });
+            if (!localResponse.ok) {
+              await new Promise((resolve) => window.setTimeout(resolve, 2500));
+              return;
+            }
           } else if (event.entityType === 'issue') {
             const payload = event.payload as { status_id?: string };
             if (!payload.status_id || !event.entityId) continue;
@@ -358,6 +371,7 @@ type CloudSyncRecord = {
     | 'project'
     | 'status'
     | 'workspace'
+    | 'workspace_request'
     | 'issue_workspace'
     | 'chat'
     | 'chat_command'
@@ -379,6 +393,11 @@ type CloudSyncEvent = {
 type MobileChatCommand = {
   workspace_id: string;
   prompt: string;
+  executor?: string;
+};
+
+type MobileWorkspaceRequest = {
+  issue_id: string;
   executor?: string;
 };
 
