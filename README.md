@@ -101,6 +101,57 @@ This downloads prebuilt binaries and starts the local web cockpit at `http://loc
 - **Memory reconstruction** — if graph extraction was unavailable when facts were saved, `mem0_vk` can re-extract existing facts and rebuild their entities and relations after the extraction configuration is fixed.
 - **Safe adapter migration** — Settings → Memory offers preview-first migration between `mem0_vk` and Mem0 Platform, with duplicate detection, source preservation, and explicit confirmation.
 
+### How project memory works
+
+Memory is scoped to the repository being worked on. The repository slug is used
+as the Mem0 `user_id`, so a fact saved for `aurapunk-ide` is not returned for a
+different repository. Multiple agents and sessions can share that project
+namespace, but namespaces are never merged implicitly.
+
+The memory loop is deliberate:
+
+1. **Recall** — before analysing code, the agent calls `memory_search` with a
+   focused question about the files or module it is about to touch.
+2. **Save** — after verification, the agent calls `memory_save` with a durable,
+   self-contained fact such as an architectural decision, convention, or root
+   cause. Chatter, guesses, and secrets do not belong in project memory.
+3. **Connect** — with graph extraction enabled, entities and relations connect
+   facts such as modules, files, services, and dependencies. `mem0_vk` exposes
+   `memory_graph_traverse` for multi-hop neighbourhood queries.
+
+### Reconstructing memory after code changes
+
+`mem0_vk` records the current Git commit when a memory is saved. The
+`memory_check_staleness` tool compares that provenance with the current
+worktree and searches removed diff lines for evidence that a referenced entity
+may no longer exist. A negative result is not proof of freshness; an
+unavailable check is reported as unknown.
+
+If facts were saved before an extraction model or graph service was configured,
+the `POST /api/re-extract/:user_id` operation reprocesses existing facts,
+rebuilds their entities and relations, and updates the project graph. It
+reconstructs memory structure; it does not restore deleted code or certify that
+the underlying fact is still true.
+
+### Choosing and migrating memory adapters
+
+`mem0_vk` is the full-control, self-hosted adapter: extraction providers,
+embeddings, Qdrant, graph storage, Git provenance, traversal, and re-extraction
+remain under the project's control. Mem0 Platform is the managed alternative:
+it handles extraction, embeddings, storage, asynchronous processing, and its
+own Graph Memory, but does not expose the AuraPunk-specific Git staleness and
+bulk re-extraction contract.
+
+Switching adapters does not move data. To migrate, open **Settings → Memory**,
+enter the source and destination endpoints/keys, run **Preview migration**, and
+review the counts. Only then confirm **Execute migration**. The operation is
+scoped to one repository, skips duplicate normalized facts, never deletes the
+source, and does not persist migration credentials. Imported facts are
+re-extracted by the destination, so vectors, provider-specific graph IDs, and
+exact extraction results are not portable. Keep the source active until the
+destination has finished processing and representative searches have been
+verified.
+
 ### Prompt Cache-Hit Design
 
 To minimize token costs on providers with prompt caching (Anthropic, OpenRouter, DeepSeek):
