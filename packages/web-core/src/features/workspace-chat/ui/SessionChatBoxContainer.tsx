@@ -70,6 +70,11 @@ import { getInteractiveConfig } from '@/shared/lib/interactive';
 import { RenameSessionDialog } from '@vibe/ui/components/RenameSessionDialog';
 import type { TurnNavigationItem } from '@vibe/ui/components/TurnNavigationPopup';
 
+const MEMORY_SLASH_COMMAND = {
+  name: 'memory',
+  description: 'Open memory adapters and endpoint settings',
+} as const;
+
 /** Compute execution status from boolean flags */
 function computeExecutionStatus(params: {
   isInFeedbackMode: boolean;
@@ -528,6 +533,15 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
   });
 
   const handleSend = useCallback(async () => {
+    if (/^\/memory\s*$/i.test(localMessage.trim())) {
+      cancelDebouncedSave();
+      setLocalMessage('');
+      clearUploadedAttachments();
+      await clearDraft();
+      void SettingsDialog.show({ initialSection: 'memory' });
+      return;
+    }
+
     const { prompt, isSlashCommand } = buildAgentPrompt(localMessage, [
       reviewMarkdown,
     ]);
@@ -1007,6 +1021,7 @@ export function SessionChatBoxContainer(props: SessionChatBoxContainerProps) {
         className="min-h-double max-h-[50vh] overflow-y-auto"
         repoIds={repoIds}
         executor={executor}
+        additionalSlashCommands={[MEMORY_SLASH_COMMAND]}
         sessionId={sessionId}
         autoFocus
         onPasteFiles={onPasteFiles}

@@ -23,6 +23,26 @@ interface Mem0Connection {
   url: string;
   local_url: string;
   cloud_url: string;
+  enabled: boolean;
+  adapter: 'mem0_vk' | 'mem0_platform';
+  mem0_api_key_configured: boolean;
+  qdrant_url: string;
+  qdrant_api_key_configured: boolean;
+  embedding_dimensions: number;
+}
+
+type MigrationAdapter = 'mem0_vk' | 'mem0_platform';
+
+interface MemoryMigrationResult {
+  mode: 'preview' | 'execute';
+  user_id: string;
+  source_count: number;
+  destination_existing: number;
+  would_migrate: number;
+  queued: number;
+  skipped_duplicates: number;
+  failed: string[];
+  warnings: string[];
 }
 
 const PROVIDER_ORDER = ['groq', 'openrouter', 'llama', 'openai'] as const;
@@ -57,14 +77,39 @@ async function fetchMem0Connection(): Promise<Mem0Connection> {
 }
 
 async function updateMem0Connection(
-  source: Mem0Connection['source']
+  body: Partial<{
+    source: Mem0Connection['source'];
+    adapter: Mem0Connection['adapter'];
+    enabled: boolean;
+    url: string;
+    mem0_api_key: string;
+    qdrant_url: string;
+    qdrant_api_key: string;
+    qdrant_collection: string;
+    embedding_dimensions: number;
+  }>
 ): Promise<Mem0Connection> {
   const response = await makeRequest('/api/usage/mem0-connection', {
     method: 'PUT',
-    body: JSON.stringify({ source }),
+    body: JSON.stringify(body),
     cache: 'no-store',
   });
   return handleApiResponse<Mem0Connection>(response);
+}
+
+async function migrateMemories(body: {
+  source: { adapter: MigrationAdapter; url: string; api_key: string };
+  destination: { adapter: MigrationAdapter; url: string; api_key: string };
+  user_id: string;
+  mode: 'preview' | 'execute';
+  confirm: boolean;
+}): Promise<MemoryMigrationResult> {
+  const response = await makeRequest('/api/usage/memory-migration', {
+    method: 'POST',
+    body: JSON.stringify(body),
+    cache: 'no-store',
+  });
+  return handleApiResponse<MemoryMigrationResult>(response);
 }
 
 interface ProviderDraft {
@@ -77,6 +122,12 @@ export function MemorySettingsSection() {
   const { t } = useTranslation('settings');
   const [config, setConfig] = useState<Mem0Config | null>(null);
   const [connection, setConnection] = useState<Mem0Connection | null>(null);
+  const [enabled, setEnabled] = useState(true);
+  const [adapter, setAdapter] = useState<Mem0Connection['adapter']>('mem0_vk');
+  const [mem0ApiKey, setMem0ApiKey] = useState('');
+  const [qdrantUrl, setQdrantUrl] = useState('');
+  const [qdrantApiKey, setQdrantApiKey] = useState('');
+  const [embeddingDimensions, setEmbeddingDimensions] = useState(384);
   const [provider, setProvider] = useState('groq');
   const [graphEnabled, setGraphEnabled] = useState(true);
   const [drafts, setDrafts] = useState<Record<string, ProviderDraft>>({});
@@ -84,6 +135,23 @@ export function MemorySettingsSection() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [connectionBusy, setConnectionBusy] = useState(false);
+  const [migrationSourceAdapter, setMigrationSourceAdapter] =
+    useState<MigrationAdapter>('mem0_vk');
+  const [migrationDestinationAdapter, setMigrationDestinationAdapter] =
+    useState<MigrationAdapter>('mem0_platform');
+  const [migrationSourceUrl, setMigrationSourceUrl] = useState(
+    'http://localhost:8000'
+  );
+  const [migrationDestinationUrl, setMigrationDestinationUrl] = useState(
+    'https://api.mem0.ai'
+  );
+  const [migrationSourceKey, setMigrationSourceKey] = useState('');
+  const [migrationDestinationKey, setMigrationDestinationKey] = useState('');
+  const [migrationUserId, setMigrationUserId] = useState('');
+  const [migrationConfirm, setMigrationConfirm] = useState(false);
+  const [migrationBusy, setMigrationBusy] = useState(false);
+  const [migrationResult, setMigrationResult] =
+    useState<MemoryMigrationResult | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -109,13 +177,55 @@ export function MemorySettingsSection() {
 
   useEffect(() => {
     void fetchMem0Connection()
-      .then(setConnection)
+      .then((next) => {
+        setConnection(next);
+        setEnabled(next.enabled);
+        setAdapter(next.adapter);
+        setQdrantUrl(next.qdrant_url);
+        setEmbeddingDimensions(next.embedding_dimensions);
+        if (next.adapter === 'mem0_vk') {
+          setMigrationSourceUrl(next.url);
+          setMigrationSourceAdapter('mem0_vk');
+        }
+      })
       .catch((e: unknown) => {
         setError(
           e instanceof Error ? e.message : 'Failed to load memory connection'
         );
       });
   }, []);
+
+  const handleMigration = async (mode: 'preview' | 'execute') => {
+    setMigrationBusy(true);
+    setError(null);
+    try {
+      const result = await migrateMemories({
+        source: {
+          adapter: migrationSourceAdapter,
+          url: migrationSourceUrl,
+          api_key: migrationSourceKey,
+        },
+        destination: {
+          adapter: migrationDestinationAdapter,
+          url: migrationDestinationUrl,
+          api_key: migrationDestinationKey,
+        },
+        user_id: migrationUserId.trim(),
+        mode,
+        confirm: mode === 'execute' && migrationConfirm,
+      });
+      setMigrationResult(result);
+      if (mode === 'execute') {
+        setMigrationConfirm(false);
+        setMigrationSourceKey('');
+        setMigrationDestinationKey('');
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Memory migration failed');
+    } finally {
+      setMigrationBusy(false);
+    }
+  };
 
   const setDraft = (p: string, field: keyof ProviderDraft, value: string) => {
     setDrafts((prev) => ({
@@ -129,27 +239,42 @@ export function MemorySettingsSection() {
     setSaved(false);
     setError(null);
     try {
-      const providers: Record<
-        string,
-        { url: string; model: string; key?: string }
-      > = {};
-      for (const p of PROVIDER_ORDER) {
-        const d = drafts[p] ?? { url: '', model: '', key: '' };
-        const patch: { url: string; model: string; key?: string } = {
-          url: d.url,
-          model: d.model,
-        };
-        // Only send a key when the user typed a new one — the server keeps the
-        // existing masked key otherwise.
-        if (d.key) patch.key = d.key;
-        providers[p] = patch;
-      }
-      const cfg = await updateMem0Config({
-        provider,
-        graph_enabled: graphEnabled,
-        providers,
+      const nextConnection = await updateMem0Connection({
+        enabled,
+        adapter,
+        ...(mem0ApiKey ? { mem0_api_key: mem0ApiKey } : {}),
+        qdrant_url: qdrantUrl,
+        ...(qdrantApiKey ? { qdrant_api_key: qdrantApiKey } : {}),
+        embedding_dimensions: embeddingDimensions,
       });
-      setConfig(cfg);
+      setConnection(nextConnection);
+      setMem0ApiKey('');
+      setQdrantApiKey('');
+      window.dispatchEvent(new Event('mem0-connection-changed'));
+
+      if (enabled && adapter === 'mem0_vk') {
+        const providers: Record<
+          string,
+          { url: string; model: string; key?: string }
+        > = {};
+        for (const p of PROVIDER_ORDER) {
+          const d = drafts[p] ?? { url: '', model: '', key: '' };
+          const patch: { url: string; model: string; key?: string } = {
+            url: d.url,
+            model: d.model,
+          };
+          // Only send a key when the user typed a new one — the server keeps the
+          // existing masked key otherwise.
+          if (d.key) patch.key = d.key;
+          providers[p] = patch;
+        }
+        const cfg = await updateMem0Config({
+          provider,
+          graph_enabled: graphEnabled,
+          providers,
+        });
+        setConfig(cfg);
+      }
       setSaved(true);
       // Re-run the re-extract check: toggling the graph or a provider can make
       // previously-stored memories extractable.
@@ -166,8 +291,10 @@ export function MemorySettingsSection() {
     setConnectionBusy(true);
     setError(null);
     try {
-      const next = await updateMem0Connection(source);
+      const next = await updateMem0Connection({ source });
       setConnection(next);
+      setEnabled(next.enabled);
+      setAdapter(next.adapter);
       window.dispatchEvent(new Event('mem0-connection-changed'));
     } catch (e) {
       setError(
@@ -210,6 +337,142 @@ export function MemorySettingsSection() {
         <>
           {connection && (
             <div className="rounded-sm border border-border bg-panel p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-high">
+                    Memory endpoints
+                  </div>
+                  <div className="mt-1 text-xs text-low">
+                    Disable this to stop memory MCP calls without removing the
+                    saved credentials.
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={enabled}
+                  onClick={() => setEnabled((value) => !value)}
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                    enabled ? 'bg-brand' : 'bg-secondary'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
+                      enabled ? 'left-[22px]' : 'left-0.5'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              <div className="mt-4 text-sm font-medium text-high">
+                Memory adapter
+              </div>
+              <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {(
+                  [
+                    [
+                      'mem0_vk',
+                      'Self-hosted mem0-vk',
+                      'REST local/cloud + Qdrant próprio',
+                    ],
+                    [
+                      'mem0_platform',
+                      'Mem0 Platform',
+                      'API gerenciada da Mem0',
+                    ],
+                  ] as const
+                ).map(([value, label, description]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={adapter === value}
+                    onClick={() => setAdapter(value)}
+                    className={`rounded-sm border px-3 py-2 text-left transition-colors ${
+                      adapter === value
+                        ? 'border-brand bg-brand/10 text-brand'
+                        : 'border-border bg-secondary text-normal hover:bg-secondary/80'
+                    }`}
+                  >
+                    <span className="block text-sm font-medium">{label}</span>
+                    <span className="mt-1 block text-xs text-low">
+                      {description}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <label className="mt-3 block text-xs text-low">
+                Mem0 API key
+                <input
+                  type="password"
+                  value={mem0ApiKey}
+                  onChange={(event) => setMem0ApiKey(event.target.value)}
+                  placeholder={
+                    connection.mem0_api_key_configured
+                      ? '•••••••••• (saved)'
+                      : 'Token / API key'
+                  }
+                  autoComplete="off"
+                  className="mt-1 w-full rounded-sm border border-border bg-secondary px-2 py-1.5 text-xs text-high placeholder:text-low focus:outline-none focus:ring-1 focus:ring-brand"
+                />
+              </label>
+
+              {adapter === 'mem0_vk' ? (
+                <div className="mt-3 rounded-sm border border-border bg-secondary/40 p-2">
+                  <div className="text-xs font-medium text-normal">
+                    Qdrant (self-hosted adapter)
+                  </div>
+                  <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <input
+                      type="url"
+                      value={qdrantUrl}
+                      onChange={(event) => setQdrantUrl(event.target.value)}
+                      placeholder="Qdrant URL"
+                      className="min-w-0 rounded-sm border border-border bg-panel px-2 py-1.5 text-xs text-high placeholder:text-low focus:outline-none focus:ring-1 focus:ring-brand"
+                    />
+                    <input
+                      type="password"
+                      value={qdrantApiKey}
+                      onChange={(event) => setQdrantApiKey(event.target.value)}
+                      placeholder={
+                        connection.qdrant_api_key_configured
+                          ? '•••••••••• (saved)'
+                          : 'Qdrant API key'
+                      }
+                      autoComplete="off"
+                      className="min-w-0 rounded-sm border border-border bg-panel px-2 py-1.5 text-xs text-high placeholder:text-low focus:outline-none focus:ring-1 focus:ring-brand"
+                    />
+                    <input
+                      type="number"
+                      min={1}
+                      max={8192}
+                      value={embeddingDimensions}
+                      onChange={(event) =>
+                        setEmbeddingDimensions(
+                          Number(event.target.value) || 384
+                        )
+                      }
+                      placeholder="Dimensions"
+                      className="min-w-0 rounded-sm border border-border bg-panel px-2 py-1.5 text-xs text-high placeholder:text-low focus:outline-none focus:ring-1 focus:ring-brand"
+                    />
+                  </div>
+                  <div className="mt-2 text-xs text-low">
+                    A dimensão deve ser igual à do modelo de embeddings. O
+                    padrão deste projeto é 384.
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 rounded-sm border border-brand/20 bg-brand/5 px-3 py-2 text-xs text-low">
+                  O Platform gerencia extração, embeddings, índice vetorial e
+                  processamento assíncrono. As credenciais do Qdrant não se
+                  aplicam neste adapter.
+                </div>
+              )}
+            </div>
+          )}
+
+          {connection && adapter === 'mem0_vk' && (
+            <div className="rounded-sm border border-border bg-panel p-3">
               <div className="text-sm font-medium text-high">Memory source</div>
               <div className="mt-1 text-xs text-low">
                 Choose which Mem0 service new agent runs should use.
@@ -247,129 +510,286 @@ export function MemorySettingsSection() {
             </div>
           )}
 
-          <div className="rounded-sm border border-border bg-panel p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-high">
-                  {t('settings.memory.graph', 'Memory graph')}
+          {adapter === 'mem0_vk' && (
+            <>
+              <div className="rounded-sm border border-border bg-panel p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-medium text-high">
+                      {t('settings.memory.graph', 'Memory graph')}
+                    </div>
+                    <div className="text-xs text-low">
+                      {config.graph_url
+                        ? `mem0 · ${config.collection} · ${config.graph_url}`
+                        : t(
+                            'settings.memory.graphDisabled',
+                            'Graph service not configured'
+                          )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={graphEnabled}
+                    onClick={() => setGraphEnabled((v) => !v)}
+                    className={`relative h-6 w-11 rounded-full transition-colors ${
+                      graphEnabled ? 'bg-brand' : 'bg-secondary'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
+                        graphEnabled ? 'left-[22px]' : 'left-0.5'
+                      }`}
+                    />
+                  </button>
                 </div>
-                <div className="text-xs text-low">
-                  {config.graph_url
-                    ? `mem0 · ${config.collection} · ${config.graph_url}`
-                    : t(
-                        'settings.memory.graphDisabled',
-                        'Graph service not configured'
-                      )}
+                <div className="mt-2 text-xs text-low">
+                  {t(
+                    'settings.memory.graphHint',
+                    'When off, memories are stored and searched as vectors only; no graph is built or persisted.'
+                  )}
                 </div>
               </div>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={graphEnabled}
-                onClick={() => setGraphEnabled((v) => !v)}
-                className={`relative h-6 w-11 rounded-full transition-colors ${
-                  graphEnabled ? 'bg-brand' : 'bg-secondary'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-all ${
-                    graphEnabled ? 'left-[22px]' : 'left-0.5'
-                  }`}
-                />
-              </button>
-            </div>
-            <div className="mt-2 text-xs text-low">
-              {t(
-                'settings.memory.graphHint',
-                'When off, memories are stored and searched as vectors only; no graph is built or persisted.'
-              )}
-            </div>
-          </div>
 
-          <div className="rounded-sm border border-border bg-panel p-3">
-            <label className="mb-1 block text-xs text-low">
-              {t('settings.memory.provider', 'Extraction provider (primary)')}
-            </label>
-            <select
-              value={provider}
-              onChange={(e) => setProvider(e.target.value)}
-              className="w-full rounded-sm border border-border bg-secondary px-2 py-1.5 text-sm text-high focus:outline-none focus:ring-1 focus:ring-brand"
-            >
-              {PROVIDER_ORDER.map((p) => (
-                <option key={p} value={p}>
-                  {providerLabel(p)}
-                </option>
-              ))}
-            </select>
-            <div className="mt-1 text-xs text-low">
-              {t(
-                'settings.memory.providerHint',
-                'Configured providers are tried in order when the primary is rate-limited or fails.'
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-sm border border-border bg-panel p-3">
-            <div className="mb-2 text-sm font-medium text-high">
-              {t('settings.memory.providers', 'Providers & API keys')}
-            </div>
-            <div className="flex flex-col gap-4">
-              {PROVIDER_ORDER.map((p) => {
-                const d = drafts[p] ?? { url: '', model: '', key: '' };
-                const hasKey = config.providers[p]?.has_key ?? false;
-                return (
-                  <div key={p} className="rounded-sm bg-secondary/40 p-2">
-                    <div className="mb-1 text-xs font-medium text-normal">
+              <div className="rounded-sm border border-border bg-panel p-3">
+                <label className="mb-1 block text-xs text-low">
+                  {t(
+                    'settings.memory.provider',
+                    'Extraction provider (primary)'
+                  )}
+                </label>
+                <select
+                  value={provider}
+                  onChange={(e) => setProvider(e.target.value)}
+                  className="w-full rounded-sm border border-border bg-secondary px-2 py-1.5 text-sm text-high focus:outline-none focus:ring-1 focus:ring-brand"
+                >
+                  {PROVIDER_ORDER.map((p) => (
+                    <option key={p} value={p}>
                       {providerLabel(p)}
-                    </div>
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                      <input
-                        type="text"
-                        value={d.url}
-                        onChange={(e) => setDraft(p, 'url', e.target.value)}
-                        placeholder={t('settings.memory.baseUrl', 'Base URL')}
-                        className="min-w-0 rounded-sm border border-border bg-panel px-2 py-1.5 text-xs text-high placeholder:text-low focus:outline-none focus:ring-1 focus:ring-brand"
-                      />
-                      <input
-                        type="text"
-                        value={d.model}
-                        onChange={(e) => setDraft(p, 'model', e.target.value)}
-                        placeholder={t('settings.memory.model', 'Model')}
-                        className="min-w-0 rounded-sm border border-border bg-panel px-2 py-1.5 text-xs text-high placeholder:text-low focus:outline-none focus:ring-1 focus:ring-brand"
-                      />
-                      <div className="relative">
-                        <input
-                          type="password"
-                          value={d.key}
-                          onChange={(e) => setDraft(p, 'key', e.target.value)}
-                          placeholder={
-                            hasKey
-                              ? '•••••••••• (saved)'
-                              : t('settings.memory.apiKey', 'API key')
-                          }
-                          autoComplete="off"
-                          className="min-w-0 w-full rounded-sm border border-border bg-panel px-2 py-1.5 pr-9 text-xs text-high placeholder:text-low focus:outline-none focus:ring-1 focus:ring-brand"
-                        />
-                        {hasKey && (
-                          <span
-                            title={t('settings.memory.keySaved', 'Key saved')}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-success"
-                          >
-                            ●
-                          </span>
-                        )}
+                    </option>
+                  ))}
+                </select>
+                <div className="mt-1 text-xs text-low">
+                  {t(
+                    'settings.memory.providerHint',
+                    'Configured providers are tried in order when the primary is rate-limited or fails.'
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-sm border border-border bg-panel p-3">
+                <div className="mb-2 text-sm font-medium text-high">
+                  {t('settings.memory.providers', 'Providers & API keys')}
+                </div>
+                <div className="flex flex-col gap-4">
+                  {PROVIDER_ORDER.map((p) => {
+                    const d = drafts[p] ?? { url: '', model: '', key: '' };
+                    const hasKey = config.providers[p]?.has_key ?? false;
+                    return (
+                      <div key={p} className="rounded-sm bg-secondary/40 p-2">
+                        <div className="mb-1 text-xs font-medium text-normal">
+                          {providerLabel(p)}
+                        </div>
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                          <input
+                            type="text"
+                            value={d.url}
+                            onChange={(e) => setDraft(p, 'url', e.target.value)}
+                            placeholder={t(
+                              'settings.memory.baseUrl',
+                              'Base URL'
+                            )}
+                            className="min-w-0 rounded-sm border border-border bg-panel px-2 py-1.5 text-xs text-high placeholder:text-low focus:outline-none focus:ring-1 focus:ring-brand"
+                          />
+                          <input
+                            type="text"
+                            value={d.model}
+                            onChange={(e) =>
+                              setDraft(p, 'model', e.target.value)
+                            }
+                            placeholder={t('settings.memory.model', 'Model')}
+                            className="min-w-0 rounded-sm border border-border bg-panel px-2 py-1.5 text-xs text-high placeholder:text-low focus:outline-none focus:ring-1 focus:ring-brand"
+                          />
+                          <div className="relative">
+                            <input
+                              type="password"
+                              value={d.key}
+                              onChange={(e) =>
+                                setDraft(p, 'key', e.target.value)
+                              }
+                              placeholder={
+                                hasKey
+                                  ? '•••••••••• (saved)'
+                                  : t('settings.memory.apiKey', 'API key')
+                              }
+                              autoComplete="off"
+                              className="min-w-0 w-full rounded-sm border border-border bg-panel px-2 py-1.5 pr-9 text-xs text-high placeholder:text-low focus:outline-none focus:ring-1 focus:ring-brand"
+                            />
+                            {hasKey && (
+                              <span
+                                title={t(
+                                  'settings.memory.keySaved',
+                                  'Key saved'
+                                )}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-success"
+                              >
+                                ●
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-2 text-xs text-low">
+                  {t(
+                    'settings.memory.keysHint',
+                    'API keys are stored in the mem0 container and never shown again — only a "saved" indicator is returned. Leave a key field empty to keep the existing one.'
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="rounded-sm border border-border bg-panel p-3">
+            <div className="text-sm font-medium text-high">
+              Migrate project memories
+            </div>
+            <div className="mt-1 text-xs text-low">
+              Preview first. The source is never deleted, credentials are used
+              only for this operation, and duplicate facts are skipped.
+              Destination memories are re-extracted by their own adapter.
+            </div>
+
+            <label className="mt-3 block text-xs text-low">
+              Project / repository slug (`user_id`)
+              <input
+                type="text"
+                value={migrationUserId}
+                onChange={(event) => setMigrationUserId(event.target.value)}
+                placeholder="vibe-kanban-alternative"
+                className="mt-1 w-full rounded-sm border border-border bg-secondary px-2 py-1.5 text-xs text-high placeholder:text-low focus:outline-none focus:ring-1 focus:ring-brand"
+              />
+            </label>
+
+            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+              {(
+                [
+                  ['source', 'Source'],
+                  ['destination', 'Destination'],
+                ] as const
+              ).map(([side, label]) => {
+                const isSource = side === 'source';
+                const selectedAdapter = isSource
+                  ? migrationSourceAdapter
+                  : migrationDestinationAdapter;
+                const selectedUrl = isSource
+                  ? migrationSourceUrl
+                  : migrationDestinationUrl;
+                const selectedKey = isSource
+                  ? migrationSourceKey
+                  : migrationDestinationKey;
+                return (
+                  <div
+                    key={side}
+                    className="rounded-sm border border-border bg-secondary/40 p-2"
+                  >
+                    <div className="text-xs font-medium text-normal">
+                      {label}
                     </div>
+                    <select
+                      value={selectedAdapter}
+                      onChange={(event) => {
+                        const value = event.target.value as MigrationAdapter;
+                        if (isSource) setMigrationSourceAdapter(value);
+                        else setMigrationDestinationAdapter(value);
+                      }}
+                      className="mt-2 w-full rounded-sm border border-border bg-panel px-2 py-1.5 text-xs text-high focus:outline-none focus:ring-1 focus:ring-brand"
+                    >
+                      <option value="mem0_vk">mem0_vk (self-hosted)</option>
+                      <option value="mem0_platform">Mem0 Platform (cloud)</option>
+                    </select>
+                    <input
+                      type="url"
+                      value={selectedUrl}
+                      onChange={(event) => {
+                        if (isSource) setMigrationSourceUrl(event.target.value);
+                        else setMigrationDestinationUrl(event.target.value);
+                      }}
+                      placeholder="https://endpoint"
+                      className="mt-2 w-full rounded-sm border border-border bg-panel px-2 py-1.5 text-xs text-high placeholder:text-low focus:outline-none focus:ring-1 focus:ring-brand"
+                    />
+                    <input
+                      type="password"
+                      value={selectedKey}
+                      onChange={(event) => {
+                        if (isSource) setMigrationSourceKey(event.target.value);
+                        else setMigrationDestinationKey(event.target.value);
+                      }}
+                      placeholder="API key (if required)"
+                      autoComplete="off"
+                      className="mt-2 w-full rounded-sm border border-border bg-panel px-2 py-1.5 text-xs text-high placeholder:text-low focus:outline-none focus:ring-1 focus:ring-brand"
+                    />
                   </div>
                 );
               })}
             </div>
-            <div className="mt-2 text-xs text-low">
-              {t(
-                'settings.memory.keysHint',
-                'API keys are stored in the mem0 container and never shown again — only a "saved" indicator is returned. Leave a key field empty to keep the existing one.'
-              )}
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                disabled={migrationBusy || !migrationUserId.trim()}
+                onClick={() => void handleMigration('preview')}
+                className="rounded-sm border border-border bg-secondary px-3 py-1.5 text-xs font-medium text-high hover:bg-secondary/80 disabled:opacity-50"
+              >
+                {migrationBusy ? 'Working…' : 'Preview migration'}
+              </button>
+              <label className="flex items-center gap-2 text-xs text-low">
+                <input
+                  type="checkbox"
+                  checked={migrationConfirm}
+                  onChange={(event) => setMigrationConfirm(event.target.checked)}
+                  className="accent-brand"
+                />
+                I reviewed the preview and want to enqueue the copy
+              </label>
+              <button
+                type="button"
+                disabled={
+                  migrationBusy ||
+                  !migrationUserId.trim() ||
+                  !migrationConfirm
+                }
+                onClick={() => void handleMigration('execute')}
+                className="rounded-sm bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand/90 disabled:opacity-50"
+              >
+                Execute migration
+              </button>
             </div>
+
+            {migrationResult && (
+              <div className="mt-3 rounded-sm border border-border bg-secondary/40 p-2 text-xs text-low">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <span>Source: {migrationResult.source_count}</span>
+                  <span>Existing: {migrationResult.destination_existing}</span>
+                  <span>To copy: {migrationResult.would_migrate}</span>
+                  <span>Queued: {migrationResult.queued}</span>
+                  <span>Duplicates: {migrationResult.skipped_duplicates}</span>
+                  <span>Failures: {migrationResult.failed.length}</span>
+                </div>
+                {migrationResult.warnings.map((warning) => (
+                  <div key={warning} className="mt-2 text-warning">
+                    {warning}
+                  </div>
+                ))}
+                {migrationResult.failed.map((failure) => (
+                  <div key={failure} className="mt-2 text-error">
+                    {failure}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-3">

@@ -105,6 +105,11 @@ type WysiwygProps = {
   repoIds?: string[];
   /** Enables `/` command autocomplete (agent-specific). */
   executor?: BaseCodingAgent | null;
+  /** Commands handled by the host UI instead of being sent to the agent. */
+  additionalSlashCommands?: Array<{
+    name: string;
+    description?: string | null;
+  }>;
   onCmdEnter?: () => void;
   onShiftCmdEnter?: () => void;
   /** Keyboard shortcut mode for sending messages */
@@ -258,6 +263,7 @@ const WYSIWYGEditor = forwardRef<WYSIWYGEditorRef, WysiwygProps>(
       className,
       repoIds,
       executor = null,
+      additionalSlashCommands = [],
       onCmdEnter,
       onShiftCmdEnter,
       sendShortcut,
@@ -308,6 +314,15 @@ const WYSIWYGEditor = forwardRef<WYSIWYGEditorRef, WysiwygProps>(
       sessionId,
       repoId,
     });
+    const slashCommands = useMemo(() => {
+      const names = new Set(
+        slashCommandsQuery.commands.map(({ name }) => name)
+      );
+      return [
+        ...slashCommandsQuery.commands,
+        ...additionalSlashCommands.filter(({ name }) => !names.has(name)),
+      ];
+    }, [additionalSlashCommands, slashCommandsQuery.commands]);
     const listRecentRepos = useCallback(async () => repoApi.listRecent(), []);
     const getRepoById = useCallback(async (targetRepoId: string) => {
       try {
@@ -566,12 +581,16 @@ const WYSIWYGEditor = forwardRef<WYSIWYGEditorRef, WysiwygProps>(
                         onCreateTag={handleCreateTag}
                         searchTagsAndFiles={searchFileTags}
                       />
-                      {executor && (
+                      {(executor || additionalSlashCommands.length > 0) && (
                         <SlashCommandTypeaheadPlugin
                           enabled={true}
-                          commands={slashCommandsQuery.commands}
-                          isInitialized={slashCommandsQuery.isInitialized}
-                          isDiscovering={slashCommandsQuery.discovering}
+                          commands={slashCommands}
+                          isInitialized={
+                            executor ? slashCommandsQuery.isInitialized : true
+                          }
+                          isDiscovering={
+                            executor ? slashCommandsQuery.discovering : false
+                          }
                         />
                       )}
                       <KeyboardCommandsPlugin

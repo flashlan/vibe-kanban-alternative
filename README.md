@@ -96,6 +96,10 @@ This downloads prebuilt binaries and starts the local web cockpit at `http://loc
 - **Verified fact save-back** — the memory pipeline stage instructs the agent to persist only self-contained, verified facts (architectural decisions, patterns, root causes) via `memory_save`; ephemeral chatter is filtered out.
 - **MCP tool integration** — agents access `memory_search` and `memory_save` as first-class Model Context Protocol (MCP) tools.
 - **Graph-based memory (GraphML)** — entity and relation extraction builds an interconnected graph (mem0 + Qdrant + NetworkX), persisted on disk (`/data/graphs/*.graphml`) so knowledge structures survive container reboots.
+- **Project-scoped namespaces** — each repository uses its own `user_id`, so agents share knowledge inside a project without mixing it with another codebase.
+- **Code-aware freshness** — saved facts can carry the current Git commit; the staleness check compares that provenance with removed lines in the current worktree.
+- **Memory reconstruction** — if graph extraction was unavailable when facts were saved, `mem0_vk` can re-extract existing facts and rebuild their entities and relations after the extraction configuration is fixed.
+- **Safe adapter migration** — Settings → Memory offers preview-first migration between `mem0_vk` and Mem0 Platform, with duplicate detection, source preservation, and explicit confirmation.
 
 ### Prompt Cache-Hit Design
 

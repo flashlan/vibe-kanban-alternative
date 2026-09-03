@@ -20,29 +20,17 @@ use services::services::mem0_relevance::Mem0RelevanceSummary;
 use services::services::token_telemetry::TokenTelemetrySummary;
 use sqlx::FromRow;
 use ts_rs::TS;
-use utils::response::ApiResponse;
+use utils::{
+    memory_config::{self, MemoryAdapter},
+    response::ApiResponse,
+};
 use uuid::Uuid;
 
 use crate::DeploymentImpl;
 
-const DEFAULT_LOCAL_MEM0_URL: &str = "http://localhost:8000";
-const DEFAULT_CLOUD_MEM0_URL: &str = "http://192.168.1.168:8000";
-
 /// Default mem0 server base URL; override with `MEM0_URL`.
 fn mem0_url() -> String {
-    if let Ok(url) = std::env::var("MEM0_URL") {
-        return url;
-    }
-
-    let cloud_mode = std::env::var("VIBE_KANBAN_MODE")
-        .map(|value| value.trim().eq_ignore_ascii_case("cloud"))
-        .unwrap_or(false);
-    if cloud_mode {
-        std::env::var("AURAPUNK_CLOUD_MEM0_URL")
-            .unwrap_or_else(|_| DEFAULT_CLOUD_MEM0_URL.to_string())
-    } else {
-        DEFAULT_LOCAL_MEM0_URL.to_string()
-    }
+    memory_config::load().active_url()
 }
 
 fn mem0_source(url: &str) -> &'static str {
@@ -58,11 +46,27 @@ pub struct Mem0Connection {
     pub url: String,
     pub local_url: String,
     pub cloud_url: String,
+    pub enabled: bool,
+    pub adapter: String,
+    pub mem0_api_key_configured: bool,
+    pub qdrant_url: String,
+    pub qdrant_api_key_configured: bool,
+    pub embedding_dimensions: u32,
 }
 
 #[derive(Debug, Deserialize)]
 struct UpdateMem0ConnectionRequest {
-    source: String,
+    source: Option<String>,
+    adapter: Option<String>,
+    enabled: Option<bool>,
+    url: Option<String>,
+    mem0_api_key: Option<String>,
+    clear_mem0_api_key: Option<bool>,
+    qdrant_url: Option<String>,
+    qdrant_api_key: Option<String>,
+    clear_qdrant_api_key: Option<bool>,
+    qdrant_collection: Option<String>,
+    embedding_dimensions: Option<u32>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -71,14 +75,30 @@ struct UpdateMem0AccountRequest {
 }
 
 fn mem0_connection() -> Mem0Connection {
-    let url = mem0_url();
+    let config = memory_config::load();
+    let url = config.active_url();
+    let source = if config.adapter == MemoryAdapter::Mem0Vk && config.mem0_url.is_some() {
+        mem0_source(&url).to_string()
+    } else {
+        config.source.clone()
+    };
     Mem0Connection {
-        source: mem0_source(&url).to_string(),
+        source,
         url,
-        local_url: std::env::var("MEM0_LOCAL_URL")
-            .unwrap_or_else(|_| DEFAULT_LOCAL_MEM0_URL.to_string()),
-        cloud_url: std::env::var("AURAPUNK_CLOUD_MEM0_URL")
-            .unwrap_or_else(|_| DEFAULT_CLOUD_MEM0_URL.to_string()),
+        local_url: config
+            .local_url
+            .clone()
+            .unwrap_or_else(|| memory_config::DEFAULT_LOCAL_MEM0_URL.to_string()),
+        cloud_url: config
+            .cloud_url
+            .clone()
+            .unwrap_or_else(|| memory_config::DEFAULT_CLOUD_MEM0_URL.to_string()),
+        enabled: config.enabled,
+        adapter: config.adapter.as_str().to_string(),
+        mem0_api_key_configured: config.has_mem0_api_key(),
+        qdrant_url: config.qdrant_url.clone().unwrap_or_default(),
+        qdrant_api_key_configured: config.has_qdrant_api_key(),
+        embedding_dimensions: config.embedding_dimensions,
     }
 }
 
@@ -87,16 +107,28 @@ fn mem0_connection() -> Mem0Connection {
 /// service; the optional account header lets a hosted service enforce the
 /// signed-in user's active license and namespace.
 fn authorize_mem0(request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-    let request =
-        match std::env::var("MEM0_API_TOKEN").or_else(|_| std::env::var("AURAPUNK_MEM0_TOKEN")) {
-            Ok(token) if !token.trim().is_empty() => request.bearer_auth(token),
+    let config = memory_config::load();
+    let request = match config
+        .mem0_api_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|key| !key.is_empty())
+    {
+        Some(key) if config.adapter == MemoryAdapter::Mem0Platform => request
+            .header("Authorization", format!("Token {key}"))
+            .header("Accept", "application/json"),
+        Some(key) => request.bearer_auth(key),
+        None => request,
+    };
+    if config.adapter == MemoryAdapter::Mem0Platform {
+        request
+    } else {
+        match std::env::var("MEM0_ACCOUNT_ID").or_else(|_| std::env::var("AURAPUNK_ACCOUNT_ID")) {
+            Ok(account_id) if !account_id.trim().is_empty() => {
+                request.header("X-AuraPunk-Account-Id", account_id)
+            }
             _ => request,
-        };
-    match std::env::var("MEM0_ACCOUNT_ID").or_else(|_| std::env::var("AURAPUNK_ACCOUNT_ID")) {
-        Ok(account_id) if !account_id.trim().is_empty() => {
-            request.header("X-AuraPunk-Account-Id", account_id)
         }
-        _ => request,
     }
 }
 
@@ -330,10 +362,12 @@ fn component_urls() -> (String, String, String) {
         Some(host) => format!("http://{host}:8001"),
         None => "http://localhost:8001".to_string(),
     });
-    let qdrant = std::env::var("QDRANT_URL").unwrap_or_else(|_| match url_host(&mem0) {
-        Some(host) => format!("http://{host}:6333"),
-        None => "http://localhost:6333".to_string(),
-    });
+    let qdrant = memory_config::load()
+        .qdrant_url
+        .unwrap_or_else(|| match url_host(&mem0) {
+            Some(host) => format!("http://{host}:6333"),
+            None => "http://localhost:6333".to_string(),
+        });
     (mem0, embeddings, qdrant)
 }
 
@@ -356,6 +390,9 @@ fn url_host(input: &str) -> Option<String> {
 /// mem0: reachable (`/api/config` 2xx) AND its own `/health` reports `ok`.
 /// Returns `(reachable, healthy)`.
 async fn check_mem0(client: &reqwest::Client, base: &str) -> (bool, bool) {
+    if memory_config::load().adapter == MemoryAdapter::Mem0Platform {
+        return check_mem0_platform(client, base).await;
+    }
     let reachable = match authorize_mem0(client.get(format!("{base}/api/config")))
         .send()
         .await
@@ -375,6 +412,31 @@ async fn check_mem0(client: &reqwest::Client, base: &str) -> (bool, bool) {
     (reachable, healthy)
 }
 
+/// Mem0 Platform has no mem0-vk `/api/config` or `/health` endpoint. A scoped
+/// search is a safe authenticated liveness probe for the managed API.
+async fn check_mem0_platform(client: &reqwest::Client, base: &str) -> (bool, bool) {
+    let body = serde_json::json!({
+        "query": "health check",
+        "filters": { "user_id": "aurapunk-health-check" },
+        "top_k": 1,
+    });
+    match authorize_mem0(client.post(format!("{base}/v3/memories/search/")))
+        .json(&body)
+        .send()
+        .await
+    {
+        Ok(response) if response.status().is_success() => (true, true),
+        Ok(response) => {
+            tracing::debug!(status = %response.status(), "Mem0 Platform health probe failed");
+            (true, false)
+        }
+        Err(error) => {
+            tracing::debug!(error = %error, "Mem0 Platform is unreachable");
+            (false, false)
+        }
+    }
+}
+
 /// Endpoint that returns a JSON body with an `ok` boolean field (mem0
 /// `/health`, embeddings `/health`). Treats absence of the field as healthy
 /// only when the request itself succeeded.
@@ -390,8 +452,12 @@ async fn check_json_ok(client: &reqwest::Client, url: &str) -> bool {
 }
 
 /// Plain status-code liveness probe (qdrant `/healthz` returns text, not JSON).
-async fn check_status(client: &reqwest::Client, url: &str) -> bool {
-    match client.get(url).send().await {
+async fn check_status(client: &reqwest::Client, url: &str, api_key: Option<&str>) -> bool {
+    let request = api_key
+        .filter(|key| !key.trim().is_empty())
+        .map(|key| client.get(url).header("api-key", key))
+        .unwrap_or_else(|| client.get(url));
+    match request.send().await {
         Ok(r) => r.status().is_success(),
         _ => false,
     }
@@ -459,6 +525,19 @@ fn compute_level(
 /// components (3s timeout per check) and a computed 4-level health indicator
 /// for the UI header dot. Best-effort: never errors, always returns a status.
 async fn mem0_status() -> ResponseJson<ApiResponse<Mem0Status>> {
+    let config = memory_config::load();
+    if !config.enabled {
+        return ResponseJson(ApiResponse::success(Mem0Status {
+            level: "disabled".to_string(),
+            components: Mem0ComponentStatus {
+                mem0: false,
+                embeddings: false,
+                qdrant: false,
+            },
+            message: "memória desativada nas configurações".to_string(),
+            connection: mem0_connection(),
+        }));
+    }
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(3))
         .build()
@@ -470,7 +549,11 @@ async fn mem0_status() -> ResponseJson<ApiResponse<Mem0Status>> {
     let (mem0_res, emb_res, qdrant_res) = tokio::join!(
         check_mem0(&client, &mem0_base),
         check_json_ok(&client, &emb_health_url),
-        check_status(&client, &qdrant_health_url),
+        check_status(
+            &client,
+            &qdrant_health_url,
+            config.qdrant_api_key.as_deref()
+        ),
     );
     let (mem0_up, mem0_healthy) = mem0_res;
 
@@ -478,7 +561,10 @@ async fn mem0_status() -> ResponseJson<ApiResponse<Mem0Status>> {
     // probes fail, use a real search through mem0 before reporting a degraded
     // state. This also remains conservative: a failed search leaves the
     // direct probe results unchanged.
-    let (embeddings, qdrant) = if mem0_up && !emb_res && !qdrant_res {
+    let (embeddings, qdrant) = if config.adapter == MemoryAdapter::Mem0Platform {
+        // Mem0 Platform owns extraction, embeddings and vector storage.
+        (true, true)
+    } else if mem0_up && !emb_res && !qdrant_res {
         if check_mem0_vector_search(&client, &mem0_base).await {
             (true, true)
         } else {
@@ -509,18 +595,88 @@ async fn get_mem0_connection() -> ResponseJson<ApiResponse<Mem0Connection>> {
 async fn update_mem0_connection(
     Json(body): Json<UpdateMem0ConnectionRequest>,
 ) -> ResponseJson<ApiResponse<Mem0Connection>> {
-    let url = match body.source.trim().to_ascii_lowercase().as_str() {
-        "local" => {
-            std::env::var("MEM0_LOCAL_URL").unwrap_or_else(|_| DEFAULT_LOCAL_MEM0_URL.to_string())
-        }
-        "cloud" => std::env::var("AURAPUNK_CLOUD_MEM0_URL")
-            .unwrap_or_else(|_| DEFAULT_CLOUD_MEM0_URL.to_string()),
-        _ => return ResponseJson(ApiResponse::error("source must be local or cloud")),
-    };
+    let mut config = memory_config::load();
 
-    // This is a local operator setting. It is intentionally applied to the
-    // process so newly spawned MCP workers inherit the selected endpoint.
-    unsafe { std::env::set_var("MEM0_URL", url) };
+    if let Some(source) = body.source {
+        let source = source.trim().to_ascii_lowercase();
+        if !matches!(source.as_str(), "local" | "cloud") {
+            return ResponseJson(ApiResponse::error("source must be local or cloud"));
+        }
+        config.source = source;
+        if config.adapter == MemoryAdapter::Mem0Vk && body.url.is_none() {
+            config.mem0_url = None;
+        }
+    }
+
+    if let Some(adapter) = body.adapter {
+        let Some(adapter) = MemoryAdapter::from_env(&adapter) else {
+            return ResponseJson(ApiResponse::error(
+                "adapter must be mem0_vk or mem0_platform",
+            ));
+        };
+        config.adapter = adapter;
+        if body.url.is_none() {
+            config.mem0_url = None;
+        }
+    }
+    if let Some(enabled) = body.enabled {
+        config.enabled = enabled;
+    }
+    if let Some(url) = body.url {
+        let url = url.trim().to_string();
+        if !url.starts_with("http://") && !url.starts_with("https://") {
+            return ResponseJson(ApiResponse::error(
+                "url must start with http:// or https://",
+            ));
+        }
+        config.mem0_url = Some(url);
+    }
+    if body.clear_mem0_api_key.unwrap_or(false) {
+        config.mem0_api_key = None;
+    } else if let Some(key) = body.mem0_api_key.filter(|key| !key.trim().is_empty()) {
+        config.mem0_api_key = Some(key.trim().to_string());
+    }
+    if let Some(url) = body.qdrant_url {
+        let url = url.trim().to_string();
+        if !url.is_empty() && !url.starts_with("http://") && !url.starts_with("https://") {
+            return ResponseJson(ApiResponse::error(
+                "qdrant_url must start with http:// or https://",
+            ));
+        }
+        config.qdrant_url = (!url.is_empty()).then_some(url);
+    }
+    if body.clear_qdrant_api_key.unwrap_or(false) {
+        config.qdrant_api_key = None;
+    } else if let Some(key) = body.qdrant_api_key.filter(|key| !key.trim().is_empty()) {
+        config.qdrant_api_key = Some(key.trim().to_string());
+    }
+    if let Some(collection) = body.qdrant_collection {
+        config.qdrant_collection =
+            (!collection.trim().is_empty()).then_some(collection.trim().to_string());
+    }
+    if let Some(dimensions) = body.embedding_dimensions {
+        if !(1..=8192).contains(&dimensions) {
+            return ResponseJson(ApiResponse::error(
+                "embedding_dimensions must be between 1 and 8192",
+            ));
+        }
+        config.embedding_dimensions = dimensions;
+    }
+
+    if let Err(error) = memory_config::save(&config) {
+        return ResponseJson(ApiResponse::error(&format!(
+            "failed to save memory config: {error}"
+        )));
+    }
+
+    // Keep legacy environment consumers working in this process. The MCP
+    // worker also reads memory.toml directly, so this remains correct after a
+    // server restart as well.
+    unsafe {
+        std::env::set_var("MEM0_URL", config.active_url());
+        std::env::set_var("AURAPUNK_MEM0_ADAPTER", config.adapter.as_str());
+        std::env::set_var("MEM0_ENABLED", config.enabled.to_string());
+    }
     ResponseJson(ApiResponse::success(mem0_connection()))
 }
 
@@ -619,6 +775,30 @@ async fn get_mem0_config(
     State(deployment): State<DeploymentImpl>,
 ) -> ResponseJson<ApiResponse<Mem0Config>> {
     let _ = deployment;
+    let memory = memory_config::load();
+    if !memory.enabled || memory.adapter == MemoryAdapter::Mem0Platform {
+        return ResponseJson(ApiResponse::success(Mem0Config {
+            ok: memory.enabled,
+            provider: if memory.adapter == MemoryAdapter::Mem0Platform {
+                "mem0_platform"
+            } else {
+                // Keep the form valid so an operator can re-enable memory
+                // while the backend is offline; the provider is not changed
+                // by the disabled response.
+                "groq"
+            }
+            .to_string(),
+            graph_enabled: false,
+            graph_url: String::new(),
+            collection: if memory.adapter == MemoryAdapter::Mem0Platform {
+                "managed by Mem0 Platform"
+            } else {
+                "memory disabled"
+            }
+            .to_string(),
+            providers: std::collections::HashMap::new(),
+        }));
+    }
     let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build()
@@ -645,6 +825,19 @@ async fn put_mem0_config(
     Json(req): Json<UpdateMem0ConfigRequest>,
 ) -> ResponseJson<ApiResponse<Mem0Config>> {
     let _ = deployment;
+    if memory_config::load().adapter == MemoryAdapter::Mem0Platform {
+        // Extraction, embeddings and graph settings are managed by the hosted
+        // platform. Keep the endpoint successful so the shared Settings form
+        // can be used regardless of the selected adapter.
+        return ResponseJson(ApiResponse::success(Mem0Config {
+            ok: true,
+            provider: "mem0_platform".to_string(),
+            graph_enabled: false,
+            graph_url: String::new(),
+            collection: "managed by Mem0 Platform".to_string(),
+            providers: std::collections::HashMap::new(),
+        }));
+    }
     let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build()
@@ -653,11 +846,21 @@ async fn put_mem0_config(
         Err(_) => return ResponseJson(ApiResponse::error("failed to build mem0 client")),
     };
     let url = format!("{}/api/config", mem0_url());
-    let body = serde_json::json!({
+    let memory = memory_config::load();
+    let mut body = serde_json::json!({
         "provider": req.provider,
         "graph_enabled": req.graph_enabled,
         "providers": req.providers,
     });
+    if memory.qdrant_url.is_some() || memory.qdrant_api_key.is_some() {
+        body["vector_store"] = serde_json::json!({
+            "provider": "qdrant",
+            "url": memory.qdrant_url,
+            "api_key": memory.qdrant_api_key,
+            "collection_name": memory.qdrant_collection,
+            "embedding_model_dims": memory.embedding_dimensions,
+        });
+    }
     match authorize_mem0(client.post(&url)).json(&body).send().await {
         Ok(r) if r.status().is_success() => match r.json::<Mem0Config>().await {
             Ok(cfg) => ResponseJson(ApiResponse::success(cfg)),
@@ -675,6 +878,9 @@ async fn put_mem0_config(
 
 /// Fetch mem0 extraction-token usage (best-effort).
 async fn fetch_mem0_tokens() -> Mem0TokenUsage {
+    if memory_config::load().adapter == MemoryAdapter::Mem0Platform {
+        return Mem0TokenUsage::default();
+    }
     let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(5))
         .build()
@@ -924,6 +1130,14 @@ async fn re_extract(
     axum::extract::Query(q): axum::extract::Query<ReExtractQuery>,
 ) -> ResponseJson<ApiResponse<ReExtractResponse>> {
     let _ = deployment;
+    if !memory_config::load().enabled {
+        return ResponseJson(ApiResponse::error("memory endpoints are disabled"));
+    }
+    if memory_config::load().adapter == MemoryAdapter::Mem0Platform {
+        return ResponseJson(ApiResponse::error(
+            "re-extract is managed by Mem0 Platform and is not available here",
+        ));
+    }
     let client = match reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(300))
         .build()

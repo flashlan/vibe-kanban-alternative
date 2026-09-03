@@ -108,15 +108,91 @@ Supported relationship types: `blocking`, `related`, `has_duplicate`.
 ### Project Memory (mem0)
 
 The project-memory tools give coding agents shared, cross-session memory backed by
-a mem0 server (default `http://localhost:8000`, override with `MEM0_URL`). The
-`user_id` is the repository slug, so every CLI working in the same repository —
-opencode, Claude, and so on — reads and writes the same memory.
+one of two selectable adapters. `mem0_vk` is the existing self-hosted service
+(default `http://localhost:8000`, override with `MEM0_URL`); `mem0_platform` uses
+the official Mem0 Platform API. The `user_id` is the repository slug, so every
+CLI working in the same repository — opencode, Claude, and so on — reads and
+writes the same memory within the selected backend.
+
+Type `/memory` in the workspace chat to open Settings → Memory. There you can
+enable/disable the memory endpoints, switch adapters, select local versus shared
+self-hosted Mem0, and save the Mem0 API key. Qdrant URL/API key and embedding
+dimensions apply only to `mem0_vk`; Mem0 Platform manages those dependencies.
+Credentials are stored in `~/.vibe-kanban/memory.toml` with restricted local
+permissions and are returned to the UI only as a saved/not-saved flag.
+
+#### Memória por projeto
+
+Each repository has its own memory namespace, identified by its repository slug
+(`user_id`). A fact saved while working on `aurapunk-ide` is not returned while
+working on another repository. This keeps decisions, conventions, architecture
+notes, and lessons from one codebase out of another. Different agents and
+sessions can share the same project memory as long as they use the same adapter
+and slug.
+
+Memory is intentionally agentic: the agent calls `memory_search` before
+analysing a relevant area and calls `memory_save` only for verified, durable
+facts after work is complete. It is not an automatic dump of every conversation
+and it does not replace `AGENTS.md`, which remains the canonical project
+instruction file.
+
+#### Reconstrução após mudanças no código
+
+`mem0_vk` records the Git `commit_sha` associated with a saved fact when the
+workspace context is available. `memory_check_staleness` can then compare that
+commit with the current worktree and report evidence when the referenced code
+was removed. This means an agent can treat an old memory as **possibly stale**
+instead of blindly trusting it.
+
+When graph extraction was unavailable when older facts were saved,
+`mem0_vk` also provides a re-extraction operation. It scans the existing facts,
+runs the configured extraction model again, rebuilds entity/relation payloads,
+and updates the project graph. This reconstructs the memory structure; it does
+not restore deleted source code or prove that a fact is still true.
+
+Mem0 Platform performs extraction and graph processing as a managed, asynchronous
+operation for new imports. Its internal graph is not the same as the
+`mem0_vk` graph contract, so the custom traversal, Git staleness check, and bulk
+re-extraction controls are currently available only when `mem0_vk` is selected.
+
+### Migrating project memory
+
+Changing the adapter does not move memories. `mem0_vk` and Mem0 Platform use
+different stores, identifiers, extraction pipelines, and graph implementations.
+The Memory settings screen therefore provides a separate, preview-first
+migration operation. It reads one repository slug at a time, compares normalized
+memory content with the destination, and skips duplicates. It never deletes the
+source and it never persists the migration credentials.
+
+The safe procedure is:
+
+1. Keep the current adapter active and run a **Preview** for the repository.
+2. Review `would_migrate`, `skipped_duplicates`, and any warnings.
+3. Run **Execute migration** with the explicit confirmation checkbox.
+4. Wait for the destination queue to finish. Mem0 Platform imports are
+   asynchronous and return an event for background processing.
+5. Search the destination and verify representative memories before switching
+   the active adapter in Settings.
+
+Migration is content-idempotent: repeating it does not intentionally create a
+second copy of the same normalized fact. It does not preserve the original
+vector, Platform/internal graph IDs, or the exact extraction result. The
+destination re-extracts each fact using its own configured pipeline. When a
+`commit_sha` is available, it is copied as metadata; `mem0_vk` can use it for
+its Git staleness check, while Mem0 Platform treats it as ordinary metadata.
+
+The backend endpoint used by the UI is `POST /api/usage/memory-migration`.
+Its request contains `source`, `destination`, `user_id`, `mode` (`preview` or
+`execute`), and `confirm`. Source and destination API keys are accepted only
+for that request and are never returned.
 
 | Tool | Purpose | Required Parameters | Optional Parameters | Returns |
 |------|---------|-------------------|-------------------|---------|
 | `memory_search` | Search the project's shared memory for facts relevant to a query | `query`<br/>`user_id` | None | Ranked memory list |
 | `memory_recall` | Fetch all memories stored for the project | `user_id` | None | Full memory list |
 | `memory_save` | Persist a verified, durable fact to the project's memory | `content`<br/>`user_id` | None | Confirmation |
+| `memory_graph_traverse` | Traverse related graph entities from a named start node | `start`<br/>`user_id` | `hops`<br/>`direction` | Nodes and relations (`mem0_vk` only currently) |
+| `memory_check_staleness` | Check whether a graph entity may have become stale since its saved commit | `user_id`<br/>`entity` | None | Commit and evidence (`mem0_vk` only currently) |
 
 <Tip>
 Use `memory_search` **before** analysing code to recall decisions, conventions and

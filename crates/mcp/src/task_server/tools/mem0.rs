@@ -5,6 +5,7 @@ use rmcp::{
     tool_router,
 };
 use serde::{Deserialize, Serialize};
+use utils::memory_config::{self, MemoryAdapter};
 use uuid::Uuid;
 
 use super::McpServer;
@@ -12,7 +13,15 @@ use super::McpServer;
 /// mem0-vk Docker container (REST + MCP). Defaults to the local mem0 server;
 /// override with `MEM0_URL` when it runs elsewhere.
 fn mem0_url() -> String {
-    std::env::var("MEM0_URL").unwrap_or_else(|_| "http://localhost:8000".to_string())
+    memory_config::load().active_url()
+}
+
+fn memory_enabled() -> bool {
+    memory_config::load().enabled
+}
+
+fn using_mem0_platform() -> bool {
+    memory_config::load().adapter == MemoryAdapter::Mem0Platform
 }
 
 /// Apply the universal Mem0 service-to-service contract. Local/Docker and
@@ -20,16 +29,28 @@ fn mem0_url() -> String {
 /// receive the signed-in AuraPunk account identity for license validation and
 /// per-account memory scoping.
 fn authorize_mem0(request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
-    let request =
-        match std::env::var("MEM0_API_TOKEN").or_else(|_| std::env::var("AURAPUNK_MEM0_TOKEN")) {
-            Ok(token) if !token.trim().is_empty() => request.bearer_auth(token),
+    let config = memory_config::load();
+    let request = match config
+        .mem0_api_key
+        .as_deref()
+        .map(str::trim)
+        .filter(|key| !key.is_empty())
+    {
+        Some(key) if config.adapter == MemoryAdapter::Mem0Platform => request
+            .header("Authorization", format!("Token {key}"))
+            .header("Accept", "application/json"),
+        Some(key) => request.bearer_auth(key),
+        None => request,
+    };
+    if config.adapter == MemoryAdapter::Mem0Platform {
+        request
+    } else {
+        match std::env::var("MEM0_ACCOUNT_ID").or_else(|_| std::env::var("AURAPUNK_ACCOUNT_ID")) {
+            Ok(account_id) if !account_id.trim().is_empty() => {
+                request.header("X-AuraPunk-Account-Id", account_id)
+            }
             _ => request,
-        };
-    match std::env::var("MEM0_ACCOUNT_ID").or_else(|_| std::env::var("AURAPUNK_ACCOUNT_ID")) {
-        Ok(account_id) if !account_id.trim().is_empty() => {
-            request.header("X-AuraPunk-Account-Id", account_id)
         }
-        _ => request,
     }
 }
 
@@ -318,6 +339,19 @@ struct Mem0SearchResponse {
 }
 
 #[derive(Debug, Deserialize)]
+struct Mem0PlatformSearchResponse {
+    #[serde(default)]
+    results: Vec<Mem0PlatformHit>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Mem0PlatformHit {
+    #[serde(default)]
+    memory: Option<String>,
+    score: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
 struct Mem0VectorHit {
     score: Option<f64>,
     payload: Option<Mem0Payload>,
@@ -405,17 +439,38 @@ impl McpServer {
         content: &str,
         user_id: &str,
     ) -> Result<bool, ErrorData> {
+        if !memory_enabled() {
+            tracing::debug!(target: "mem0", user_id, "memory_save skipped because memory is disabled");
+            return Ok(false);
+        }
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
             .build()
             .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
-        let commit_sha = self.resolve_commit_sha(user_id).await;
-        let url = format!("{}/api/memories", mem0_url());
-        let body = serde_json::json!({
-            "content": content,
-            "user_id": user_id,
-            "commit_sha": commit_sha,
-        });
+        let commit_sha = if using_mem0_platform() {
+            None
+        } else {
+            self.resolve_commit_sha(user_id).await
+        };
+        let (url, body) = if using_mem0_platform() {
+            let mut body = serde_json::json!({
+                "messages": [{ "role": "user", "content": content }],
+                "user_id": user_id,
+            });
+            if let Some(commit_sha) = commit_sha {
+                body["metadata"] = serde_json::json!({ "commit_sha": commit_sha });
+            }
+            (format!("{}/v3/memories/add/", mem0_url()), body)
+        } else {
+            (
+                format!("{}/api/memories", mem0_url()),
+                serde_json::json!({
+                    "content": content,
+                    "user_id": user_id,
+                    "commit_sha": commit_sha,
+                }),
+            )
+        };
 
         let resp = match authorize_mem0(client.post(&url)).json(&body).send().await {
             Ok(response) if response.status().is_success() => response,
@@ -433,6 +488,12 @@ impl McpServer {
                 return Ok(false);
             }
         };
+
+        if using_mem0_platform() {
+            // Mem0 Platform queues extraction and returns an event_id. A 2xx
+            // response is the durable acknowledgement available to this tool.
+            return Ok(true);
+        }
 
         let parsed: Mem0SaveResponse = match resp.json().await {
             Ok(parsed) => parsed,
@@ -485,6 +546,23 @@ impl McpServer {
             .iter()
             .find(|r| r.repo_name == user_id)?;
         Some((context.workspace_id, repo.repo_id))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn platform_response_maps_to_the_existing_memory_shape() {
+        let response: Mem0PlatformSearchResponse = serde_json::from_value(serde_json::json!({
+            "results": [{ "id": "memory-1", "memory": "Uses Qdrant", "score": 0.82 }]
+        }))
+        .expect("valid Mem0 Platform response");
+
+        assert_eq!(response.results.len(), 1);
+        assert_eq!(response.results[0].memory.as_deref(), Some("Uses Qdrant"));
+        assert_eq!(response.results[0].score, Some(0.82));
     }
 }
 
@@ -577,16 +655,33 @@ impl McpServer {
     ) -> Result<CallToolResult, ErrorData> {
         let limit = limit.unwrap_or(DEFAULT_SEARCH_LIMIT);
 
+        if !memory_enabled() {
+            return McpServer::success(&McpMemorySearchResult { memories: vec![] });
+        }
+
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
             .build()
             .map_err(|e| ErrorData::internal_error(e.to_string(), None))?;
 
-        let url = format!("{}/api/search", mem0_url());
-        // `limit` is sent as a best-effort hint for servers that honor it;
-        // the client-side sort+truncate below is what actually guarantees
-        // the cap regardless of server support.
-        let body = serde_json::json!({ "query": query, "user_id": user_id, "limit": limit });
+        let (url, body) = if using_mem0_platform() {
+            (
+                format!("{}/v3/memories/search/", mem0_url()),
+                serde_json::json!({
+                    "query": query,
+                    "filters": { "user_id": user_id },
+                    "top_k": limit,
+                }),
+            )
+        } else {
+            // `limit` is sent as a best-effort hint for servers that honor it;
+            // the client-side sort+truncate below is what actually guarantees
+            // the cap regardless of server support.
+            (
+                format!("{}/api/search", mem0_url()),
+                serde_json::json!({ "query": query, "user_id": user_id, "limit": limit }),
+            )
+        };
 
         let resp = match authorize_mem0(client.post(&url)).json(&body).send().await {
             Ok(r) if r.status().is_success() => r,
@@ -605,23 +700,46 @@ impl McpServer {
             }
         };
 
-        let parsed: Mem0SearchResponse = match resp.json().await {
-            Ok(parsed) => parsed,
-            Err(e) => {
-                tracing::warn!(
-                    target: "mem0",
-                    user_id = %user_id,
-                    error = %e,
-                    "memory_search: unparseable mem0 response; degrading to empty results"
-                );
-                return McpServer::success(&McpMemorySearchResult { memories: vec![] });
+        let mut hits: Vec<Mem0VectorHit> = if using_mem0_platform() {
+            match resp.json::<Mem0PlatformSearchResponse>().await {
+                Ok(parsed) => parsed
+                    .results
+                    .into_iter()
+                    .map(|hit| Mem0VectorHit {
+                        score: hit.score,
+                        payload: Some(Mem0Payload {
+                            content: hit.memory,
+                        }),
+                    })
+                    .collect(),
+                Err(e) => {
+                    tracing::warn!(
+                        target: "mem0",
+                        user_id = %user_id,
+                        error = %e,
+                        "memory_search: unparseable Mem0 Platform response; degrading to empty results"
+                    );
+                    return McpServer::success(&McpMemorySearchResult { memories: vec![] });
+                }
+            }
+        } else {
+            match resp.json::<Mem0SearchResponse>().await {
+                Ok(parsed) => parsed.vector,
+                Err(e) => {
+                    tracing::warn!(
+                        target: "mem0",
+                        user_id = %user_id,
+                        error = %e,
+                        "memory_search: unparseable mem0 response; degrading to empty results"
+                    );
+                    return McpServer::success(&McpMemorySearchResult { memories: vec![] });
+                }
             }
         };
 
         // Rank by score (higher = more relevant; unscored hits sort last),
         // dedupe by content keeping the best-ranked occurrence, then cap to
         // `limit` — a vague query must not flood the agent's context.
-        let mut hits: Vec<Mem0VectorHit> = parsed.vector;
         hits.sort_by(|a, b| {
             b.score
                 .unwrap_or(f64::MIN)
@@ -731,6 +849,12 @@ impl McpServer {
     ) -> Result<CallToolResult, ErrorData> {
         let hops = hops.unwrap_or(2).min(MAX_TRAVERSE_HOPS);
         let direction = direction.unwrap_or_else(|| "both".to_string());
+
+        // Mem0 Platform's managed API does not expose the custom graph
+        // traversal contract used by mem0-vk.
+        if !memory_enabled() || using_mem0_platform() {
+            return McpServer::success(&McpGraphTraverseResult::empty());
+        }
 
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(5))
@@ -849,6 +973,10 @@ impl McpServer {
             McpCheckStalenessRequest,
         >,
     ) -> Result<CallToolResult, ErrorData> {
+        if !memory_enabled() || using_mem0_platform() {
+            return McpServer::success(&McpCheckStalenessResult::not_checked());
+        }
+
         let client = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()

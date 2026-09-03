@@ -4,7 +4,7 @@ import { makeRequest, handleApiResponse } from '@/shared/lib/api';
 import { SettingsDialog } from '@/shared/dialogs/settings/SettingsDialog';
 import { Tooltip } from '@vibe/ui/components/Tooltip';
 
-type Mem0Level = 'green' | 'yellow' | 'orange' | 'red';
+type Mem0Level = 'green' | 'yellow' | 'orange' | 'red' | 'disabled';
 
 interface Mem0ComponentStatus {
   mem0: boolean;
@@ -24,6 +24,8 @@ interface Mem0Connection {
   url: string;
   local_url: string;
   cloud_url: string;
+  enabled: boolean;
+  adapter: 'mem0_vk' | 'mem0_platform';
 }
 
 const LEVEL_COLOR: Record<Mem0Level, string> = {
@@ -31,6 +33,7 @@ const LEVEL_COLOR: Record<Mem0Level, string> = {
   yellow: '#eab308',
   orange: '#f97316',
   red: '#ef4444',
+  disabled: '#9ca3af',
 };
 
 const LEVEL_LABEL: Record<Mem0Level, string> = {
@@ -38,6 +41,7 @@ const LEVEL_LABEL: Record<Mem0Level, string> = {
   yellow: 'Degraded (graph)',
   orange: 'Degraded (backend)',
   red: 'Unavailable',
+  disabled: 'Disabled',
 };
 
 const POLL_INTERVAL_MS = 30_000;
@@ -94,7 +98,10 @@ export function Mem0StatusIndicator() {
   const tooltip = status
     ? [
         `${LEVEL_LABEL[level]} — ${status.message}`.trim(),
-        `Source: ${status.connection?.source === 'cloud' ? 'Cloud / shared server' : 'Local Mem0'}`,
+        `Adapter: ${status.connection?.adapter === 'mem0_platform' ? 'Mem0 Platform' : 'Self-hosted mem0-vk'}`,
+        status.connection?.adapter === 'mem0_platform'
+          ? ''
+          : `Source: ${status.connection?.source === 'cloud' ? 'Cloud / shared server' : 'Local Mem0'}`,
         status.connection?.url ? `Endpoint: ${status.connection.url}` : '',
         '',
         componentLine('Mem0', components?.mem0 ?? false),
