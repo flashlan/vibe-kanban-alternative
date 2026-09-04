@@ -12,6 +12,8 @@ use axum::{
 };
 use base64::Engine;
 use db::models::{
+    coding_agent_turn::CodingAgentTurn,
+    execution_process::ExecutionProcess,
     file::WorkspaceAttachment,
     issue::Issue,
     issue_workspace::IssueWorkspace,
@@ -20,8 +22,10 @@ use db::models::{
     project_status::ProjectStatus,
     repo::Repo,
     requests::{CreateAndStartWorkspaceRequest, LinkedIssueInfo, WorkspaceRepoInput},
+    scratch::{Scratch, ScratchPayload, ScratchType},
     session::{CreateSession, Session},
     workspace::Workspace,
+    workspace_repo::WorkspaceRepo,
 };
 use deployment::Deployment;
 use executors::model_selector::PermissionPolicy;
@@ -111,8 +115,101 @@ async fn get_context_for(
             entity_type: "workspace",
             entity_id: workspace.id.to_string(),
             operation: "upsert",
-            payload: serde_json::to_value(workspace)
+            payload: serde_json::to_value(&workspace)
                 .map_err(|error| ApiError::BadRequest(error.to_string()))?,
+        });
+
+        // Keep the board record small, but publish the detail needed when a
+        // Mobile user opens a workspace: sessions/agents, execution state,
+        // repository branches, notes and the turn identifiers used to join
+        // the compact chat stream. This is deliberately one bounded record
+        // per workspace instead of copying the full local database.
+        let sessions = Session::find_by_workspace_id(pool, workspace.id).await?;
+        let mut executions = Vec::new();
+        let mut turns = Vec::new();
+        for session in &sessions {
+            for process in ExecutionProcess::find_by_session_id(pool, session.id, false).await? {
+                turns.push(
+                    CodingAgentTurn::find_by_execution_process_id(pool, process.id)
+                        .await?
+                        .map(|turn| {
+                            serde_json::json!({
+                                "id": turn.id,
+                                "execution_process_id": turn.execution_process_id,
+                                "agent_session_id": turn.agent_session_id,
+                                "agent_message_id": turn.agent_message_id,
+                                "prompt": turn.prompt,
+                                "summary": turn.summary,
+                                "seen": turn.seen,
+                                "created_at": turn.created_at,
+                                "updated_at": turn.updated_at,
+                            })
+                        }),
+                );
+                executions.push(serde_json::json!({
+                    "id": process.id,
+                    "session_id": process.session_id,
+                    "run_reason": process.run_reason,
+                    "status": process.status,
+                    "exit_code": process.exit_code,
+                    "started_at": process.started_at,
+                    "completed_at": process.completed_at,
+                    "created_at": process.created_at,
+                    "updated_at": process.updated_at,
+                }));
+            }
+        }
+        let turns: Vec<Value> = turns.into_iter().flatten().collect();
+        let workspace_repos =
+            WorkspaceRepo::find_repos_with_target_branch_for_workspace(pool, workspace.id).await?;
+        let repositories = workspace_repos
+            .iter()
+            .map(|repo| {
+                serde_json::json!({
+                    "id": repo.repo.id,
+                    "name": repo.repo.name,
+                    "display_name": repo.repo.display_name,
+                    "target_branch": repo.target_branch,
+                })
+            })
+            .collect::<Vec<_>>();
+        let notes = Scratch::find_by_id(pool, workspace.id, &ScratchType::WorkspaceNotes)
+            .await?
+            .and_then(|scratch| match scratch.payload {
+                ScratchPayload::WorkspaceNotes(notes) => Some(notes.content),
+                _ => None,
+            });
+        let session_payload = sessions
+            .iter()
+            .map(|session| {
+                serde_json::json!({
+                    "id": session.id,
+                    "workspace_id": session.workspace_id,
+                    "name": session.name,
+                    "executor": session.executor,
+                    "agent_working_dir": session.agent_working_dir,
+                    "created_at": session.created_at,
+                    "updated_at": session.updated_at,
+                })
+            })
+            .collect::<Vec<_>>();
+        records.push(MobileSyncRecord {
+            entity_type: "workspace_context",
+            entity_id: workspace.id.to_string(),
+            operation: "upsert",
+            payload: serde_json::json!({
+                "workspace_id": workspace.id,
+                "branch": workspace.branch,
+                "sessions": session_payload,
+                "executions": executions,
+                "turns": turns,
+                "repositories": repositories,
+                "git": {
+                    "branch": workspace.branch,
+                    "repositories": repositories,
+                },
+                "notes": notes,
+            }),
         });
     }
 
@@ -195,6 +292,8 @@ async fn get_context_for(
                 "workspace_id": row.try_get::<Uuid, _>("workspace_id")?,
                 "prompt": row.try_get::<Option<String>, _>("prompt")?,
                 "summary": row.try_get::<Option<String>, _>("summary")?,
+                "agent_session_id": row.try_get::<Option<String>, _>("agent_session_id")?,
+                "agent_message_id": row.try_get::<Option<String>, _>("agent_message_id")?,
                 "seen": row.try_get::<bool, _>("seen")?,
                 "created_at": row.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")?,
                 "updated_at": row.try_get::<chrono::DateTime<chrono::Utc>, _>("updated_at")?,
@@ -530,7 +629,8 @@ async fn tailcat_workspace_chat(
 ) -> Result<ResponseJson<ApiResponse<MobileContextResponse>>, ApiError> {
     authorize_tailcat(&headers, &deployment)?;
     let rows = sqlx::query(
-        r#"SELECT cat.id, s.workspace_id, cat.prompt, cat.summary, cat.seen,
+        r#"SELECT cat.id, s.workspace_id, cat.prompt, cat.summary,
+                      cat.agent_session_id, cat.agent_message_id, cat.seen,
                   cat.created_at, cat.updated_at
            FROM coding_agent_turns cat
            JOIN execution_processes ep ON ep.id = cat.execution_process_id
