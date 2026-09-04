@@ -5,9 +5,10 @@
 use api_types::UpdateIssueRequest;
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{State, ws::Message},
+    http::HeaderMap,
     response::{IntoResponse, Json as ResponseJson, Response},
-    routing::{get, post},
+    routing::{get, patch, post},
 };
 use base64::Engine;
 use db::models::{
@@ -31,7 +32,12 @@ use sqlx::Row;
 use utils::response::ApiResponse;
 use uuid::Uuid;
 
-use crate::{DeploymentImpl, error::ApiError};
+use crate::{
+    DeploymentImpl,
+    error::ApiError,
+    middleware::signed_ws::{MaybeSignedWebSocket, SignedWsUpgrade},
+    routes::{instance, local_kanban},
+};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct MobileSyncRecord {
@@ -83,6 +89,14 @@ pub async fn get_context(
 ) -> Result<ResponseJson<ApiResponse<MobileContextResponse>>, ApiError> {
     let pool = &deployment.db().pool;
     let mut records = Vec::new();
+    let node = instance::describe(&deployment);
+    records.push(MobileSyncRecord {
+        entity_type: "instance",
+        entity_id: node.instance_id.clone(),
+        operation: "upsert",
+        payload: serde_json::to_value(node)
+            .map_err(|error| ApiError::BadRequest(error.to_string()))?,
+    });
     let issue_workspace_links = IssueWorkspace::list_linked_all(pool).await?;
 
     for workspace in Workspace::find_all_with_status(pool, None, None).await? {
@@ -451,4 +465,110 @@ pub fn router() -> Router<DeploymentImpl> {
         .route("/mobile/context", get(get_context))
         .route("/mobile/chat", post(post_chat_command))
         .route("/mobile/workspace", post(post_workspace_request))
+}
+
+/// Direct Mobile transport over the configured Tailcat network. The bearer
+/// token is generated per Desktop instance and is separate from the Cloud
+/// account token. Tailcat ACLs provide network isolation; this token provides
+/// an application-level second check.
+pub fn tailcat_router() -> Router<DeploymentImpl> {
+    Router::new()
+        .route("/tailcat/health", get(tailcat_health))
+        .route("/tailcat/context", get(tailcat_context))
+        .route("/tailcat/chat", post(tailcat_chat))
+        .route("/tailcat/workspace", post(tailcat_workspace))
+        .route("/tailcat/issues/{id}", patch(tailcat_update_issue))
+        .route("/tailcat/events/ws", get(tailcat_events_ws))
+}
+
+async fn tailcat_health(
+    headers: HeaderMap,
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<Value>>, ApiError> {
+    authorize_tailcat(&headers, &deployment)?;
+    Ok(ResponseJson(ApiResponse::success(serde_json::json!({
+        "service": "aurapunk-desktop",
+        "transport": "tailcat",
+        "instance_id": instance::describe(&deployment).instance_id,
+    }))))
+}
+
+async fn tailcat_context(
+    headers: HeaderMap,
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<MobileContextResponse>>, ApiError> {
+    authorize_tailcat(&headers, &deployment)?;
+    Ok(get_context(State(deployment)).await?)
+}
+
+async fn tailcat_chat(
+    headers: HeaderMap,
+    State(deployment): State<DeploymentImpl>,
+    Json(command): Json<MobileChatCommand>,
+) -> Result<Response, ApiError> {
+    authorize_tailcat(&headers, &deployment)?;
+    post_chat_command(State(deployment), Json(command)).await
+}
+
+async fn tailcat_workspace(
+    headers: HeaderMap,
+    State(deployment): State<DeploymentImpl>,
+    Json(request): Json<MobileWorkspaceRequest>,
+) -> Result<Response, ApiError> {
+    authorize_tailcat(&headers, &deployment)?;
+    post_workspace_request(State(deployment), Json(request)).await
+}
+
+async fn tailcat_update_issue(
+    headers: HeaderMap,
+    State(deployment): State<DeploymentImpl>,
+    axum::extract::Path(id): axum::extract::Path<Uuid>,
+    Json(request): Json<UpdateIssueRequest>,
+) -> Result<Response, ApiError> {
+    authorize_tailcat(&headers, &deployment)?;
+    let issue = local_kanban::merge_and_update_issue(&deployment.db().pool, id, request)
+        .await?
+        .ok_or_else(|| ApiError::BadRequest("issue not found".into()))?;
+    Ok(ResponseJson(ApiResponse::<_, Value>::success(issue)).into_response())
+}
+
+async fn tailcat_events_ws(
+    ws: SignedWsUpgrade,
+    headers: HeaderMap,
+    State(deployment): State<DeploymentImpl>,
+) -> Response {
+    if let Err(error) = authorize_tailcat(&headers, &deployment) {
+        return error.into_response();
+    }
+    ws.on_upgrade(move |mut socket: MaybeSignedWebSocket| async move {
+        use futures_util::StreamExt;
+
+        let mut events = deployment.stream_events().await;
+        while let Some(event) = events.next().await {
+            if event.is_err() {
+                break;
+            }
+            if socket
+                .send(Message::Text("{\"type\":\"context_changed\"}".into()))
+                .await
+                .is_err()
+            {
+                break;
+            }
+        }
+    })
+    .into_response()
+}
+
+fn authorize_tailcat(headers: &HeaderMap, deployment: &impl Deployment) -> Result<(), ApiError> {
+    let expected = instance::describe(deployment).direct_token;
+    let supplied = headers
+        .get("authorization")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .unwrap_or_default();
+    if supplied.is_empty() || supplied != expected {
+        return Err(ApiError::Forbidden("invalid Tailcat instance token".into()));
+    }
+    Ok(())
 }

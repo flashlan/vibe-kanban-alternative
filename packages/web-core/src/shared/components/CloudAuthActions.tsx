@@ -544,7 +544,8 @@ type CloudSyncRecord = {
     | 'chat_command'
     | 'issue'
     | 'job'
-    | 'executor_options';
+    | 'executor_options'
+    | 'instance';
   entity_id: string;
   operation: 'upsert' | 'delete';
   payload: unknown;

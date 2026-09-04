@@ -40,6 +40,7 @@ pub mod execution_processes;
 pub mod filesystem;
 pub mod frontend;
 pub mod health;
+pub mod instance;
 pub mod kanban;
 pub mod local_kanban;
 pub mod memory_migration;
@@ -88,6 +89,8 @@ pub fn router(deployment: DeploymentImpl) -> IntoMakeService<Router> {
         .merge(usage::router())
         .merge(memory_migration::router())
         .merge(mobile_sync::router())
+        .merge(mobile_sync::tailcat_router())
+        .merge(instance::router())
         .nest("/attachments", attachments::routes())
         .layer(ValidateRequestHeaderLayer::custom(
             middleware::validate_origin,
