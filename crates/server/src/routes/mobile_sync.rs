@@ -9,7 +9,9 @@ use axum::{
     response::{IntoResponse, Json as ResponseJson, Response},
     routing::{get, post},
 };
+use base64::Engine;
 use db::models::{
+    file::WorkspaceAttachment,
     issue::Issue,
     issue_workspace::IssueWorkspace,
     project::Project,
@@ -21,6 +23,7 @@ use db::models::{
     workspace::Workspace,
 };
 use deployment::Deployment;
+use executors::model_selector::PermissionPolicy;
 use executors::{executors::BaseCodingAgent, profile::ExecutorConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -48,6 +51,23 @@ pub struct MobileChatCommand {
     pub workspace_id: Uuid,
     pub prompt: String,
     pub executor: Option<String>,
+    #[serde(default)]
+    pub model_id: Option<String>,
+    #[serde(default)]
+    pub reasoning_id: Option<String>,
+    #[serde(default)]
+    pub agent_id: Option<String>,
+    #[serde(default)]
+    pub permission_policy: Option<PermissionPolicy>,
+    #[serde(default)]
+    pub attachments: Vec<MobileChatAttachment>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MobileChatAttachment {
+    pub file_name: String,
+    pub mime_type: String,
+    pub data_base64: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -257,6 +277,36 @@ pub async fn post_chat_command(
         ));
     }
 
+    let mut prompt = prompt.to_string();
+    let mut attachment_paths = Vec::new();
+    for attachment in command.attachments {
+        if !attachment.mime_type.starts_with("image/") {
+            return Err(ApiError::BadRequest(
+                "Mobile chat attachments must be images".to_string(),
+            ));
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(&attachment.data_base64)
+            .map_err(|_| ApiError::BadRequest("Invalid mobile image attachment".to_string()))?;
+        if bytes.len() > 350_000 {
+            return Err(ApiError::BadRequest(
+                "Mobile image attachments must be smaller than 350 KB".to_string(),
+            ));
+        }
+        let file = deployment
+            .file()
+            .store_file(&bytes, &attachment.file_name)
+            .await?;
+        WorkspaceAttachment::associate_many_dedup(pool, workspace.id, &[file.id]).await?;
+        attachment_paths.push((file.original_name, file.file_path));
+    }
+    if !attachment_paths.is_empty() {
+        prompt.push_str("\n\n## Images attached from AuraPunk Mobile\n");
+        for (name, path) in attachment_paths {
+            prompt.push_str(&format!("- Inspect `.vibe-attachments/{path}` ({name})\n"));
+        }
+    }
+
     let session =
         if let Some(session) = Session::find_latest_by_workspace_id(pool, workspace.id).await? {
             session
@@ -287,12 +337,17 @@ pub async fn post_chat_command(
         .map_err(|_| {
             ApiError::BadRequest("Workspace session has an unknown executor".to_string())
         })?;
+    let mut executor_config = ExecutorConfig::new(executor);
+    executor_config.model_id = command.model_id;
+    executor_config.reasoning_id = command.reasoning_id;
+    executor_config.agent_id = command.agent_id;
+    executor_config.permission_policy = command.permission_policy;
     Ok(crate::routes::sessions::run_follow_up(
         &deployment,
         session,
         workspace,
-        prompt.to_string(),
-        ExecutorConfig::new(executor),
+        prompt,
+        executor_config,
         None,
         None,
         None,

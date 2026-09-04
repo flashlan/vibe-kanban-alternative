@@ -94,6 +94,46 @@ export function CloudAuthActions() {
             }),
           });
         }
+
+        // Keep the same discovered model catalog available to Mobile. The
+        // mobile client cannot open the Desktop's localhost WebSocket, so the
+        // Desktop publishes the catalog through the existing Cloud context
+        // channel. It is intentionally best-effort: sending a message still
+        // works with the executor default when discovery is unavailable.
+        const modelResponse = await makeLocalApiRequest(
+          '/api/agents/models?executor=codex',
+          { headers: { Accept: 'application/json' }, cache: 'no-store' }
+        );
+        if (modelResponse.ok) {
+          const modelBody = (await modelResponse.json()) as {
+            data?: Array<{
+              id: string;
+              name: string;
+              provider?: string;
+            }>;
+          };
+          const models = modelBody.data ?? [];
+          if (models.length > 0) {
+            await fetch(`${cloudUrl.replace(/\/$/, '')}/api/sync`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${nextAccount.accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                source: 'desktop',
+                operations: [
+                  {
+                    entityType: 'executor_options',
+                    entityId: 'CODEX',
+                    operation: 'upsert',
+                    payload: { executor: 'CODEX', models },
+                  },
+                ],
+              }),
+            });
+          }
+        }
       } catch {
         // Cloud sync is deliberately best-effort. The local database remains
         // authoritative while the network or Cloud service is unavailable.
@@ -503,7 +543,8 @@ type CloudSyncRecord = {
     | 'chat'
     | 'chat_command'
     | 'issue'
-    | 'job';
+    | 'job'
+    | 'executor_options';
   entity_id: string;
   operation: 'upsert' | 'delete';
   payload: unknown;
