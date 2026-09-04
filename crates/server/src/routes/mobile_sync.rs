@@ -98,6 +98,8 @@ async fn get_context_for(
     deployment: &DeploymentImpl,
     include_chat: bool,
 ) -> Result<ResponseJson<ApiResponse<MobileContextResponse>>, ApiError> {
+    const MAX_WORKSPACE_CONTEXT_EXECUTIONS: usize = 24;
+
     let pool = &deployment.db().pool;
     let mut records = Vec::new();
     let node = instance::describe(deployment);
@@ -125,41 +127,48 @@ async fn get_context_for(
         // the compact chat stream. This is deliberately one bounded record
         // per workspace instead of copying the full local database.
         let sessions = Session::find_by_workspace_id(pool, workspace.id).await?;
+        let mut workspace_processes = Vec::new();
+        for session in &sessions {
+            workspace_processes
+                .extend(ExecutionProcess::find_by_session_id(pool, session.id, false).await?);
+        }
+        workspace_processes.sort_by_key(|process| process.created_at);
+        let workspace_processes = workspace_processes
+            .into_iter()
+            .rev()
+            .take(MAX_WORKSPACE_CONTEXT_EXECUTIONS)
+            .collect::<Vec<_>>();
         let mut executions = Vec::new();
         let mut turns = Vec::new();
-        for session in &sessions {
-            for process in ExecutionProcess::find_by_session_id(pool, session.id, false).await? {
-                turns.push(
-                    CodingAgentTurn::find_by_execution_process_id(pool, process.id)
-                        .await?
-                        .map(|turn| {
-                            serde_json::json!({
-                                "id": turn.id,
-                                "execution_process_id": turn.execution_process_id,
-                                "agent_session_id": turn.agent_session_id,
-                                "agent_message_id": turn.agent_message_id,
-                                "prompt": turn.prompt,
-                                "summary": turn.summary,
-                                "seen": turn.seen,
-                                "created_at": turn.created_at,
-                                "updated_at": turn.updated_at,
-                            })
-                        }),
-                );
-                executions.push(serde_json::json!({
-                    "id": process.id,
-                    "session_id": process.session_id,
-                    "run_reason": process.run_reason,
-                    "status": process.status,
-                    "exit_code": process.exit_code,
-                    "started_at": process.started_at,
-                    "completed_at": process.completed_at,
-                    "created_at": process.created_at,
-                    "updated_at": process.updated_at,
+        for process in workspace_processes.into_iter().rev() {
+            // Full prompts and summaries remain in individual chat records.
+            // The context payload only needs stable join identifiers and must
+            // stay safely below the Cloud operation size limit.
+            if let Some(turn) =
+                CodingAgentTurn::find_by_execution_process_id(pool, process.id).await?
+            {
+                turns.push(serde_json::json!({
+                    "id": turn.id,
+                    "execution_process_id": turn.execution_process_id,
+                    "agent_session_id": turn.agent_session_id,
+                    "agent_message_id": turn.agent_message_id,
+                    "seen": turn.seen,
+                    "created_at": turn.created_at,
+                    "updated_at": turn.updated_at,
                 }));
             }
+            executions.push(serde_json::json!({
+                "id": process.id,
+                "session_id": process.session_id,
+                "run_reason": process.run_reason,
+                "status": process.status,
+                "exit_code": process.exit_code,
+                "started_at": process.started_at,
+                "completed_at": process.completed_at,
+                "created_at": process.created_at,
+                "updated_at": process.updated_at,
+            }));
         }
-        let turns: Vec<Value> = turns.into_iter().flatten().collect();
         let workspace_repos =
             WorkspaceRepo::find_repos_with_target_branch_for_workspace(pool, workspace.id).await?;
         let repositories = workspace_repos
