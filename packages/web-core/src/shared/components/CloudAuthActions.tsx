@@ -75,24 +75,77 @@ export function CloudAuthActions() {
           data?: { records?: CloudSyncRecord[] };
         };
         const records = localBody.data?.records ?? [];
-        for (let index = 0; index < records.length; index += 100) {
-          const batch = records.slice(index, index + 100);
-          await fetch(`${cloudUrl.replace(/\/$/, '')}/api/sync`, {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${nextAccount.accessToken}`,
-              'Content-Type': 'application/json',
+        // Older Desktop context exporters may include the relationship only
+        // inside the issue payload. Publish the normalized relation as well so
+        // Mobile can open an existing workspace instead of offering to create
+        // a duplicate one.
+        const derivedRelations = records.flatMap((record) => {
+          if (record.entity_type !== 'issue' || record.operation !== 'upsert') {
+            return [];
+          }
+          const payload = record.payload as {
+            workspace_id?: unknown;
+            project_id?: unknown;
+          };
+          if (
+            typeof payload.workspace_id !== 'string' ||
+            payload.workspace_id.length === 0
+          ) {
+            return [];
+          }
+          return [
+            {
+              entity_type: 'issue_workspace' as const,
+              entity_id: `${record.entity_id}:${payload.workspace_id}`,
+              operation: 'upsert' as const,
+              payload: {
+                issue_id: record.entity_id,
+                workspace_id: payload.workspace_id,
+                ...(typeof payload.project_id === 'string'
+                  ? { project_id: payload.project_id }
+                  : {}),
+              },
             },
-            body: JSON.stringify({
-              source: 'desktop',
-              operations: batch.map((record) => ({
-                entityType: record.entity_type,
-                entityId: record.entity_id,
-                operation: record.operation,
-                payload: record.payload,
-              })),
-            }),
-          });
+          ];
+        });
+        const publishedRecords = [...records, ...derivedRelations].filter(
+          (record, index, all) =>
+            all.findIndex(
+              (candidate) =>
+                candidate.entity_type === record.entity_type &&
+                candidate.entity_id === record.entity_id
+            ) === index
+        );
+
+        const publish = async (operations: CloudSyncRecord[]) => {
+          const response = await fetch(
+            `${cloudUrl.replace(/\/$/, '')}/api/sync`,
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${nextAccount.accessToken}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                source: 'desktop',
+                operations: operations.map((record) => ({
+                  entityType: record.entity_type,
+                  entityId: record.entity_id,
+                  operation: record.operation,
+                  payload: record.payload,
+                })),
+              }),
+            }
+          );
+          if (!response.ok) {
+            throw new Error(
+              `Cloud sync returned HTTP ${response.status}: ${(await response.text()).slice(0, 200)}`
+            );
+          }
+        };
+
+        for (let index = 0; index < publishedRecords.length; index += 100) {
+          await publish(publishedRecords.slice(index, index + 100));
         }
 
         // Keep the same discovered model catalog available to Mobile. The
@@ -114,27 +167,18 @@ export function CloudAuthActions() {
           };
           const models = modelBody.data ?? [];
           if (models.length > 0) {
-            await fetch(`${cloudUrl.replace(/\/$/, '')}/api/sync`, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${nextAccount.accessToken}`,
-                'Content-Type': 'application/json',
+            await publish([
+              {
+                entity_type: 'executor_options',
+                entity_id: 'CODEX',
+                operation: 'upsert',
+                payload: { executor: 'CODEX', models },
               },
-              body: JSON.stringify({
-                source: 'desktop',
-                operations: [
-                  {
-                    entityType: 'executor_options',
-                    entityId: 'CODEX',
-                    operation: 'upsert',
-                    payload: { executor: 'CODEX', models },
-                  },
-                ],
-              }),
-            });
+            ]);
           }
         }
-      } catch {
+      } catch (error) {
+        console.warn('AuraPunk Cloud context sync failed', error);
         // Cloud sync is deliberately best-effort. The local database remains
         // authoritative while the network or Cloud service is unavailable.
       }
