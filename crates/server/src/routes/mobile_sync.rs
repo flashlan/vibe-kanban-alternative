@@ -5,7 +5,7 @@
 use api_types::UpdateIssueRequest;
 use axum::{
     Json, Router,
-    extract::{State, ws::Message},
+    extract::{Path, State, ws::Message},
     http::HeaderMap,
     response::{IntoResponse, Json as ResponseJson, Response},
     routing::{get, patch, post},
@@ -87,9 +87,16 @@ pub struct MobileWorkspaceRequest {
 pub async fn get_context(
     State(deployment): State<DeploymentImpl>,
 ) -> Result<ResponseJson<ApiResponse<MobileContextResponse>>, ApiError> {
+    get_context_for(&deployment, true).await
+}
+
+async fn get_context_for(
+    deployment: &DeploymentImpl,
+    include_chat: bool,
+) -> Result<ResponseJson<ApiResponse<MobileContextResponse>>, ApiError> {
     let pool = &deployment.db().pool;
     let mut records = Vec::new();
-    let node = instance::describe(&deployment);
+    let node = instance::describe(deployment);
     records.push(MobileSyncRecord {
         entity_type: "instance",
         entity_id: node.instance_id.clone(),
@@ -168,35 +175,37 @@ pub async fn get_context(
         });
     }
 
-    let chat_rows = sqlx::query(
-        r#"SELECT cat.id, s.workspace_id, cat.prompt, cat.summary, cat.seen,
-                  cat.created_at, cat.updated_at
-           FROM coding_agent_turns cat
-           JOIN execution_processes ep ON ep.id = cat.execution_process_id
-           JOIN sessions s ON s.id = ep.session_id
-           WHERE ep.dropped = FALSE
-           ORDER BY cat.created_at ASC"#,
-    )
-    .fetch_all(pool)
-    .await?;
+    if include_chat {
+        let chat_rows = sqlx::query(
+            r#"SELECT cat.id, s.workspace_id, cat.prompt, cat.summary, cat.seen,
+                      cat.created_at, cat.updated_at
+               FROM coding_agent_turns cat
+               JOIN execution_processes ep ON ep.id = cat.execution_process_id
+               JOIN sessions s ON s.id = ep.session_id
+               WHERE ep.dropped = FALSE
+               ORDER BY cat.created_at ASC"#,
+        )
+        .fetch_all(pool)
+        .await?;
 
-    for row in chat_rows {
-        let id: Uuid = row.try_get("id")?;
-        let payload = serde_json::json!({
-            "id": id,
-            "workspace_id": row.try_get::<Uuid, _>("workspace_id")?,
-            "prompt": row.try_get::<Option<String>, _>("prompt")?,
-            "summary": row.try_get::<Option<String>, _>("summary")?,
-            "seen": row.try_get::<bool, _>("seen")?,
-            "created_at": row.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")?,
-            "updated_at": row.try_get::<chrono::DateTime<chrono::Utc>, _>("updated_at")?,
-        });
-        records.push(MobileSyncRecord {
-            entity_type: "chat",
-            entity_id: id.to_string(),
-            operation: "upsert",
-            payload,
-        });
+        for row in chat_rows {
+            let id: Uuid = row.try_get("id")?;
+            let payload = serde_json::json!({
+                "id": id,
+                "workspace_id": row.try_get::<Uuid, _>("workspace_id")?,
+                "prompt": row.try_get::<Option<String>, _>("prompt")?,
+                "summary": row.try_get::<Option<String>, _>("summary")?,
+                "seen": row.try_get::<bool, _>("seen")?,
+                "created_at": row.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")?,
+                "updated_at": row.try_get::<chrono::DateTime<chrono::Utc>, _>("updated_at")?,
+            });
+            records.push(MobileSyncRecord {
+                entity_type: "chat",
+                entity_id: id.to_string(),
+                operation: "upsert",
+                payload,
+            });
+        }
     }
 
     Ok(ResponseJson(ApiResponse::success(MobileContextResponse {
@@ -475,6 +484,11 @@ pub fn tailcat_router() -> Router<DeploymentImpl> {
     Router::new()
         .route("/tailcat/health", get(tailcat_health))
         .route("/tailcat/context", get(tailcat_context))
+        .route("/tailcat/kanban", get(tailcat_kanban))
+        .route(
+            "/tailcat/workspaces/{workspace_id}/chat",
+            get(tailcat_workspace_chat),
+        )
         .route("/tailcat/chat", post(tailcat_chat))
         .route("/tailcat/workspace", post(tailcat_workspace))
         .route("/tailcat/issues/{id}", patch(tailcat_update_issue))
@@ -498,7 +512,60 @@ async fn tailcat_context(
     State(deployment): State<DeploymentImpl>,
 ) -> Result<ResponseJson<ApiResponse<MobileContextResponse>>, ApiError> {
     authorize_tailcat(&headers, &deployment)?;
-    Ok(get_context(State(deployment)).await?)
+    get_context_for(&deployment, true).await
+}
+
+async fn tailcat_kanban(
+    headers: HeaderMap,
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<MobileContextResponse>>, ApiError> {
+    authorize_tailcat(&headers, &deployment)?;
+    get_context_for(&deployment, false).await
+}
+
+async fn tailcat_workspace_chat(
+    headers: HeaderMap,
+    Path(workspace_id): Path<Uuid>,
+    State(deployment): State<DeploymentImpl>,
+) -> Result<ResponseJson<ApiResponse<MobileContextResponse>>, ApiError> {
+    authorize_tailcat(&headers, &deployment)?;
+    let rows = sqlx::query(
+        r#"SELECT cat.id, s.workspace_id, cat.prompt, cat.summary, cat.seen,
+                  cat.created_at, cat.updated_at
+           FROM coding_agent_turns cat
+           JOIN execution_processes ep ON ep.id = cat.execution_process_id
+           JOIN sessions s ON s.id = ep.session_id
+           WHERE ep.dropped = FALSE AND s.workspace_id = ?
+           ORDER BY cat.created_at ASC
+           LIMIT 300"#,
+    )
+    .bind(workspace_id)
+    .fetch_all(&deployment.db().pool)
+    .await?;
+    let records = rows
+        .into_iter()
+        .map(|row| {
+            let id: Uuid = row.try_get("id")?;
+            let payload = serde_json::json!({
+                "id": id,
+                "workspace_id": row.try_get::<Uuid, _>("workspace_id")?,
+                "prompt": row.try_get::<Option<String>, _>("prompt")?,
+                "summary": row.try_get::<Option<String>, _>("summary")?,
+                "seen": row.try_get::<bool, _>("seen")?,
+                "created_at": row.try_get::<chrono::DateTime<chrono::Utc>, _>("created_at")?,
+                "updated_at": row.try_get::<chrono::DateTime<chrono::Utc>, _>("updated_at")?,
+            });
+            Ok::<_, sqlx::Error>(MobileSyncRecord {
+                entity_type: "chat",
+                entity_id: id.to_string(),
+                operation: "upsert",
+                payload,
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ResponseJson(ApiResponse::success(MobileContextResponse {
+        records,
+    })))
 }
 
 async fn tailcat_chat(
