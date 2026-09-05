@@ -34,6 +34,25 @@ function isVibeApiRequest(pathname) {
   return pathname === '/api' || pathname.startsWith('/api/') || pathname === '/v1' || pathname.startsWith('/v1/');
 }
 
+// The local gateway shares one origin between the Desktop API and the Cloud
+// control plane. Cloud owns these prefixes; every other /api request remains
+// compatible with the Vibe backend.
+function isCloudApiRequest(pathname) {
+  return [
+    '/api/admin',
+    '/api/billing',
+    '/api/cloud-contract',
+    '/api/dashboard',
+    '/api/dashboard-api',
+    '/api/deployment',
+    '/api/desktop-auth',
+    '/api/devices',
+    '/api/instances',
+    '/api/sync',
+    '/api/teams',
+  ].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
 function proxyRequest(request, response, origin) {
   const target = new URL(request.url ?? '/', origin);
   const upstream = fetch(target, {
@@ -104,7 +123,7 @@ const server = createServer((request, response) => {
     return;
   }
 
-  if (isVibeApiRequest(pathname)) {
+  if (isVibeApiRequest(pathname) && !isCloudApiRequest(pathname)) {
     proxyRequest(request, response, vibeOrigin);
     return;
   }
