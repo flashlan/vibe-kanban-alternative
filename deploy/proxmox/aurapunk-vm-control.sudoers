@@ -1,0 +1,1 @@
+aurapunk-vm-controller ALL=(root) NOPASSWD: /usr/sbin/qm start 116, /usr/sbin/qm start 135, /usr/sbin/qm shutdown 116, /usr/sbin/qm shutdown 135, /usr/sbin/qm status 116, /usr/sbin/qm status 135

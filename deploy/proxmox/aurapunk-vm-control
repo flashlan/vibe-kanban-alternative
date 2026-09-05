@@ -1,0 +1,27 @@
+#!/bin/sh
+# Restricted forced-command endpoint for the AuraPunk release controller.
+# It intentionally accepts only power/status operations for the native build
+# VMs. Keep this script root-owned and invoke it only through the dedicated
+# `aurapunk-vm-controller` SSH account.
+set -eu
+
+command=${SSH_ORIGINAL_COMMAND:-}
+
+case "$command" in
+  'start 116' | 'start 135')
+    set -- $command
+    exec sudo -n /usr/sbin/qm start "$2"
+    ;;
+  'shutdown 116' | 'shutdown 135')
+    set -- $command
+    exec sudo -n /usr/sbin/qm shutdown "$2"
+    ;;
+  'status 116' | 'status 135')
+    set -- $command
+    exec sudo -n /usr/sbin/qm status "$2"
+    ;;
+  *)
+    echo 'unsupported VM controller command' >&2
+    exit 64
+    ;;
+esac

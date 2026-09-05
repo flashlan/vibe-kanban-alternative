@@ -1,0 +1,151 @@
+name: Native desktop release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PROXMOX_HOST: 192.168.254.25
+  PROXMOX_CONTROLLER_USER: aurapunk-vm-controller
+  PROXMOX_CONTROLLER_KEY: /run/secrets/aurapunk-vm-controller
+
+jobs:
+  wake-macos:
+    runs-on: release-controller
+    steps:
+      - name: Start the Intel macOS builder
+        shell: sh
+        run: |
+          set -eu
+          apk add --no-cache openssh-client
+          control() {
+            ssh -i "$PROXMOX_CONTROLLER_KEY" -o BatchMode=yes \
+              -o StrictHostKeyChecking=accept-new \
+              -o UserKnownHostsFile=/tmp/proxmox_known_hosts \
+              "$PROXMOX_CONTROLLER_USER@$PROXMOX_HOST" "$@"
+          }
+          if ! control status 116 | grep -q 'running'; then
+            control start 116
+          fi
+          for _ in $(seq 1 30); do
+            control status 116 | grep -q 'running' && exit 0
+            sleep 2
+          done
+          exit 1
+
+  wake-windows:
+    runs-on: release-controller
+    steps:
+      - name: Start the Windows builder
+        shell: sh
+        run: |
+          set -eu
+          apk add --no-cache openssh-client
+          control() {
+            ssh -i "$PROXMOX_CONTROLLER_KEY" -o BatchMode=yes \
+              -o StrictHostKeyChecking=accept-new \
+              -o UserKnownHostsFile=/tmp/proxmox_known_hosts \
+              "$PROXMOX_CONTROLLER_USER@$PROXMOX_HOST" "$@"
+          }
+          if ! control status 135 | grep -q 'running'; then
+            control start 135
+          fi
+          for _ in $(seq 1 30); do
+            control status 135 | grep -q 'running' && exit 0
+            sleep 2
+          done
+          exit 1
+
+  build-macos-x64:
+    needs: wake-macos
+    runs-on: macos-x64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build signed update artifacts
+        run: |
+          set -euo pipefail
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm app:build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aurapunk-macos-x64
+          path: target/release/bundle/**
+          if-no-files-found: error
+
+  build-windows-x64:
+    needs: wake-windows
+    runs-on: windows-x64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build signed update artifacts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          corepack enable
+          pnpm install --frozen-lockfile
+          pnpm app:build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: aurapunk-windows-x64
+          path: target/release/bundle/**
+          if-no-files-found: error
+
+  publish:
+    needs: [build-macos-x64, build-windows-x64]
+    runs-on: release-controller
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          merge-multiple: true
+      - name: Create the Gitea release and upload artifacts
+        shell: sh
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_PUBLISH_TOKEN }}
+        run: |
+          set -eu
+          test -n "$RELEASE_TOKEN"
+          apk add --no-cache curl jq
+          api="${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases"
+          body=$(jq -nc --arg tag "$GITHUB_REF_NAME" '{tag_name:$tag,name:$tag}')
+          release=$(curl --fail --silent --show-error \
+            -H "Authorization: token $RELEASE_TOKEN" \
+            -H 'Content-Type: application/json' \
+            -d "$body" "$api")
+          release_id=$(printf '%s' "$release" | jq -r '.id')
+          test -n "$release_id"
+          find release-artifacts -type f -print0 | while IFS= read -r -d '' artifact; do
+            name=$(basename "$artifact")
+            curl --fail --silent --show-error \
+              -H "Authorization: token $RELEASE_TOKEN" \
+              --data-binary "@$artifact" \
+              "$api/$release_id/assets?name=$name"
+          done
+
+  shutdown-builders:
+    needs: [wake-macos, wake-windows, build-macos-x64, build-windows-x64, publish]
+    if: always()
+    runs-on: release-controller
+    steps:
+      - name: Stop native builder VMs
+        shell: sh
+        run: |
+          set -eu
+          apk add --no-cache openssh-client
+          control() {
+            ssh -i "$PROXMOX_CONTROLLER_KEY" -o BatchMode=yes \
+              -o StrictHostKeyChecking=accept-new \
+              -o UserKnownHostsFile=/tmp/proxmox_known_hosts \
+              "$PROXMOX_CONTROLLER_USER@$PROXMOX_HOST" "$@"
+          }
+          for vmid in 116 135; do
+            if control status "$vmid" | grep -q 'running'; then
+              control shutdown "$vmid"
+            fi
+          done
